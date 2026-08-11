@@ -2,10 +2,10 @@ name: Deploy to Vercel
 
 # Production: push/manual on `main` → --prod
 #   → https://assessa.sstcloud.com.au
-#   → https://assessa.vercel.app
+#   → https://assessa-ragavendrenv-5507s-projects.vercel.app
 # Development: push/manual on `develop` → preview (not --prod)
 #   → https://assessa-git-develop-ragavendrenv-5507s-projects.vercel.app
-# Pull requests → ephemeral preview URL (commented on the PR)
+# Pull requests → ephemeral preview URL
 
 on:
   push:
@@ -29,7 +29,6 @@ on:
 
 permissions:
   contents: read
-  deployments: write
   pull-requests: write
 
 concurrency:
@@ -37,19 +36,24 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # From `vercel link` / .vercel/project.json (not secrets)
   VERCEL_ORG_ID: team_sKKMMuszjU4cd4Ag6IY6ZLEb
   VERCEL_PROJECT_ID: prj_yXSFIGCjYkIwYAV3FGwAFLVCvhmX
+  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     environment:
       name: ${{ ((github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production') || (github.event_name == 'push' && github.ref == 'refs/heads/main')) && 'production' || 'development' }}
-      url: ${{ steps.deploy.outputs.preview-url }}
+      url: ${{ steps.deploy.outputs.url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
 
       - name: Resolve deploy target
         id: target
@@ -64,36 +68,70 @@ jobs:
 
           if [[ "$IS_PROD" == "true" ]]; then
             echo "label=production" >> "$GITHUB_OUTPUT"
-            echo "vercel_args=--prod" >> "$GITHUB_OUTPUT"
+            echo "prod=true" >> "$GITHUB_OUTPUT"
           else
             echo "label=development" >> "$GITHUB_OUTPUT"
-            echo "vercel_args=" >> "$GITHUB_OUTPUT"
+            echo "prod=false" >> "$GITHUB_OUTPUT"
           fi
-          echo "Deploy target resolved (prod=$IS_PROD)"
 
-      - name: Deploy to Vercel
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Pull Vercel environment
+        shell: bash
+        run: |
+          if [[ "${{ steps.target.outputs.prod }}" == "true" ]]; then
+            vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+          else
+            vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
+          fi
+
+      - name: Build
+        shell: bash
+        run: |
+          if [[ "${{ steps.target.outputs.prod }}" == "true" ]]; then
+            vercel build --prod --token="$VERCEL_TOKEN"
+          else
+            vercel build --token="$VERCEL_TOKEN"
+          fi
+
+      - name: Deploy
         id: deploy
-        uses: amondnet/vercel-action@v25.2.0
+        shell: bash
+        run: |
+          if [[ "${{ steps.target.outputs.prod }}" == "true" ]]; then
+            URL=$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN")
+          else
+            URL=$(vercel deploy --prebuilt --token="$VERCEL_TOKEN")
+          fi
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "Deployed (${{ steps.target.outputs.label }}): $URL"
+
+      - name: Comment preview URL on PR
+        if: github.event_name == 'pull_request' && steps.deploy.outputs.url != ''
+        uses: actions/github-script@v7
         with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ env.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ env.VERCEL_PROJECT_ID }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          github-comment: true
-          github-deployment: true
-          vercel-args: ${{ steps.target.outputs.vercel_args }}
+          script: |
+            const url = '${{ steps.deploy.outputs.url }}';
+            const body = `### Assessa preview\n\n${url}\n\n- Production: https://assessa.sstcloud.com.au\n- Development branch: https://assessa-git-develop-ragavendrenv-5507s-projects.vercel.app`;
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
 
       - name: Summarize URLs
-        if: always() && steps.deploy.outputs.preview-url != ''
+        if: always()
         shell: bash
         run: |
           {
             echo "## Assessa deploy (${{ steps.target.outputs.label }})"
             echo ""
-            echo "- **This deployment:** ${{ steps.deploy.outputs.preview-url }}"
-            echo "- **Production custom domain:** https://assessa.sstcloud.com.au"
-            echo "- **Production Vercel alias:** https://assessa-ragavendrenv-5507s-projects.vercel.app"
-            echo "- **Development (develop branch):** https://assessa-git-develop-ragavendrenv-5507s-projects.vercel.app"
+            echo "- **This deployment:** ${{ steps.deploy.outputs.url }}"
+            echo "- **Production:** https://assessa.sstcloud.com.au"
+            echo "- **Production (Vercel):** https://assessa-ragavendrenv-5507s-projects.vercel.app"
+            echo "- **Development:** https://assessa-git-develop-ragavendrenv-5507s-projects.vercel.app"
             echo ""
-            echo "Repo secret required: \`VERCEL_TOKEN\`"
+            echo "Requires repo secret \`VERCEL_TOKEN\` with access to this Vercel project."
           } >> "$GITHUB_STEP_SUMMARY"
