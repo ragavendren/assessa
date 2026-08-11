@@ -1,5 +1,5 @@
 {
   "framework": "tanstack-start",
   "buildCommand": "npm run build",
-  "installCommand": "npm install --include=optional"
+  "installCommand": "npm install --include=optional && npm install --no-save @rolldown/binding-linux-x64-gnu@1.2.3 lightningcss-linux-x64-gnu@1.33.0 @tailwindcss/oxide-linux-x64-gnu@4.3.3"
 }
