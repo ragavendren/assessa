@@ -13,7 +13,7 @@ const participantSchema = z.object({
 
 /** Public exam briefing for share links — no login required. */
 export const getPublicExamBriefing = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) => z.object({ examId: z.string().uuid() }).parse(input))
+  .validator((input: unknown) => z.object({ examId: z.string().uuid() }).parse(input))
   .handler(async ({ data }) => {
     const { getExam } = await import("@/lib/platform.server");
     const { examAvailability } = await import("@/lib/exam-availability");
@@ -49,7 +49,7 @@ export const getPublicExamBriefing = createServerFn({ method: "POST" })
  * and start the attempt — no interactive login required.
  */
 export const startGuestAttempt = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) => participantSchema.parse(input))
+  .validator((input: unknown) => participantSchema.parse(input))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { createClient } = await import("@supabase/supabase-js");

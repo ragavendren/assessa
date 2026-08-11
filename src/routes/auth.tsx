@@ -104,31 +104,6 @@ function AuthPage() {
     }
   }
 
-  async function onGoogle() {
-    setBusy(true);
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(destination)}`,
-          queryParams: { prompt: "select_account" },
-        },
-      });
-      if (error) {
-        const message = error.message || "";
-        toast.error(
-          /provider is not enabled|unsupported provider/i.test(message)
-            ? "Google sign-in is not enabled yet. Use email/password, or enable Google under Supabase → Authentication → Providers."
-            : message || "Google sign-in failed. Please try again.",
-        );
-        setBusy(false);
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Google sign-in failed");
-      setBusy(false);
-    }
-  }
-
   if (checkEmail) {
     return (
       <AuthLayout>
@@ -215,20 +190,6 @@ function AuthPage() {
             {busy ? "Please wait…" : mode === "signup" ? "Create account" : "Sign in"}
           </button>
         </form>
-
-        <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
-          <span className="h-px flex-1 bg-border" />
-          or
-          <span className="h-px flex-1 bg-border" />
-        </div>
-
-        <button
-          onClick={onGoogle}
-          disabled={busy}
-          className="w-full rounded-md border border-input bg-card px-4 py-2.5 text-sm font-medium transition-colors hover:bg-secondary disabled:opacity-60"
-        >
-          {busy ? "Redirecting…" : "Continue with Google"}
-        </button>
 
         {mode === "signin" ? (
           <Link

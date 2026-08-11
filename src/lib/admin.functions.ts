@@ -117,7 +117,7 @@ export const getAdminOverview = createServerFn({ method: "POST" })
 
 export const updateExamSettings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) =>
+  .validator((input: unknown) =>
     z
       .object({
         examId: z.string().uuid(),
@@ -175,7 +175,7 @@ export const cleanupSeedAssessments = createServerFn({ method: "POST" })
 
 export const createExam = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) =>
+  .validator((input: unknown) =>
     z
       .object({
         title: z.string().trim().min(3).max(140),
@@ -390,7 +390,7 @@ function mapQuestionsForInsert(examId: string, questions: z.infer<typeof examQue
 /** Admin: load one assessment with questions for editing. */
 export const getExamForEdit = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ examId: z.string().uuid() }).parse(input))
+  .validator((input: unknown) => z.object({ examId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { requireAdmin } = await import("@/lib/platform.server");
@@ -460,7 +460,7 @@ export const getExamForEdit = createServerFn({ method: "POST" })
 /** Admin: update assessment details and replace its question bank. */
 export const updateExam = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => examUpdateSchema.parse(input))
+  .validator((input: unknown) => examUpdateSchema.parse(input))
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { requireAdmin } = await import("@/lib/platform.server");
@@ -519,7 +519,7 @@ export const updateExam = createServerFn({ method: "POST" })
 /** Admin: delete an assessment (cascades questions/attempts). */
 export const deleteExam = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ examId: z.string().uuid() }).parse(input))
+  .validator((input: unknown) => z.object({ examId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { requireAdmin } = await import("@/lib/platform.server");
@@ -532,7 +532,7 @@ export const deleteExam = createServerFn({ method: "POST" })
 /** Admin: publish or unpublish an assessment. */
 export const setExamPublished = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) =>
+  .validator((input: unknown) =>
     z.object({ examId: z.string().uuid(), active: z.boolean() }).parse(input),
   )
   .handler(async ({ data, context }) => {
@@ -564,7 +564,7 @@ export const listExamCategories = createServerFn({ method: "POST" })
 
 export const upsertBadge = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) =>
+  .validator((input: unknown) =>
     z
       .object({
         code: z.string().trim().regex(/^[a-z0-9_]+$/, "Use lowercase letters, numbers, underscores").max(60),
@@ -617,7 +617,7 @@ export const listBadgeConfig = createServerFn({ method: "POST" })
 
 export const updateXpRule = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) =>
+  .validator((input: unknown) =>
     z
       .object({
         code: z.string().max(60),
@@ -715,7 +715,7 @@ export const getAdminUsers = createServerFn({ method: "POST" })
 /** Admin: one user's activity timeline and per-assessment performance. */
 export const getAdminUserDetail = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ userId: z.string().uuid() }).parse(input))
+  .validator((input: unknown) => z.object({ userId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { requireAdmin } = await import("@/lib/platform.server");
@@ -924,7 +924,7 @@ export const getAdminAssessmentPerformance = createServerFn({ method: "POST" })
 /** Admin: promote/demote user role. */
 export const setUserRole = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) =>
+  .validator((input: unknown) =>
     z
       .object({
         userId: z.string().uuid(),
@@ -970,7 +970,7 @@ export const setUserRole = createServerFn({ method: "POST" })
 /** Admin: ban / unban a user (blocks further auth). */
 export const setUserBanned = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) =>
+  .validator((input: unknown) =>
     z
       .object({
         userId: z.string().uuid(),
@@ -997,7 +997,7 @@ export const setUserBanned = createServerFn({ method: "POST" })
 /** Admin: edit participant profile fields. */
 export const updateAdminUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) =>
+  .validator((input: unknown) =>
     z
       .object({
         userId: z.string().uuid(),
@@ -1049,7 +1049,7 @@ export const updateAdminUser = createServerFn({ method: "POST" })
 /** Admin: permanently delete a user and related profile/role rows. */
 export const deleteAdminUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ userId: z.string().uuid() }).parse(input))
+  .validator((input: unknown) => z.object({ userId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { requireAdmin } = await import("@/lib/platform.server");

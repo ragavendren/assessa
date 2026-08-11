@@ -206,7 +206,7 @@ export const listMyExams = createServerFn({ method: "POST" })
 
 export const getExamBriefing = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ examId: z.string().uuid() }).parse(input))
+  .validator((input: unknown) => z.object({ examId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     const { getExam, assertExamAccess, countAttempts, ensureProfile } = await import(
       "@/lib/platform.server"
@@ -257,7 +257,7 @@ export const getExamBriefing = createServerFn({ method: "POST" })
 
 export const beginAttempt = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) =>
+  .validator((input: unknown) =>
     z
       .object({ examId: z.string().uuid(), extra: z.record(z.string(), z.string()).default({}) })
       .parse(input),
@@ -269,7 +269,7 @@ export const beginAttempt = createServerFn({ method: "POST" })
 
 export const getAttemptPaper = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ attemptId: z.string().uuid() }).parse(input))
+  .validator((input: unknown) => z.object({ attemptId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     const { loadAttempt, serveQuestions } = await import("@/lib/platform.server");
     const { attempt, exam } = await loadAttempt(context.userId, data.attemptId);
@@ -297,7 +297,7 @@ export const getAttemptPaper = createServerFn({ method: "POST" })
 
 export const finishAttempt = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) =>
+  .validator((input: unknown) =>
     z
       .object({
         attemptId: z.string().uuid(),
@@ -318,7 +318,7 @@ export const finishAttempt = createServerFn({ method: "POST" })
 
 export const getResult = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ attemptId: z.string().uuid() }).parse(input))
+  .validator((input: unknown) => z.object({ attemptId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     const { summariseResult } = await import("@/lib/platform.server");
     return summariseResult(context.userId, data.attemptId);
@@ -326,7 +326,7 @@ export const getResult = createServerFn({ method: "POST" })
 
 export const getLeaderboard = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) =>
+  .validator((input: unknown) =>
     z
       .object({
         scope: z.enum(["global", "organization", "department", "exam", "topic"]),
@@ -443,7 +443,7 @@ export const getProgress = createServerFn({ method: "POST" })
 
 export const saveProfile = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) =>
+  .validator((input: unknown) =>
     z
       .object({
         full_name: z.string().trim().min(2).max(120),
