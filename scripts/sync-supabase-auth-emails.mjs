@@ -55,7 +55,10 @@ function ensureHookSecret(fileEnv) {
   const envPath = resolve(".env");
   const existing = existsSync(envPath) ? readFileSync(envPath, "utf8") : "";
   const line = `\n# Supabase Auth Send Email Hook (Resend API)\nSEND_EMAIL_HOOK_SECRET=${secret}\n`;
-  writeFileSync(envPath, existing.endsWith("\n") || !existing ? `${existing}${line}` : `${existing}\n${line}`);
+  writeFileSync(
+    envPath,
+    existing.endsWith("\n") || !existing ? `${existing}${line}` : `${existing}\n${line}`,
+  );
   console.log("Generated SEND_EMAIL_HOOK_SECRET and appended to .env");
   return secret;
 }
@@ -88,7 +91,9 @@ if (!from?.adminEmail) {
   process.exit(1);
 }
 if (!appUrl.startsWith("https://") || /localhost|127\.0\.0\.1/.test(appUrl)) {
-  console.error("APP_URL must be a public https URL for the Send Email Hook (e.g. https://assessa.sstcloud.com.au)");
+  console.error(
+    "APP_URL must be a public https URL for the Send Email Hook (e.g. https://assessa.sstcloud.com.au)",
+  );
   process.exit(1);
 }
 
@@ -148,4 +153,6 @@ console.log("- Hook URI:", hookUri);
 console.log("- From (Resend):", `${from.senderName} <${from.adminEmail}>`);
 console.log("- SMTP / built-in Supabase mailer: disabled");
 console.log("- Rate limit (Auth triggers/hour):", payload.rate_limit_email_sent);
-console.log("Deploy the app with RESEND_API_KEY, RESEND_FROM_EMAIL, SEND_EMAIL_HOOK_SECRET, then test signup.");
+console.log(
+  "Deploy the app with RESEND_API_KEY, RESEND_FROM_EMAIL, SEND_EMAIL_HOOK_SECRET, then test signup.",
+);
