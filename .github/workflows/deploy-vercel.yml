@@ -35,17 +35,16 @@ concurrency:
   group: vercel-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
+# Do NOT bind GitHub Environments here — env-scoped VERCEL_TOKEN secrets
+# override the repo secret and commonly break `vercel pull` with
+# "Could not retrieve Project Settings".
 env:
   VERCEL_ORG_ID: team_sKKMMuszjU4cd4Ag6IY6ZLEb
   VERCEL_PROJECT_ID: prj_yXSFIGCjYkIwYAV3FGwAFLVCvhmX
-  VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment:
-      name: ${{ ((github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production') || (github.event_name == 'push' && github.ref == 'refs/heads/main')) && 'production' || 'development' }}
-      url: ${{ steps.deploy.outputs.url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -77,32 +76,29 @@ jobs:
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
 
-      - name: Pull Vercel environment
+      - name: Verify Vercel token
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         shell: bash
         run: |
-          if [[ "${{ steps.target.outputs.prod }}" == "true" ]]; then
-            vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
-          else
-            vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
+          if [[ -z "$VERCEL_TOKEN" ]]; then
+            echo "Missing repo secret VERCEL_TOKEN. Create one at https://vercel.com/account/tokens"
+            echo "then: gh secret set VERCEL_TOKEN --repo ragavendren/assessa"
+            exit 1
           fi
+          vercel whoami --token="$VERCEL_TOKEN"
 
-      - name: Build
-        shell: bash
-        run: |
-          if [[ "${{ steps.target.outputs.prod }}" == "true" ]]; then
-            vercel build --prod --token="$VERCEL_TOKEN"
-          else
-            vercel build --token="$VERCEL_TOKEN"
-          fi
-
-      - name: Deploy
+      - name: Deploy to Vercel
         id: deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         shell: bash
         run: |
+          # Remote build+deploy (avoids local vercel pull/link issues)
           if [[ "${{ steps.target.outputs.prod }}" == "true" ]]; then
-            URL=$(vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN")
+            URL=$(vercel deploy --yes --prod --token="$VERCEL_TOKEN")
           else
-            URL=$(vercel deploy --prebuilt --token="$VERCEL_TOKEN")
+            URL=$(vercel deploy --yes --token="$VERCEL_TOKEN")
           fi
           echo "url=$URL" >> "$GITHUB_OUTPUT"
           echo "Deployed (${{ steps.target.outputs.label }}): $URL"
@@ -133,5 +129,5 @@ jobs:
             echo "- **Production (Vercel):** https://assessa-ragavendrenv-5507s-projects.vercel.app"
             echo "- **Development:** https://assessa-git-develop-ragavendrenv-5507s-projects.vercel.app"
             echo ""
-            echo "Requires repo secret \`VERCEL_TOKEN\` with access to this Vercel project."
+            echo "Uses repo secret \`VERCEL_TOKEN\` only (do not set the same name under GitHub Environments)."
           } >> "$GITHUB_STEP_SUMMARY"
