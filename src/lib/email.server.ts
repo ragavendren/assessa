@@ -296,8 +296,8 @@ export function buildAuthEmail(payload: AuthEmailPayload): {
   if (!to) return null;
 
   const fullName =
-    typeof payload.user.user_metadata?.full_name === "string"
-      ? payload.user.user_metadata.full_name.trim()
+    typeof payload.user.user_metadata?.["full_name"] === "string"
+      ? payload.user.user_metadata["full_name"].trim()
       : "";
   const href = confirmationUrl(payload.email_data);
   const action = payload.email_data.email_action_type;
