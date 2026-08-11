@@ -17,11 +17,14 @@ GitHub Actions workflow: [`.github/workflows/deploy-vercel.yml`](.github/workflo
 - Push to `develop` → development preview
 - Manual run: **Actions → Deploy to Vercel → Run workflow** → choose `production` or `development`
 
-Requires repo secret `VERCEL_TOKEN` ([create token](https://vercel.com/account/tokens)):
+Requires repo secret `VERCEL_TOKEN` ([create token](https://vercel.com/account/tokens)) with access to team **ragavendrenv-5507s-projects** / project **assessa**:
 
 ```sh
+# Create a new token at vercel.com/account/tokens, then:
 gh secret set VERCEL_TOKEN --repo ragavendren/assessa
 ```
+
+If Actions fail with `Could not retrieve Project Settings`, the token is expired, revoked, or lacks access — generate a fresh token and re-set the secret.
 
 Vercel project env vars must include Production **and** Preview (development/PR) values — see below. Sync from `.env` with `npm run env:sync-vercel`.
 
