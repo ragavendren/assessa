@@ -1,0 +1,46 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# build
+.output/
+.nitro/
+.vinxi/
+dist/
+build/
+.vercel/
+.turbo/
+
+# env & secrets
+.env
+.env.*
+!.env.example
+
+# logs / debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# typescript
+*.tsbuildinfo
+
+# supabase CLI local
+supabase/.temp/
+supabase/.branches/
+
+# test / coverage
+coverage/
+
+# misc
+*.local
+.cache/

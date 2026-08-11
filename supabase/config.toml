@@ -1,0 +1,7 @@
+# Synced from SUPABASE_PROJECT_ID in .env by `npm run db:migrate`.
+# Source: Supabase Dashboard → Project Settings → General → Reference ID
+project_id = "bdktwzctaiqtlyhzegvr"
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]

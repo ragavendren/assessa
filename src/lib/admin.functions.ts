@@ -1,0 +1,731 @@
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
+
+export const getAdminOverview = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { requireAdmin } = await import("@/lib/platform.server");
+    await requireAdmin(context.userId);
+
+    const [{ data: profiles }, { data: attempts }, { data: xp }, { data: badges }, { data: streaks }, { data: exams }, { data: mastery }] =
+      await Promise.all([
+        supabaseAdmin.from("profiles").select("id, full_name, email, organization, department"),
+        supabaseAdmin
+          .from("exam_attempts")
+          .select("user_id, exam_id, score, passed, submitted_at, status")
+          .eq("status", "submitted"),
+        supabaseAdmin.from("xp_transactions").select("user_id, points"),
+        supabaseAdmin.from("user_badges").select("user_id"),
+        supabaseAdmin.from("user_streaks").select("user_id, streak_type, current_count, longest_count"),
+        supabaseAdmin.from("exams").select("*").order("created_at", { ascending: false }),
+        supabaseAdmin.from("topic_mastery").select("topic, subtopic, mastery, total_count"),
+      ]);
+
+    const xpByUser = new Map<string, number>();
+    for (const row of xp ?? [])
+      xpByUser.set(row.user_id, (xpByUser.get(row.user_id) ?? 0) + (row.points ?? 0));
+    const badgesByUser = new Map<string, number>();
+    for (const row of badges ?? [])
+      badgesByUser.set(row.user_id, (badgesByUser.get(row.user_id) ?? 0) + 1);
+    const attemptsByUser = new Map<string, number[]>();
+    for (const row of attempts ?? []) {
+      const list = attemptsByUser.get(row.user_id) ?? [];
+      list.push(Number(row.score ?? 0));
+      attemptsByUser.set(row.user_id, list);
+    }
+
+    const participants = (profiles ?? []).map((p) => {
+      const scores = attemptsByUser.get(p.id) ?? [];
+      const average = scores.length
+        ? Math.round(scores.reduce((s, v) => s + v, 0) / scores.length)
+        : 0;
+      const improvement =
+        scores.length >= 2 ? Math.round((scores[scores.length - 1] ?? 0) - (scores[0] ?? 0)) : 0;
+      const streak =
+        (streaks ?? []).find((s) => s.user_id === p.id && s.streak_type === "pass")?.longest_count ??
+        0;
+      return {
+        id: p.id,
+        name: p.full_name || p.email,
+        organization: p.organization,
+        department: p.department,
+        xp: xpByUser.get(p.id) ?? 0,
+        badges: badgesByUser.get(p.id) ?? 0,
+        completed: scores.length,
+        average,
+        improvement,
+        passStreak: streak,
+      };
+    });
+
+    const topicAgg = new Map<string, { sum: number; count: number }>();
+    for (const row of mastery ?? []) {
+      const key = `${row.topic} · ${row.subtopic}`;
+      const bucket = topicAgg.get(key) ?? { sum: 0, count: 0 };
+      bucket.sum += Number(row.mastery);
+      bucket.count += 1;
+      topicAgg.set(key, bucket);
+    }
+
+    return {
+      totals: {
+        participants: (profiles ?? []).length,
+        attempts: (attempts ?? []).length,
+        exams: (exams ?? []).length,
+        averageScore: (attempts ?? []).length
+          ? Math.round(
+              (attempts ?? []).reduce((s, a) => s + Number(a.score ?? 0), 0) /
+                (attempts ?? []).length,
+            )
+          : 0,
+        passRate: (attempts ?? []).length
+          ? Math.round(
+              ((attempts ?? []).filter((a) => a.passed).length / (attempts ?? []).length) * 100,
+            )
+          : 0,
+      },
+      participants,
+      exams: (exams ?? []).map((e) => ({
+        id: e.id,
+        title: e.title,
+        topic: e.topic,
+        mode: e.mode,
+        access: e.access,
+        active: e.active,
+        passMark: e.pass_mark,
+        questionCount: e.question_count,
+        duration: e.duration_minutes,
+        maxAttempts: e.max_attempts,
+        enableXp: e.enable_xp,
+        enableBadges: e.enable_badges,
+        enableLeaderboard: e.enable_leaderboard,
+        showRank: e.show_rank,
+        showOthers: e.show_others,
+        nameDisplay: e.leaderboard_name_display,
+        startsAt: e.starts_at,
+        endsAt: (e as { ends_at?: string | null }).ends_at ?? null,
+        attempts: (attempts ?? []).filter((a) => a.exam_id === e.id).length,
+      })),
+      weakestTopics: [...topicAgg.entries()]
+        .map(([key, b]) => ({ key, average: Math.round(b.sum / b.count) }))
+        .sort((a, b) => a.average - b.average)
+        .slice(0, 6),
+    };
+  });
+
+export const updateExamSettings = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        examId: z.string().uuid(),
+        enable_xp: z.boolean(),
+        enable_badges: z.boolean(),
+        enable_leaderboard: z.boolean(),
+        show_rank: z.boolean(),
+        show_others: z.boolean(),
+        leaderboard_name_display: z.enum(["full_name", "first_initial", "display_name", "anonymous"]),
+        active: z.boolean(),
+        starts_at: z.string().datetime().nullable().optional(),
+        ends_at: z.string().datetime().nullable().optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { requireAdmin } = await import("@/lib/platform.server");
+    await requireAdmin(context.userId);
+    const { examId, ...patch } = data;
+    if (patch.starts_at && patch.ends_at && new Date(patch.ends_at) <= new Date(patch.starts_at)) {
+      throw new Error("End date must be after the start date.");
+    }
+    const { error } = await supabaseAdmin.from("exams").update(patch).eq("id", examId);
+    if (error) throw error;
+    return { ok: true };
+  });
+
+export const cleanupSeedAssessments = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { requireAdmin } = await import("@/lib/platform.server");
+    await requireAdmin(context.userId);
+    const seedIds = [
+      "11111111-1111-1111-1111-111111111111",
+      "22222222-2222-2222-2222-222222222222",
+      "33333333-3333-3333-3333-333333333333",
+      "44444444-4444-4444-4444-444444444444",
+    ];
+    const { error, count } = await supabaseAdmin
+      .from("exams")
+      .delete({ count: "exact" })
+      .in("id", seedIds);
+    if (error) throw error;
+    return { deleted: count ?? 0 };
+  });
+
+export const createExam = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        title: z.string().trim().min(3).max(140),
+        description: z.string().trim().max(600).default(""),
+        topic: z.string().trim().min(2).max(60),
+        mode: z.enum(["practice", "assessment", "competitive", "certification"]),
+        duration_minutes: z.number().int().min(1).max(300),
+        pass_mark: z.number().int().min(1).max(100),
+        max_attempts: z.number().int().min(1).max(99),
+        access: z.enum(["public", "private", "organization", "group"]),
+        organization: z.string().trim().max(120).optional().or(z.literal("")),
+        team_group: z.string().trim().max(120).optional().or(z.literal("")),
+        invitations: z.string().max(4000).optional().or(z.literal("")),
+        active: z.boolean().default(true),
+        starts_at: z.string().datetime().nullable().optional(),
+        ends_at: z.string().datetime().nullable().optional(),
+        questions: z
+          .array(
+            z.object({
+              prompt: z.string().trim().min(4).max(600),
+              options: z.array(z.string().trim().min(1).max(300)).min(2).max(6),
+              correct_index: z.number().int().min(0).max(5),
+              correct_indexes: z.array(z.number().int().min(0).max(5)).min(1).max(6).optional(),
+              multi_select: z.boolean().default(false),
+              subtopic: z.string().trim().max(60).default("general"),
+              explanation: z.string().trim().max(600).default(""),
+            }),
+          )
+          .min(1)
+          .max(200),
+      })
+      .superRefine((value, ctx) => {
+        if (value.starts_at && value.ends_at && new Date(value.ends_at) <= new Date(value.starts_at)) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "End date must be after the start date." });
+        }
+        for (const [index, question] of value.questions.entries()) {
+          const indexes = [...new Set(question.correct_indexes ?? [question.correct_index])].filter(
+            (item) => item < question.options.length,
+          );
+          if (indexes.length === 0) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: `Question ${index + 1} needs a valid correct answer.`,
+            });
+          }
+          if (!question.multi_select && indexes.length > 1) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: `Question ${index + 1}: enable multi-select for multiple answers.`,
+            });
+          }
+        }
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { requireAdmin } = await import("@/lib/platform.server");
+    await requireAdmin(context.userId);
+
+    const { data: exam, error } = await supabaseAdmin
+      .from("exams")
+      .insert({
+        title: data.title,
+        description: data.description,
+        topic: data.topic,
+        mode: data.mode,
+        question_count: data.questions.length,
+        duration_minutes: data.duration_minutes,
+        pass_mark: data.pass_mark,
+        max_attempts: data.max_attempts,
+        access: data.access,
+        organization: data.organization || null,
+        team_group: data.team_group || null,
+        created_by: context.userId,
+        active: data.active,
+        starts_at: data.starts_at ?? null,
+        ends_at: data.ends_at ?? null,
+        enable_leaderboard: data.mode !== "practice",
+        enable_xp: true,
+        enable_badges: data.mode !== "certification",
+      })
+      .select("id")
+      .single();
+    if (error) throw error;
+
+    const { error: qError } = await supabaseAdmin.from("questions").insert(
+      data.questions.map((q) => {
+        const correctIndexes = [...new Set(q.correct_indexes ?? [q.correct_index])]
+          .filter((index) => index < q.options.length)
+          .sort((a, b) => a - b);
+        return {
+          exam_id: exam.id,
+          prompt: q.prompt,
+          options: q.options,
+          correct_index: correctIndexes[0] ?? 0,
+          correct_indexes: q.multi_select ? correctIndexes : [correctIndexes[0] ?? 0],
+          subtopic: q.subtopic || "general",
+          explanation: q.explanation,
+        };
+      }),
+    );
+    if (qError) throw qError;
+
+    const emails = (data.invitations ?? "")
+      .split(/[\s,;]+/)
+      .map((value) => value.trim().toLowerCase())
+      .filter((value) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value));
+    if (emails.length > 0) {
+      await supabaseAdmin
+        .from("exam_invitations")
+        .upsert(
+          emails.map((email) => ({ exam_id: exam.id, email })),
+          { onConflict: "exam_id,email" },
+        );
+      const { data: invited } = await supabaseAdmin
+        .from("profiles")
+        .select("id, email")
+        .in("email", emails);
+      for (const profile of invited ?? []) {
+        await supabaseAdmin.from("notifications").insert({
+          user_id: profile.id,
+          kind: "invitation",
+          icon: "✉️",
+          title: `You have been invited to ${data.title}`,
+          body: "Open My Exams to start when you are ready.",
+        });
+      }
+    }
+    return { examId: exam.id as string };
+  });
+
+export const upsertBadge = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        code: z.string().trim().regex(/^[a-z0-9_]+$/, "Use lowercase letters, numbers, underscores").max(60),
+        name: z.string().trim().min(2).max(80),
+        description: z.string().trim().max(240).default(""),
+        icon: z.string().trim().min(1).max(8),
+        category: z.string().trim().max(40).default("custom"),
+        condition_type: z.enum([
+          "pass_count",
+          "attempt_count",
+          "single_score",
+          "average_over",
+          "pass_streak",
+          "fast_high_score",
+          "improvement",
+          "comeback",
+          "topic_average",
+          "top_rank",
+        ]),
+        condition_value: z.number().min(0).max(1000),
+        condition_topic: z.string().trim().max(60).optional().or(z.literal("")),
+        xp_reward: z.number().int().min(0).max(2000),
+        active: z.boolean(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { requireAdmin } = await import("@/lib/platform.server");
+    await requireAdmin(context.userId);
+    const { error } = await supabaseAdmin
+      .from("badges")
+      .upsert({ ...data, condition_topic: data.condition_topic || null }, { onConflict: "code" });
+    if (error) throw error;
+    return { ok: true };
+  });
+
+export const listBadgeConfig = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { requireAdmin } = await import("@/lib/platform.server");
+    await requireAdmin(context.userId);
+    const [{ data: badges }, { data: rules }] = await Promise.all([
+      supabaseAdmin.from("badges").select("*").order("category"),
+      supabaseAdmin.from("xp_rules").select("*").order("points", { ascending: false }),
+    ]);
+    return { badges: badges ?? [], rules: rules ?? [] };
+  });
+
+export const updateXpRule = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        code: z.string().max(60),
+        points: z.number().int().min(0).max(1000),
+        active: z.boolean(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { requireAdmin } = await import("@/lib/platform.server");
+    await requireAdmin(context.userId);
+    const { error } = await supabaseAdmin
+      .from("xp_rules")
+      .update({ points: data.points, active: data.active })
+      .eq("code", data.code);
+    if (error) throw error;
+    return { ok: true };
+  });
+
+/** Admin: users list with activity and performance rollups. */
+export const getAdminUsers = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { requireAdmin } = await import("@/lib/platform.server");
+    await requireAdmin(context.userId);
+
+    const [{ data: profiles }, { data: roles }, { data: attempts }] = await Promise.all([
+      supabaseAdmin
+        .from("profiles")
+        .select(
+          "id, full_name, email, organization, department, participant_id, mobile, created_at, updated_at, leaderboard_opt_out",
+        )
+        .order("created_at", { ascending: false }),
+      supabaseAdmin.from("user_roles").select("user_id, role"),
+      supabaseAdmin
+        .from("exam_attempts")
+        .select("id, user_id, exam_id, score, passed, status, started_at, submitted_at")
+        .order("started_at", { ascending: false }),
+    ]);
+
+    const roleByUser = new Map<string, string[]>();
+    for (const row of roles ?? []) {
+      const list = roleByUser.get(row.user_id) ?? [];
+      list.push(row.role);
+      roleByUser.set(row.user_id, list);
+    }
+
+    const users = (profiles ?? []).map((profile) => {
+      const userAttempts = (attempts ?? []).filter((a) => a.user_id === profile.id);
+      const submitted = userAttempts.filter((a) => a.status === "submitted");
+      const inProgress = userAttempts.filter((a) => a.status === "in_progress");
+      const passed = submitted.filter((a) => a.passed);
+      const scores = submitted.map((a) => Number(a.score ?? 0));
+      const examsOpted = new Set(userAttempts.map((a) => a.exam_id)).size;
+      const examsCompleted = new Set(submitted.map((a) => a.exam_id)).size;
+      const lastActivity =
+        userAttempts[0]?.submitted_at || userAttempts[0]?.started_at || profile.updated_at;
+
+      return {
+        id: profile.id,
+        name: profile.full_name || profile.email,
+        email: profile.email,
+        organization: profile.organization,
+        department: profile.department,
+        participantId: profile.participant_id,
+        mobile: profile.mobile,
+        roles: roleByUser.get(profile.id) ?? ["participant"],
+        isAdmin: (roleByUser.get(profile.id) ?? []).includes("admin"),
+        leaderboardOptOut: profile.leaderboard_opt_out,
+        createdAt: profile.created_at,
+        lastActivity,
+        optedAssessments: examsOpted,
+        completedAssessments: examsCompleted,
+        completionRate: examsOpted
+          ? Math.round((examsCompleted / examsOpted) * 100)
+          : 0,
+        attempts: userAttempts.length,
+        submitted: submitted.length,
+        inProgress: inProgress.length,
+        passRate: submitted.length
+          ? Math.round((passed.length / submitted.length) * 100)
+          : 0,
+        averageScore: scores.length
+          ? Math.round(scores.reduce((sum, value) => sum + value, 0) / scores.length)
+          : 0,
+        bestScore: scores.length ? Math.max(...scores) : null,
+      };
+    });
+
+    return { users };
+  });
+
+/** Admin: one user's activity timeline and per-assessment performance. */
+export const getAdminUserDetail = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ userId: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { requireAdmin } = await import("@/lib/platform.server");
+    await requireAdmin(context.userId);
+
+    const [{ data: profile }, { data: roles }, { data: attempts }, { data: exams }] =
+      await Promise.all([
+        supabaseAdmin.from("profiles").select("*").eq("id", data.userId).maybeSingle(),
+        supabaseAdmin.from("user_roles").select("role").eq("user_id", data.userId),
+        supabaseAdmin
+          .from("exam_attempts")
+          .select(
+            "id, exam_id, score, passed, status, started_at, submitted_at, duration_seconds, correct_count, question_ids",
+          )
+          .eq("user_id", data.userId)
+          .order("started_at", { ascending: false }),
+        supabaseAdmin.from("exams").select("id, title, topic, pass_mark, active"),
+      ]);
+
+    if (!profile) throw new Error("User not found");
+
+    const examById = new Map((exams ?? []).map((exam) => [exam.id, exam]));
+    const byExam = new Map<
+      string,
+      {
+        examId: string;
+        title: string;
+        topic: string;
+        passMark: number;
+        attempts: number;
+        submitted: number;
+        bestScore: number | null;
+        passed: boolean;
+        lastStatus: string;
+        lastAt: string | null;
+      }
+    >();
+
+    for (const attempt of attempts ?? []) {
+      const exam = examById.get(attempt.exam_id);
+      const current = byExam.get(attempt.exam_id) ?? {
+        examId: attempt.exam_id,
+        title: exam?.title ?? "Assessment",
+        topic: exam?.topic ?? "—",
+        passMark: exam?.pass_mark ?? 0,
+        attempts: 0,
+        submitted: 0,
+        bestScore: null as number | null,
+        passed: false,
+        lastStatus: attempt.status,
+        lastAt: attempt.submitted_at ?? attempt.started_at,
+      };
+      current.attempts += 1;
+      if (attempt.status === "submitted") {
+        current.submitted += 1;
+        const score = Number(attempt.score ?? 0);
+        current.bestScore =
+          current.bestScore == null ? score : Math.max(current.bestScore, score);
+        if (attempt.passed) current.passed = true;
+      }
+      byExam.set(attempt.exam_id, current);
+    }
+
+    return {
+      profile: {
+        id: profile.id,
+        name: profile.full_name || profile.email,
+        email: profile.email,
+        organization: profile.organization,
+        department: profile.department,
+        participantId: profile.participant_id,
+        mobile: profile.mobile,
+        roles: (roles ?? []).map((r) => r.role),
+        isAdmin: (roles ?? []).some((r) => r.role === "admin"),
+        leaderboardOptOut: profile.leaderboard_opt_out,
+        createdAt: profile.created_at,
+      },
+      assessments: [...byExam.values()].sort((a, b) =>
+        (b.lastAt ?? "").localeCompare(a.lastAt ?? ""),
+      ),
+      activity: (attempts ?? []).map((attempt) => {
+        const exam = examById.get(attempt.exam_id);
+        return {
+          id: attempt.id,
+          examId: attempt.exam_id,
+          title: exam?.title ?? "Assessment",
+          topic: exam?.topic ?? "—",
+          status: attempt.status,
+          score: attempt.score == null ? null : Number(attempt.score),
+          passed: attempt.passed,
+          startedAt: attempt.started_at,
+          submittedAt: attempt.submitted_at,
+          durationSeconds: attempt.duration_seconds,
+          correctCount: attempt.correct_count,
+          questionCount: attempt.question_ids?.length ?? 0,
+        };
+      }),
+    };
+  });
+
+/** Admin: per-assessment opted/completion/pass metrics + leaderboard. */
+export const getAdminAssessmentPerformance = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { requireAdmin } = await import("@/lib/platform.server");
+    await requireAdmin(context.userId);
+
+    const [{ data: exams }, { data: attempts }, { data: profiles }] = await Promise.all([
+      supabaseAdmin.from("exams").select("*").order("created_at", { ascending: false }),
+      supabaseAdmin
+        .from("exam_attempts")
+        .select("id, user_id, exam_id, score, passed, status, started_at, submitted_at"),
+      supabaseAdmin
+        .from("profiles")
+        .select("id, full_name, email, display_name, organization, leaderboard_opt_out"),
+    ]);
+
+    const profileById = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
+
+    const assessments = (exams ?? []).map((exam) => {
+      const examAttempts = (attempts ?? []).filter((a) => a.exam_id === exam.id);
+      const optedUsers = new Set(examAttempts.map((a) => a.user_id));
+      const submitted = examAttempts.filter((a) => a.status === "submitted");
+      const completedUsers = new Set(submitted.map((a) => a.user_id));
+      const passedUsers = new Set(submitted.filter((a) => a.passed).map((a) => a.user_id));
+
+      const bestByUser = new Map<
+        string,
+        { score: number; passed: boolean; submittedAt: string | null }
+      >();
+      for (const attempt of submitted) {
+        const score = Number(attempt.score ?? 0);
+        const current = bestByUser.get(attempt.user_id);
+        if (!current || score > current.score) {
+          bestByUser.set(attempt.user_id, {
+            score,
+            passed: !!attempt.passed,
+            submittedAt: attempt.submitted_at,
+          });
+        }
+      }
+
+      const leaderboard = [...bestByUser.entries()]
+        .map(([userId, row]) => {
+          const profile = profileById.get(userId);
+          return {
+            userId,
+            name: profile?.full_name || profile?.email || "Participant",
+            email: profile?.email ?? "",
+            organization: profile?.organization ?? null,
+            score: row.score,
+            passed: row.passed,
+            submittedAt: row.submittedAt,
+            optedOut: !!profile?.leaderboard_opt_out,
+          };
+        })
+        .sort((a, b) => b.score - a.score || (a.name ?? "").localeCompare(b.name ?? ""))
+        .map((row, index) => ({ ...row, rank: index + 1 }));
+
+      const scores = [...bestByUser.values()].map((row) => row.score);
+      const opted = optedUsers.size;
+      const completed = completedUsers.size;
+
+      return {
+        id: exam.id,
+        title: exam.title,
+        topic: exam.topic,
+        mode: exam.mode,
+        active: exam.active,
+        passMark: exam.pass_mark,
+        opted,
+        completed,
+        completionRate: opted ? Math.round((completed / opted) * 100) : 0,
+        passRate: completed ? Math.round((passedUsers.size / completed) * 100) : 0,
+        averageBestScore: scores.length
+          ? Math.round(scores.reduce((sum, value) => sum + value, 0) / scores.length)
+          : 0,
+        inProgress: examAttempts.filter((a) => a.status === "in_progress").length,
+        leaderboard: leaderboard.slice(0, 20),
+      };
+    });
+
+    const totals = {
+      assessments: assessments.length,
+      opted: assessments.reduce((sum, exam) => sum + exam.opted, 0),
+      completed: assessments.reduce((sum, exam) => sum + exam.completed, 0),
+      averageCompletion: assessments.length
+        ? Math.round(
+            assessments.reduce((sum, exam) => sum + exam.completionRate, 0) / assessments.length,
+          )
+        : 0,
+      averagePassRate: assessments.length
+        ? Math.round(
+            assessments.reduce((sum, exam) => sum + exam.passRate, 0) / assessments.length,
+          )
+        : 0,
+    };
+
+    return { assessments, totals };
+  });
+
+/** Admin: promote/demote user role. */
+export const setUserRole = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        userId: z.string().uuid(),
+        role: z.enum(["admin", "participant"]),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { requireAdmin } = await import("@/lib/platform.server");
+    await requireAdmin(context.userId);
+
+    if (data.userId === context.userId && data.role !== "admin") {
+      throw new Error("You cannot remove your own administrator role.");
+    }
+
+    if (data.role === "admin") {
+      const { error } = await supabaseAdmin
+        .from("user_roles")
+        .upsert({ user_id: data.userId, role: "admin" }, { onConflict: "user_id,role" });
+      if (error) throw error;
+    } else {
+      const { error } = await supabaseAdmin
+        .from("user_roles")
+        .delete()
+        .eq("user_id", data.userId)
+        .eq("role", "admin");
+      if (error) throw error;
+      const { data: remaining } = await supabaseAdmin
+        .from("user_roles")
+        .select("id")
+        .eq("user_id", data.userId);
+      if (!remaining?.length) {
+        await supabaseAdmin
+          .from("user_roles")
+          .upsert({ user_id: data.userId, role: "participant" }, { onConflict: "user_id,role" });
+      }
+    }
+
+    return { ok: true };
+  });
+
+/** Admin: ban / unban a user (blocks further auth). */
+export const setUserBanned = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        userId: z.string().uuid(),
+        banned: z.boolean(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { requireAdmin } = await import("@/lib/platform.server");
+    await requireAdmin(context.userId);
+
+    if (data.userId === context.userId) {
+      throw new Error("You cannot ban your own account.");
+    }
+
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(data.userId, {
+      ban_duration: data.banned ? "876000h" : "none",
+    });
+    if (error) throw error;
+    return { ok: true };
+  });
