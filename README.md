@@ -92,15 +92,15 @@ npm run env:sync-vercel         # push selected .env keys to Vercel
 
 ## Auth & email
 
-### Delivery: Resend for everything
+### Delivery: Resend API only
 
-- **Auth** (confirm / magic link / reset / invite): Supabase mailer → **Resend SMTP** (`smtp.resend.com`)
+- **Auth** (confirm / magic link / reset / invite): Supabase **Send Email Hook** → `POST /api/auth/send-email` → **Resend API** (Supabase does not send mail)
 - **Product** (exam invites / results / badges): Resend API from the app
-- Templates: `supabase/templates/` (Assessa branded)
-- Apply Auth SMTP + templates + raise Supabase email rate limit: `npm run db:sync-auth-emails`
-- Verify delivery config: `npm run db:inspect-auth-mail`
-- Verify your sending domain in [Resend → Domains](https://resend.com/domains) before testing
-- **"Email rate limit exceeded"** is a **Supabase Auth** gate (not Resend). With custom SMTP it is configurable (`SUPABASE_RATE_LIMIT_EMAIL_SENT`, default 100/hour). Built-in Supabase mailer is only ~2/hour.
+- Enable: `npm run db:sync-auth-emails` (needs `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `APP_URL`, writes `SEND_EMAIL_HOOK_SECRET`)
+- Verify: `npm run db:inspect-auth-mail` (must say `Resend API via Send Email Hook`)
+- Deploy with `RESEND_*` + `SEND_EMAIL_HOOK_SECRET` on Vercel (`npm run env:sync-vercel`)
+- Verify domain in [Resend → Domains](https://resend.com/domains); Auth sends appear in Resend → Emails
+- **"Email rate limit exceeded"** is still a **Supabase Auth** trigger gate (`SUPABASE_RATE_LIMIT_EMAIL_SENT`), not Resend
 
 ### Email / password routes
 

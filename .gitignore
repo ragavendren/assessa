@@ -46,3 +46,4 @@ coverage/
 # misc
 *.local
 .cache/
+.vercel

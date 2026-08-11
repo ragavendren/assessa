@@ -1,5 +1,5 @@
 /**
- * Inspect Auth SMTP + raise email send rate limit (custom SMTP required).
+ * Inspect Auth email delivery mode (Send Email Hook vs SMTP).
  * Usage: node scripts/inspect-auth-mail.mjs
  */
 import { readFileSync, existsSync } from "node:fs";
@@ -33,64 +33,32 @@ if (!token || !projectRef) {
 }
 
 const url = `https://api.supabase.com/v1/projects/${projectRef}/config/auth`;
-
-async function getConfig() {
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  const body = await res.json();
-  if (!res.ok) {
-    console.error("GET failed", res.status, body);
-    process.exit(1);
-  }
-  return body;
-}
-
-function summarize(cfg) {
-  return {
-    smtp_host: cfg.smtp_host,
-    smtp_port: cfg.smtp_port,
-    smtp_user: cfg.smtp_user,
-    smtp_admin_email: cfg.smtp_admin_email,
-    smtp_sender_name: cfg.smtp_sender_name,
-    smtp_pass_set: Boolean(cfg.smtp_pass),
-    hook_send_email_enabled: cfg.hook_send_email_enabled,
-    external_email_enabled: cfg.external_email_enabled,
-    rate_limit_email_sent: cfg.rate_limit_email_sent,
-  };
-}
-
-const before = await getConfig();
-console.log("before:", JSON.stringify(summarize(before), null, 2));
-
-const usingResend = String(before.smtp_host || "").includes("resend") && Boolean(before.smtp_pass);
-
-if (!usingResend) {
-  console.error(
-    "Custom Resend SMTP is NOT active — Auth is still on Supabase built-in mailer (2 emails/hour).",
-  );
-  console.error("Run: npm run db:sync-auth-emails");
-  process.exit(2);
-}
-
-// Custom SMTP unlocks raising this. Default built-in is ~2/hour.
-const rateLimit = Number(env.SUPABASE_RATE_LIMIT_EMAIL_SENT || 100);
-const patch = await fetch(url, {
-  method: "PATCH",
-  headers: {
-    Authorization: `Bearer ${token}`,
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({ rate_limit_email_sent: rateLimit }),
+const res = await fetch(url, {
+  headers: { Authorization: `Bearer ${token}` },
 });
-const patchText = await patch.text();
-if (!patch.ok) {
-  console.error("PATCH rate limit failed", patch.status, patchText.slice(0, 500));
+const cfg = await res.json();
+if (!res.ok) {
+  console.error("GET failed", res.status, cfg);
   process.exit(1);
 }
 
-const after = await getConfig();
-console.log("after:", JSON.stringify(summarize(after), null, 2));
-console.log(
-  `OK — Auth mail via Resend SMTP; Supabase email send rate limit set to ${after.rate_limit_email_sent}/hour`,
-);
+const summary = {
+  delivery: cfg.hook_send_email_enabled
+    ? "Resend API via Send Email Hook"
+    : cfg.smtp_host
+      ? `SMTP (${cfg.smtp_host})`
+      : "Supabase built-in mailer",
+  hook_send_email_enabled: cfg.hook_send_email_enabled,
+  hook_send_email_uri: cfg.hook_send_email_uri || null,
+  smtp_host: cfg.smtp_host,
+  smtp_admin_email: cfg.smtp_admin_email,
+  rate_limit_email_sent: cfg.rate_limit_email_sent,
+};
+
+console.log(JSON.stringify(summary, null, 2));
+
+if (!cfg.hook_send_email_enabled) {
+  console.error("\nAuth is NOT on Resend API hook. Run: npm run db:sync-auth-emails");
+  process.exit(2);
+}
+console.log("\nOK — Auth emails are delivered by Resend API (not Supabase mailer).");

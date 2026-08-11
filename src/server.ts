@@ -47,9 +47,26 @@ function isH3SwallowedErrorBody(body: string): boolean {
   }
 }
 
+function isAuthSendEmailPath(pathname: string) {
+  return pathname === "/api/auth/send-email" || pathname === "/api/auth/send-email/";
+}
+
+async function handleAuthSendEmailHook(request: Request): Promise<Response> {
+  if (request.method !== "POST") {
+    return new Response("Method Not Allowed", { status: 405 });
+  }
+  const { handleSupabaseSendEmailHook } = await import("@/lib/auth-email-hook.server");
+  return handleSupabaseSendEmailHook(request);
+}
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
+      const url = new URL(request.url);
+      if (isAuthSendEmailPath(url.pathname)) {
+        return await handleAuthSendEmailHook(request);
+      }
+
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(response);

@@ -1,8 +1,7 @@
 /**
- * Outbound email via Resend.
- * - Product: invites, results, badges (Resend API)
- * - Auth: confirmation / magic link / recovery via Supabase SMTP → Resend
- *   (configured by `npm run db:sync-auth-emails`)
+ * Outbound email via Resend API only.
+ * - Auth (confirm / magic link / recovery / invite): Supabase Send Email Hook → this app → Resend
+ * - Product (exam invites / results / badges): Resend API directly
  */
 import { Resend } from "resend";
 
@@ -243,4 +242,151 @@ export async function sendExamInvitationEmails(input: {
     ),
   );
   return results.filter(Boolean).length;
+}
+
+export type AuthEmailAction =
+  | "signup"
+  | "invite"
+  | "magiclink"
+  | "recovery"
+  | "email_change"
+  | "email"
+  | "reauthentication"
+  | string;
+
+export type AuthEmailPayload = {
+  user: {
+    email?: string | null;
+    new_email?: string | null;
+    user_metadata?: Record<string, unknown> | null;
+  };
+  email_data: {
+    token: string;
+    token_hash: string;
+    redirect_to: string;
+    email_action_type: AuthEmailAction;
+    site_url: string;
+    token_new?: string;
+    old_email?: string;
+  };
+};
+
+function supabaseAuthBaseUrl() {
+  return stripQuotes(process.env["SUPABASE_URL"] || process.env["VITE_SUPABASE_URL"]).replace(
+    /\/$/,
+    "",
+  );
+}
+
+function confirmationUrl(emailData: AuthEmailPayload["email_data"]) {
+  const type = emailData.email_action_type === "email" ? "email" : emailData.email_action_type;
+  const redirect = emailData.redirect_to || appBaseUrl();
+  const base = supabaseAuthBaseUrl();
+  return `${base}/auth/v1/verify?token=${encodeURIComponent(emailData.token_hash)}&type=${encodeURIComponent(type)}&redirect_to=${encodeURIComponent(redirect)}`;
+}
+
+/** Build Assessa-branded Auth emails sent via Resend (Send Email Hook). */
+export function buildAuthEmail(payload: AuthEmailPayload): {
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+} | null {
+  const to = normalizeEmailAddress(payload.user.email);
+  if (!to) return null;
+
+  const fullName =
+    typeof payload.user.user_metadata?.full_name === "string"
+      ? payload.user.user_metadata.full_name.trim()
+      : "";
+  const href = confirmationUrl(payload.email_data);
+  const action = payload.email_data.email_action_type;
+
+  const specs: Record<string, { subject: string; subtitle: string; body: string; cta: string }> = {
+    signup: {
+      subject: "Confirm your Assessa account",
+      subtitle: "Confirm your email",
+      body: `${fullName ? `Welcome, ${escapeHtml(fullName)}.` : "Welcome."} Confirm <strong>${escapeHtml(to)}</strong> to activate your Assessa account and start taking assessments.`,
+      cta: "Confirm email address",
+    },
+    invite: {
+      subject: "You're invited to Assessa",
+      subtitle: "Accept your invitation",
+      body: `You've been invited to create an Assessa account for <strong>${escapeHtml(to)}</strong>.`,
+      cta: "Accept invitation",
+    },
+    magiclink: {
+      subject: "Your Assessa sign-in link",
+      subtitle: "Sign-in link",
+      body: "Use the button below to sign in to Assessa. This link expires shortly and can only be used once.",
+      cta: "Sign in to Assessa",
+    },
+    email: {
+      subject: "Your Assessa sign-in link",
+      subtitle: "Sign-in link",
+      body: "Use the button below to sign in to Assessa. This link expires shortly and can only be used once.",
+      cta: "Sign in to Assessa",
+    },
+    recovery: {
+      subject: "Reset your Assessa password",
+      subtitle: "Reset your password",
+      body: `We received a request to reset the password for <strong>${escapeHtml(to)}</strong>.`,
+      cta: "Reset password",
+    },
+    email_change: {
+      subject: "Confirm your new Assessa email",
+      subtitle: "Confirm new email",
+      body: `Confirm <strong>${escapeHtml(normalizeEmailAddress(payload.user.new_email) || to)}</strong> as your new Assessa email address.`,
+      cta: "Confirm new email",
+    },
+    reauthentication: {
+      subject: `${payload.email_data.token} is your Assessa verification code`,
+      subtitle: "Verification code",
+      body: `Use this code to verify your identity: <strong style="font-size:22px;letter-spacing:0.12em">${escapeHtml(payload.email_data.token)}</strong>`,
+      cta: "",
+    },
+  };
+
+  const spec = specs[action] ?? {
+    subject: "Assessa notification",
+    subtitle: "Account update",
+    body: "Please continue using the button below.",
+    cta: "Continue",
+  };
+
+  const cta = spec.cta ? { href, label: spec.cta } : undefined;
+  const html = layout(
+    spec.subtitle,
+    `<p style="margin:0;font-size:15px;line-height:1.55;color:#33443c">${spec.body}</p>`,
+    cta,
+    { brandAsHeading: true },
+  );
+
+  return {
+    to,
+    subject: spec.subject,
+    html,
+    text: [spec.subject, spec.body.replace(/<[^>]+>/g, ""), href].join("\n\n"),
+  };
+}
+
+export async function sendAuthEmail(payload: AuthEmailPayload): Promise<boolean> {
+  const built = buildAuthEmail(payload);
+  if (!built) {
+    console.warn(
+      "[email] auth send skipped — invalid recipient",
+      payload.email_data.email_action_type,
+    );
+    return false;
+  }
+  const ok = await sendEmail(built);
+  if (ok) {
+    console.info(
+      "[email] Resend Auth mail sent:",
+      payload.email_data.email_action_type,
+      "→",
+      built.to,
+    );
+  }
+  return ok;
 }
