@@ -20,14 +20,20 @@ const NAV = [
 
 export function useMe() {
   const fetchMe = useServerFn(getMe);
-  return useQuery({ queryKey: ["me"], queryFn: () => fetchMe(), staleTime: 60_000 });
+  return useQuery({
+    queryKey: ["me"],
+    queryFn: () => fetchMe(),
+    staleTime: 60_000,
+  });
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { data } = useMe();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
   const [open, setOpen] = useState(false);
 
   async function signOut() {

@@ -125,9 +125,7 @@ console.log("- SMTP: smtp.resend.com:465");
 console.log("- From:", `${from.senderName} <${from.adminEmail}>`);
 console.log("- Templates: confirmation, recovery, magic_link");
 console.log("- Supabase email send rate limit:", payload.rate_limit_email_sent, "/hour");
-console.log(
-  "Note: 'email rate limit exceeded' is from Supabase Auth (not Resend).",
-);
+console.log("Note: 'email rate limit exceeded' is from Supabase Auth (not Resend).");
 console.log(
   "Ensure this domain is verified in Resend → Domains, then test signup / forgot-password.",
 );

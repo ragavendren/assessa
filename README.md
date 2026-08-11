@@ -4,18 +4,24 @@ Online assessment platform — TanStack Start, React, TypeScript, Tailwind CSS, 
 
 ## Application URLs (Vercel)
 
-| Environment | Git branch | Deploy | URL |
-|---|---|---|---|
-| **Production** | `main` | `vercel --prod` | **https://assessa.sstcloud.com.au** |
-| **Production** (Vercel alias) | `main` | `vercel --prod` | **https://assessa-ragavendrenv-5507s-projects.vercel.app** |
-| **Development** | `develop` | preview (not prod) | **https://assessa-git-develop-ragavendrenv-5507s-projects.vercel.app** |
-| **PR preview** | pull request | preview | Unique URL on the PR (e.g. `https://assessa-<hash>-ragavendrenv-5507s-projects.vercel.app`) |
+| Environment                   | Git branch   | Deploy             | URL                                                                                         |
+| ----------------------------- | ------------ | ------------------ | ------------------------------------------------------------------------------------------- |
+| **Production**                | `main`       | `vercel --prod`    | **https://assessa.sstcloud.com.au**                                                         |
+| **Production** (Vercel alias) | `main`       | `vercel --prod`    | **https://assessa-ragavendrenv-5507s-projects.vercel.app**                                  |
+| **Development**               | `develop`    | preview (not prod) | **https://assessa-git-develop-ragavendrenv-5507s-projects.vercel.app**                      |
+| **PR preview**                | pull request | preview            | Unique URL on the PR (e.g. `https://assessa-<hash>-ragavendrenv-5507s-projects.vercel.app`) |
 
-GitHub Actions workflow: [`.github/workflows/deploy-vercel.yml`](.github/workflows/deploy-vercel.yml)
+GitHub Actions:
 
-- Push to `main` → production
-- Push to `develop` → development preview
-- Manual run: **Actions → Deploy to Vercel → Run workflow** → choose `production` or `development`
+- **CI** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — mandatory gate on every push/PR to `main` and `develop`
+  - `npm run format:check` (Prettier)
+  - `npm run lint` (ESLint)
+  - `npm run typecheck` (TypeScript)
+  - `npm run build` (production build)
+- **Deploy** [`.github/workflows/deploy-vercel.yml`](.github/workflows/deploy-vercel.yml) — runs only after **CI succeeds**
+  - Push `main` → production
+  - Push `develop` → development preview
+  - Manual: **Actions → Deploy to Vercel → Run workflow**
 
 Requires repo secret `VERCEL_TOKEN` ([create token](https://vercel.com/account/tokens)) with access to team **ragavendrenv-5507s-projects** / project **assessa**:
 
@@ -24,7 +30,7 @@ Requires repo secret `VERCEL_TOKEN` ([create token](https://vercel.com/account/t
 gh secret set VERCEL_TOKEN --repo ragavendren/assessa
 ```
 
-If Actions fail with `Could not retrieve Project Settings`, the token is expired, revoked, or lacks access — generate a fresh token and re-set the secret.
+If Actions fail with `User not found` / `Could not retrieve Project Settings`, regenerate the token and re-set the secret. Do **not** also define `VERCEL_TOKEN` under GitHub Environments (it overrides the repo secret).
 
 Vercel project env vars must include Production **and** Preview (development/PR) values — see below. Sync from `.env` with `npm run env:sync-vercel`.
 
@@ -47,31 +53,34 @@ Local SSR loads **all** `.env` keys into `process.env` via `vite.config.ts` (not
 
 ## Environment variables
 
-| Variable | Required | Purpose |
-|---|---|---|
-| `SUPABASE_PROJECT_ID` / `VITE_SUPABASE_PROJECT_ID` | Yes | Project reference ID |
-| `SUPABASE_URL` / `VITE_SUPABASE_URL` | Yes | `https://<ref>.supabase.co` |
-| `SUPABASE_PUBLISHABLE_KEY` / `VITE_…` | Yes | Publishable API key |
-| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Service role (server only) |
-| `SUPABASE_DB_PASSWORD` | Migrate | Database password |
-| `SUPABASE_DB_REGION` | Migrate | e.g. `ap-south-1` |
-| `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` | Seed | Admin created by `db:seed` |
-| `APP_URL` | Prod | Public URL (`https://assessa.sstcloud.com.au`) |
-| `GEMINI_API_KEY` | Insights | [Google AI Studio](https://aistudio.google.com/apikey) key |
-| `GEMINI_MODEL` | No | Default `gemini-3.5-flash-lite` |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google SSO | Google Cloud OAuth Web client |
-| `SUPABASE_ACCESS_TOKEN` | Sync scripts | [Account token](https://supabase.com/dashboard/account/tokens) |
-| `RESEND_API_KEY` / `RESEND_FROM_EMAIL` | Yes (mail) | Resend — Auth SMTP + product emails (verified domain) |
-| `SUPABASE_RATE_LIMIT_EMAIL_SENT` | No | Auth email triggers/hour (default `100`; needs Resend SMTP) |
-| `AI_GATEWAY_API_KEY` | No | Optional OpenRouter-style fallback |
+| Variable                                           | Required     | Purpose                                                        |
+| -------------------------------------------------- | ------------ | -------------------------------------------------------------- |
+| `SUPABASE_PROJECT_ID` / `VITE_SUPABASE_PROJECT_ID` | Yes          | Project reference ID                                           |
+| `SUPABASE_URL` / `VITE_SUPABASE_URL`               | Yes          | `https://<ref>.supabase.co`                                    |
+| `SUPABASE_PUBLISHABLE_KEY` / `VITE_…`              | Yes          | Publishable API key                                            |
+| `SUPABASE_SERVICE_ROLE_KEY`                        | Yes          | Service role (server only)                                     |
+| `SUPABASE_DB_PASSWORD`                             | Migrate      | Database password                                              |
+| `SUPABASE_DB_REGION`                               | Migrate      | e.g. `ap-south-1`                                              |
+| `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`         | Seed         | Admin created by `db:seed`                                     |
+| `APP_URL`                                          | Prod         | Public URL (`https://assessa.sstcloud.com.au`)                 |
+| `GEMINI_API_KEY`                                   | Insights     | [Google AI Studio](https://aistudio.google.com/apikey) key     |
+| `GEMINI_MODEL`                                     | No           | Default `gemini-3.5-flash-lite`                                |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`        | Google SSO   | Google Cloud OAuth Web client                                  |
+| `SUPABASE_ACCESS_TOKEN`                            | Sync scripts | [Account token](https://supabase.com/dashboard/account/tokens) |
+| `RESEND_API_KEY` / `RESEND_FROM_EMAIL`             | Yes (mail)   | Resend — Auth SMTP + product emails (verified domain)          |
+| `SUPABASE_RATE_LIMIT_EMAIL_SENT`                   | No           | Auth email triggers/hour (default `100`; needs Resend SMTP)    |
+| `AI_GATEWAY_API_KEY`                               | No           | Optional OpenRouter-style fallback                             |
 
 ## Scripts
 
 ```sh
 npm run dev
 npm run build
+npm run format              # Prettier write
+npm run format:check        # Prettier check (CI)
 npm run lint
 npm run typecheck
+npm run ci                  # format:check + lint + typecheck + build
 npm run db:migrate
 npm run db:seed
 npm run db:setup

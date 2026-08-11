@@ -22,7 +22,10 @@ export const Route = createFileRoute("/_authenticated/progress")({
           "Score trends, improvement, time usage and per-topic mastery across all your assessments.",
       },
       { property: "og:title", content: "Progress & analytics — Assessa" },
-      { property: "og:description", content: "Your full assessment analytics report." },
+      {
+        property: "og:description",
+        content: "Your full assessment analytics report.",
+      },
     ],
   }),
   component: ProgressPage,
@@ -30,7 +33,10 @@ export const Route = createFileRoute("/_authenticated/progress")({
 
 function ProgressPage() {
   const fetchProgress = useServerFn(getProgress);
-  const { data, isPending } = useQuery({ queryKey: ["progress"], queryFn: () => fetchProgress() });
+  const { data, isPending } = useQuery({
+    queryKey: ["progress"],
+    queryFn: () => fetchProgress(),
+  });
 
   if (isPending || !data) return <PageLoader />;
 

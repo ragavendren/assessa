@@ -36,7 +36,10 @@ const FILTER_LABELS: Record<(typeof FILTERS)[number], string> = {
 
 function MyExams() {
   const fetchExams = useServerFn(listMyExams);
-  const { data, isPending } = useQuery({ queryKey: ["my-exams"], queryFn: () => fetchExams() });
+  const { data, isPending } = useQuery({
+    queryKey: ["my-exams"],
+    queryFn: () => fetchExams(),
+  });
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("all");
 
   if (isPending || !data) return <PageLoader />;

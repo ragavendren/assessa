@@ -25,12 +25,7 @@ export default defineConfig(({ command, mode }) => {
     },
     resolve: {
       tsconfigPaths: true,
-      dedupe: [
-        "react",
-        "react-dom",
-        "@tanstack/react-router",
-        "@tanstack/react-query",
-      ],
+      dedupe: ["react", "react-dom", "@tanstack/react-router", "@tanstack/react-query"],
     },
     plugins: [
       tailwindcss(),
@@ -50,8 +45,7 @@ export default defineConfig(({ command, mode }) => {
                 "X-Content-Type-Options": "nosniff",
                 "X-Frame-Options": "DENY",
                 "Referrer-Policy": "strict-origin-when-cross-origin",
-                "Permissions-Policy":
-                  "camera=(), microphone=(), geolocation=()",
+                "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
                 "Cross-Origin-Opener-Policy": "same-origin",
               },
             },

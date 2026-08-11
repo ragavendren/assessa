@@ -20,7 +20,9 @@ export function questionCsvTemplate(): string {
 }
 
 export function downloadQuestionCsvTemplate() {
-  const blob = new Blob([questionCsvTemplate()], { type: "text/csv;charset=utf-8" });
+  const blob = new Blob([questionCsvTemplate()], {
+    type: "text/csv;charset=utf-8",
+  });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -67,7 +69,10 @@ function letterToIndex(token: string): number | null {
 }
 
 /** Parse a questions CSV into structured question forms. */
-export function parseQuestionsCsv(text: string): { questions: CsvQuestion[]; errors: string[] } {
+export function parseQuestionsCsv(text: string): {
+  questions: CsvQuestion[];
+  errors: string[];
+} {
   const lines = text
     .replace(/^\uFEFF/, "")
     .split(/\r?\n/)
@@ -94,7 +99,9 @@ export function parseQuestionsCsv(text: string): { questions: CsvQuestion[]; err
       errors.push(`Row ${lineNo}: need at least two options`);
       continue;
     }
-    const multiSelect = ["true", "1", "yes", "y"].includes((row[8] ?? "false").trim().toLowerCase());
+    const multiSelect = ["true", "1", "yes", "y"].includes(
+      (row[8] ?? "false").trim().toLowerCase(),
+    );
     const correctRaw = (row[7] ?? "").trim();
     if (!correctRaw) {
       errors.push(`Row ${lineNo}: correct_answers is required (e.g. B or A|C)`);

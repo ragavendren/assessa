@@ -18,7 +18,10 @@ export const Route = createFileRoute("/take/$examId")({
         content: "Enter your details to start this shared Assessa assessment. No account required.",
       },
       { property: "og:title", content: "Take assessment — Assessa" },
-      { property: "og:description", content: "Shared assessment link. Enter participant details to begin." },
+      {
+        property: "og:description",
+        content: "Shared assessment link. Enter participant details to begin.",
+      },
       { name: "robots", content: "noindex,nofollow" },
       { property: "og:url", content: `/take/${params.examId}` },
     ],
@@ -67,7 +70,10 @@ function TakeExamPage() {
         toast.error(sessionError.message);
         return;
       }
-      navigate({ to: "/attempt/$attemptId", params: { attemptId: result.attemptId } });
+      navigate({
+        to: "/attempt/$attemptId",
+        params: { attemptId: result.attemptId },
+      });
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Could not start"),
   });
@@ -81,7 +87,10 @@ function TakeExamPage() {
           <p className="mt-2 text-sm text-muted-foreground">
             {error instanceof Error ? error.message : "This link is invalid or expired."}
           </p>
-          <Link to="/" className="mt-6 inline-flex rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground">
+          <Link
+            to="/"
+            className="mt-6 inline-flex rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground"
+          >
             Go home
           </Link>
         </div>
@@ -162,19 +171,47 @@ function TakeExamPage() {
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Full name">
-              <input className="field" value={fullName} onChange={(e) => setFullName(e.target.value)} required maxLength={100} />
+              <input
+                className="field"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                required
+                maxLength={100}
+              />
             </Field>
             <Field label="Email">
-              <input className="field" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required maxLength={255} />
+              <input
+                className="field"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                maxLength={255}
+              />
             </Field>
             <Field label="Organisation (optional)">
-              <input className="field" value={organization} onChange={(e) => setOrganization(e.target.value)} maxLength={120} />
+              <input
+                className="field"
+                value={organization}
+                onChange={(e) => setOrganization(e.target.value)}
+                maxLength={120}
+              />
             </Field>
             <Field label="Participant ID (optional)">
-              <input className="field" value={participantId} onChange={(e) => setParticipantId(e.target.value)} maxLength={60} />
+              <input
+                className="field"
+                value={participantId}
+                onChange={(e) => setParticipantId(e.target.value)}
+                maxLength={60}
+              />
             </Field>
             <Field label="Mobile (optional)">
-              <input className="field" value={mobile} onChange={(e) => setMobile(e.target.value)} maxLength={40} />
+              <input
+                className="field"
+                value={mobile}
+                onChange={(e) => setMobile(e.target.value)}
+                maxLength={40}
+              />
             </Field>
           </div>
 
@@ -186,7 +223,12 @@ function TakeExamPage() {
                     className="field"
                     maxLength={120}
                     value={extra[field.key] ?? ""}
-                    onChange={(e) => setExtra((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                    onChange={(e) =>
+                      setExtra((prev) => ({
+                        ...prev,
+                        [field.key]: e.target.value,
+                      }))
+                    }
                     required={!!field.required}
                   />
                 </Field>

@@ -99,5 +99,9 @@ export const passwordRules = [
 
 export function passwordStrength(value: string) {
   const passed = passwordRules.filter((rule) => rule.test(value)).length;
-  return { passed, total: passwordRules.length, ok: passed === passwordRules.length };
+  return {
+    passed,
+    total: passwordRules.length,
+    ok: passed === passwordRules.length,
+  };
 }

@@ -12,7 +12,10 @@ export const Route = createFileRoute("/reset-password")({
         content: "Set a new password for your Assessa participant account.",
       },
       { property: "og:title", content: "Choose a new password — Assessa" },
-      { property: "og:description", content: "Set a new password for your Assessa account." },
+      {
+        property: "og:description",
+        content: "Set a new password for your Assessa account.",
+      },
     ],
   }),
   component: ResetPassword,

@@ -1,0 +1,57 @@
+name: CI
+
+# Mandatory quality gate — must pass before deploy.
+# Checks: Prettier format, ESLint, TypeScript, production build
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Format · Lint · Typecheck · Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: |
+          npm install --include=optional
+          npm install --no-save \
+            @rolldown/binding-linux-x64-gnu@1.2.3 \
+            lightningcss-linux-x64-gnu@1.33.0 \
+            @tailwindcss/oxide-linux-x64-gnu@4.3.3
+
+      - name: Format check (Prettier)
+        run: npm run format:check
+
+      - name: Lint (ESLint)
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Production build
+        run: npm run build

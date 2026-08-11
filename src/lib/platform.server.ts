@@ -83,7 +83,9 @@ export async function ensureProfile(
       .insert({
         id: userId,
         email,
-        full_name: String(meta["full_name"] ?? meta["name"] ?? email.split("@")[0] ?? "Participant"),
+        full_name: String(
+          meta["full_name"] ?? meta["name"] ?? email.split("@")[0] ?? "Participant",
+        ),
         mobile: (meta["mobile"] as string | undefined) ?? null,
         participant_id: (meta["participant_id"] as string | undefined) ?? null,
         organization: (meta["organization"] as string | undefined) ?? null,
@@ -163,9 +165,12 @@ export async function awardXp(
   referenceId?: string | null,
 ) {
   if (points <= 0) return 0;
-  await db
-    .from("xp_transactions")
-    .insert({ user_id: userId, source, points, reference_id: referenceId ?? null });
+  await db.from("xp_transactions").insert({
+    user_id: userId,
+    source,
+    points,
+    reference_id: referenceId ?? null,
+  });
   return points;
 }
 
@@ -199,9 +204,8 @@ export async function notify(
       .select("email")
       .eq("id", userId)
       .maybeSingle();
-    const { appBaseUrl, normalizeEmailAddress, sendNotificationEmail } = await import(
-      "@/lib/email.server"
-    );
+    const { appBaseUrl, normalizeEmailAddress, sendNotificationEmail } =
+      await import("@/lib/email.server");
     const to = normalizeEmailAddress(profile?.email);
     if (!to) return;
 
@@ -249,7 +253,10 @@ export async function assertExamAccess(userId: string, exam: ExamRow) {
   const availability = examAvailability(exam);
   if (!availability.ok) throw new Error(availability.reason);
   if (exam.access === "public") return;
-  const { data } = await db.rpc("can_access_exam", { _user_id: userId, _exam_id: exam.id });
+  const { data } = await db.rpc("can_access_exam", {
+    _user_id: userId,
+    _exam_id: exam.id,
+  });
   if (!data) throw new Error("You do not have access to this assessment.");
 }
 
@@ -307,11 +314,7 @@ export async function countAttempts(userId: string, examId: string) {
   return count ?? 0;
 }
 
-export async function startAttempt(
-  userId: string,
-  examId: string,
-  extra: Record<string, string>,
-) {
+export async function startAttempt(userId: string, examId: string, extra: Record<string, string>) {
   const exam = await getExam(examId);
   if (!exam) throw new Error("Assessment not found.");
   await assertExamAccess(userId, exam);
@@ -340,7 +343,12 @@ export async function startAttempt(
 
   const { data: attempt, error } = await db
     .from("exam_attempts")
-    .insert({ exam_id: examId, user_id: userId, question_ids: ids, extra_fields: extra })
+    .insert({
+      exam_id: examId,
+      user_id: userId,
+      question_ids: ids,
+      extra_fields: extra,
+    })
     .select("id")
     .single();
   if (error) throw error;
@@ -526,18 +534,16 @@ async function updateStreaks(userId: string, passed: boolean, score: number) {
       .maybeSingle();
     const current = keep ? (data?.current_count ?? 0) + 1 : 0;
     const longest = Math.max(data?.longest_count ?? 0, current);
-    await db
-      .from("user_streaks")
-      .upsert(
-        {
-          user_id: userId,
-          streak_type: type,
-          current_count: current,
-          longest_count: longest,
-          last_activity_at: now,
-        },
-        { onConflict: "user_id,streak_type" },
-      );
+    await db.from("user_streaks").upsert(
+      {
+        user_id: userId,
+        streak_type: type,
+        current_count: current,
+        longest_count: longest,
+        last_activity_at: now,
+      },
+      { onConflict: "user_id,streak_type" },
+    );
     result[type] = current;
   };
 
@@ -715,7 +721,10 @@ async function evaluateBadges(
 export async function summariseResult(
   userId: string,
   attemptId: string,
-  extras?: { gains?: { label: string; points: number }[]; newBadges?: BadgeRow[] },
+  extras?: {
+    gains?: { label: string; points: number }[];
+    newBadges?: BadgeRow[];
+  },
 ) {
   const { attempt, exam } = await loadAttempt(userId, attemptId);
   const showReview = exam.mode === "practice" || exam.mode === "assessment";
@@ -832,7 +841,8 @@ export async function leaderboard(
   if (scope === "exam" && target) {
     const exam = await getExam(target);
     if (!exam) throw new Error("Assessment not found.");
-    if (!exam.enable_leaderboard) return { title: exam.title, disabled: true, rows: [], myRank: null };
+    if (!exam.enable_leaderboard)
+      return { title: exam.title, disabled: true, rows: [], myRank: null };
     nameMode = exam.leaderboard_name_display;
     title = exam.title;
     query.eq("exam_id", target);
@@ -873,7 +883,10 @@ export async function leaderboard(
     }
     // Opted-out participants are excluded from public boards, but always see themselves.
     if (profile.leaderboard_opt_out && row.user_id !== userId) continue;
-    const bucket = agg.get(row.user_id) ?? { scores: [], exams: new Set<string>() };
+    const bucket = agg.get(row.user_id) ?? {
+      scores: [],
+      exams: new Set<string>(),
+    };
     bucket.scores.push(Number(row.score ?? 0));
     bucket.exams.add(row.exam_id);
     agg.set(row.user_id, bucket);
@@ -898,7 +911,10 @@ export async function leaderboard(
         entry.id === userId
           ? "You"
           : maskName(
-              { full_name: profile.full_name, display_name: profile.display_name },
+              {
+                full_name: profile.full_name,
+                display_name: profile.display_name,
+              },
               nameMode,
               index,
             ),

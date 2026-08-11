@@ -96,7 +96,8 @@ function Dashboard() {
               <div className="surface-paper p-4">
                 <p className="text-hairline text-muted-foreground">Ready to take</p>
                 <p className="mt-1 font-display text-2xl">
-                  {data.availableCount} assessment{data.availableCount === 1 ? "" : "s"}
+                  {data.availableCount} assessment
+                  {data.availableCount === 1 ? "" : "s"}
                 </p>
                 <Link
                   to="/exams"

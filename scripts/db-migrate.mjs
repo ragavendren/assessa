@@ -118,10 +118,7 @@ try {
 }
 
 function buildDbUrlCandidates(ref) {
-  const explicit =
-    process.env.DATABASE_URL?.trim() ||
-    process.env.SUPABASE_DB_URL?.trim() ||
-    "";
+  const explicit = process.env.DATABASE_URL?.trim() || process.env.SUPABASE_DB_URL?.trim() || "";
   if (explicit) return [explicit];
 
   const password = process.env.SUPABASE_DB_PASSWORD?.trim();
@@ -130,16 +127,18 @@ function buildDbUrlCandidates(ref) {
   const encoded = encodeURIComponent(password);
   const preferred = process.env.SUPABASE_DB_REGION?.trim();
   // Prefer India/Asia first (IST), then common Supabase regions.
-  const regions = unique([
-    preferred,
-    "ap-south-1",
-    "ap-southeast-1",
-    "ap-northeast-1",
-    "eu-west-1",
-    "eu-central-1",
-    "us-east-1",
-    "us-west-1",
-  ].filter(Boolean));
+  const regions = unique(
+    [
+      preferred,
+      "ap-south-1",
+      "ap-southeast-1",
+      "ap-northeast-1",
+      "eu-west-1",
+      "eu-central-1",
+      "us-east-1",
+      "us-west-1",
+    ].filter(Boolean),
+  );
 
   const urls = [];
   for (const region of regions) {
@@ -195,11 +194,7 @@ function unique(items) {
 function syncConfigToml(ref) {
   const path = resolve(process.cwd(), "supabase/config.toml");
   if (!existsSync(path)) {
-    writeFileSync(
-      path,
-      `# Synced from SUPABASE_PROJECT_ID\nproject_id = "${ref}"\n`,
-      "utf8",
-    );
+    writeFileSync(path, `# Synced from SUPABASE_PROJECT_ID\nproject_id = "${ref}"\n`, "utf8");
     return;
   }
   const current = readFileSync(path, "utf8");

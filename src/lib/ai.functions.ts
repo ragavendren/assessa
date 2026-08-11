@@ -5,8 +5,7 @@ import { createServerFn } from "@tanstack/react-start";
 export const getParticipantInsight = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { aiConfigured, createAssessaModel } =
-      await import("@/lib/ai-gateway.server");
+    const { aiConfigured, createAssessaModel } = await import("@/lib/ai-gateway.server");
     if (!aiConfigured()) {
       return {
         text: null,
@@ -15,10 +14,8 @@ export const getParticipantInsight = createServerFn({ method: "POST" })
       };
     }
 
-    const { supabaseAdmin } =
-      await import("@/integrations/supabase/client.server");
-    const { participantStats, getXpTotal, getLevels } =
-      await import("@/lib/platform.server");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { participantStats, getXpTotal, getLevels } = await import("@/lib/platform.server");
     const { resolveLevel } = await import("@/lib/gamification");
     const userId = context.userId;
 
@@ -26,16 +23,12 @@ export const getParticipantInsight = createServerFn({ method: "POST" })
     if (stats.completed === 0) {
       return {
         text: null,
-        error:
-          "Complete your first assessment to unlock personalised AI coaching.",
+        error: "Complete your first assessment to unlock personalised AI coaching.",
       };
     }
 
     const [{ data: mastery }, { data: attempts }] = await Promise.all([
-      supabaseAdmin
-        .from("topic_mastery")
-        .select("topic, subtopic, mastery")
-        .eq("user_id", userId),
+      supabaseAdmin.from("topic_mastery").select("topic, subtopic, mastery").eq("user_id", userId),
       supabaseAdmin
         .from("exam_attempts")
         .select("score, passed, submitted_at, exams(title, topic)")
@@ -61,9 +54,8 @@ export const getParticipantInsight = createServerFn({ method: "POST" })
       `Level ${level.level} (${level.name}) with ${level.xp} XP; ${level.xpToNext} XP to level ${level.nextLevel ?? level.level}`,
       `Result history (oldest first): ${history.join(" | ")}`,
       `Topic mastery: ${
-        (mastery ?? [])
-          .map((m) => `${m.topic}/${m.subtopic} ${m.mastery}%`)
-          .join(", ") || "none recorded"
+        (mastery ?? []).map((m) => `${m.topic}/${m.subtopic} ${m.mastery}%`).join(", ") ||
+        "none recorded"
       }`,
     ].join("\n");
 
@@ -81,11 +73,9 @@ export const getParticipantInsight = createServerFn({ method: "POST" })
       });
       return { text: await result.text, error: null };
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "AI request failed";
+      const message = error instanceof Error ? error.message : "AI request failed";
       console.error("[ai] participant insight failed:", message);
-      if (message.includes("429"))
-        return { text: null, error: "AI is busy — try again shortly." };
+      if (message.includes("429")) return { text: null, error: "AI is busy — try again shortly." };
       if (message.includes("402") || /quota|billing|exceeded/i.test(message))
         return {
           text: null,
@@ -94,8 +84,7 @@ export const getParticipantInsight = createServerFn({ method: "POST" })
       if (/no longer available|not found|404/i.test(message))
         return {
           text: null,
-          error:
-            "AI model unavailable. Set GEMINI_MODEL to gemini-3.5-flash-lite.",
+          error: "AI model unavailable. Set GEMINI_MODEL to gemini-3.5-flash-lite.",
         };
       return { text: null, error: "Could not generate insights right now." };
     }
@@ -105,8 +94,7 @@ export const getParticipantInsight = createServerFn({ method: "POST" })
 export const getTeamInsight = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { aiConfigured, createAssessaModel } =
-      await import("@/lib/ai-gateway.server");
+    const { aiConfigured, createAssessaModel } = await import("@/lib/ai-gateway.server");
     if (!aiConfigured()) {
       return {
         text: null,
@@ -115,21 +103,19 @@ export const getTeamInsight = createServerFn({ method: "POST" })
       };
     }
 
-    const { supabaseAdmin } =
-      await import("@/integrations/supabase/client.server");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { requireAdmin } = await import("@/lib/platform.server");
     await requireAdmin(context.userId);
 
-    const [{ data: attempts }, { data: mastery }, { data: profiles }] =
-      await Promise.all([
-        supabaseAdmin
-          .from("exam_attempts")
-          .select("user_id, score, passed, submitted_at, exams(title, topic)")
-          .eq("status", "submitted")
-          .order("submitted_at", { ascending: true }),
-        supabaseAdmin.from("topic_mastery").select("topic, subtopic, mastery"),
-        supabaseAdmin.from("profiles").select("id, department"),
-      ]);
+    const [{ data: attempts }, { data: mastery }, { data: profiles }] = await Promise.all([
+      supabaseAdmin
+        .from("exam_attempts")
+        .select("user_id, score, passed, submitted_at, exams(title, topic)")
+        .eq("status", "submitted")
+        .order("submitted_at", { ascending: true }),
+      supabaseAdmin.from("topic_mastery").select("topic, subtopic, mastery"),
+      supabaseAdmin.from("profiles").select("id, department"),
+    ]);
 
     if ((attempts ?? []).length === 0) {
       return {
@@ -153,9 +139,7 @@ export const getTeamInsight = createServerFn({ method: "POST" })
       perUser.set(a.user_id, list);
     }
     const improved = [...perUser.values()].filter(
-      (scores) =>
-        scores.length >= 2 &&
-        (scores[scores.length - 1] ?? 0) - (scores[0] ?? 0) >= 10,
+      (scores) => scores.length >= 2 && (scores[scores.length - 1] ?? 0) - (scores[0] ?? 0) >= 10,
     ).length;
 
     const facts = [
@@ -188,11 +172,9 @@ export const getTeamInsight = createServerFn({ method: "POST" })
       });
       return { text: await result.text, error: null };
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "AI request failed";
+      const message = error instanceof Error ? error.message : "AI request failed";
       console.error("[ai] team insight failed:", message);
-      if (message.includes("429"))
-        return { text: null, error: "AI is busy — try again shortly." };
+      if (message.includes("429")) return { text: null, error: "AI is busy — try again shortly." };
       if (message.includes("402") || /quota|billing|exceeded/i.test(message))
         return {
           text: null,
@@ -201,8 +183,7 @@ export const getTeamInsight = createServerFn({ method: "POST" })
       if (/no longer available|not found|404/i.test(message))
         return {
           text: null,
-          error:
-            "AI model unavailable. Set GEMINI_MODEL to gemini-3.5-flash-lite.",
+          error: "AI model unavailable. Set GEMINI_MODEL to gemini-3.5-flash-lite.",
         };
       return {
         text: null,

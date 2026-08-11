@@ -12,10 +12,14 @@ export const Route = createFileRoute("/_authenticated/results/$attemptId")({
       { title: "Your result — Assessa" },
       {
         name: "description",
-        content: "Score, pass status, XP earned, badges unlocked and answer review for your attempt.",
+        content:
+          "Score, pass status, XP earned, badges unlocked and answer review for your attempt.",
       },
       { property: "og:title", content: "Your result — Assessa" },
-      { property: "og:description", content: "Your assessment score, XP and badges." },
+      {
+        property: "og:description",
+        content: "Your assessment score, XP and badges.",
+      },
     ],
   }),
   component: ResultPage,

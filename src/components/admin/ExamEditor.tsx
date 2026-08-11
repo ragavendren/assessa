@@ -162,8 +162,7 @@ export function examToEditorValues(exam: {
       exam.questions.length > 0
         ? exam.questions.map((q) => ({
             prompt: q.prompt,
-            options:
-              q.options.length >= 4 ? q.options : [...q.options, "", "", "", ""].slice(0, 4),
+            options: q.options.length >= 4 ? q.options : [...q.options, "", "", "", ""].slice(0, 4),
             correctIndexes: q.correct_indexes,
             multiSelect: q.multi_select,
             subtopic: q.subtopic,
@@ -460,7 +459,8 @@ export function ExamEditor({
               </div>
               {values.topic ? (
                 <p className="text-xs text-muted-foreground">
-                  Selected category: <span className="font-medium text-foreground">{values.topic}</span>
+                  Selected category:{" "}
+                  <span className="font-medium text-foreground">{values.topic}</span>
                 </p>
               ) : null}
             </div>
@@ -560,7 +560,11 @@ export function ExamEditor({
                 <select
                   className="field mt-1"
                   value={values.access}
-                  onChange={(e) => patch({ access: e.target.value as ExamEditorValues["access"] })}
+                  onChange={(e) =>
+                    patch({
+                      access: e.target.value as ExamEditorValues["access"],
+                    })
+                  }
                 >
                   <option value="public">Anyone with the share link (no login)</option>
                   <option value="private">Invited emails only</option>
@@ -752,7 +756,10 @@ export function ExamEditor({
                     placeholder="Type a tag and press Enter…"
                     value={tagDraftByIndex[index] ?? ""}
                     onChange={(e) =>
-                      setTagDraftByIndex((current) => ({ ...current, [index]: e.target.value }))
+                      setTagDraftByIndex((current) => ({
+                        ...current,
+                        [index]: e.target.value,
+                      }))
                     }
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
@@ -768,7 +775,9 @@ export function ExamEditor({
                     Tag: <span className="font-medium text-foreground">{question.subtopic}</span>
                   </p>
                 ) : (
-                  <p className="text-xs text-muted-foreground">No tag yet (defaults to “general”).</p>
+                  <p className="text-xs text-muted-foreground">
+                    No tag yet (defaults to “general”).
+                  </p>
                 )}
               </div>
 
@@ -925,7 +934,9 @@ export function ExamEditor({
       {tab === "submit" ? (
         <section className="surface-paper space-y-5 p-5">
           <div>
-            <p className="text-hairline text-muted-foreground">Ready to {mode === "edit" ? "update" : "create"}</p>
+            <p className="text-hairline text-muted-foreground">
+              Ready to {mode === "edit" ? "update" : "create"}
+            </p>
             <h2 className="mt-1 font-display text-2xl">{values.title}</h2>
             <p className="mt-2 text-sm text-muted-foreground">
               Category <span className="font-medium text-foreground">{values.topic}</span> ·{" "}
@@ -963,14 +974,14 @@ export function ExamEditor({
               <Send className="h-4 w-4" />
               {mutation.isPending
                 ? "Saving…"
-                : submitLabel ??
+                : (submitLabel ??
                   (mode === "edit"
                     ? values.active
                       ? "Update & publish"
                       : "Update assessment"
                     : values.active
                       ? "Publish assessment"
-                      : "Save draft")}
+                      : "Save draft"))}
             </button>
           </div>
         </section>

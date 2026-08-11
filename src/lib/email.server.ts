@@ -73,9 +73,7 @@ function resendClient() {
 }
 
 export function appBaseUrl() {
-  const configured = stripQuotes(
-    process.env["APP_URL"] || process.env["VITE_APP_URL"],
-  );
+  const configured = stripQuotes(process.env["APP_URL"] || process.env["VITE_APP_URL"]);
   if (configured) return configured.replace(/\/$/, "");
   const vercel = stripQuotes(process.env["VERCEL_URL"]);
   if (vercel) return `https://${vercel.replace(/^https?:\/\//, "")}`;
@@ -83,9 +81,7 @@ export function appBaseUrl() {
 }
 
 function fromAddress() {
-  const raw =
-    stripQuotes(process.env["RESEND_FROM_EMAIL"]) ||
-    "Assessa <onboarding@resend.dev>";
+  const raw = stripQuotes(process.env["RESEND_FROM_EMAIL"]) || "Assessa <onboarding@resend.dev>";
   if (raw.includes("<") && raw.includes(">")) return raw;
   if (raw.includes("@")) return `Assessa <${raw}>`;
   return "Assessa <onboarding@resend.dev>";
@@ -95,10 +91,7 @@ function fromAddress() {
 export async function sendEmail(payload: EmailPayload): Promise<boolean> {
   const client = resendClient();
   if (!client) {
-    console.warn(
-      "[email] RESEND_API_KEY not set — skipping send:",
-      payload.subject,
-    );
+    console.warn("[email] RESEND_API_KEY not set — skipping send:", payload.subject);
     return false;
   }
 
@@ -210,9 +203,7 @@ export async function sendNotificationEmail(input: {
     html: layout(
       input.title,
       bodyHtml,
-      input.href
-        ? { href: input.href, label: input.ctaLabel ?? "Open Assessa" }
-        : undefined,
+      input.href ? { href: input.href, label: input.ctaLabel ?? "Open Assessa" } : undefined,
       {
         brandAsHeading: false,
       },

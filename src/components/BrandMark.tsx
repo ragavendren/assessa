@@ -29,14 +29,13 @@ export function BrandMark({
             d="M32 12.5L18.5 48h7.2l2.55-7.1h7.5L38.3 48h7.2L32 12.5zm0 13.1l2.7 7.6h-5.4L32 25.6z"
             fill="#F7F3EA"
           />
-          <path
-            d="M41.2 41.8l4.1-4.1 2.2 2.2-6.3 6.3-3.5-3.5 2.2-2.2 1.3 1.3z"
-            fill="#E5A63B"
-          />
+          <path d="M41.2 41.8l4.1-4.1 2.2 2.2-6.3 6.3-3.5-3.5 2.2-2.2 1.3 1.3z" fill="#E5A63B" />
         </svg>
       </span>
       {showWordmark ? (
-        <span className={cn("font-display text-lg tracking-tight text-foreground", wordmarkClassName)}>
+        <span
+          className={cn("font-display text-lg tracking-tight text-foreground", wordmarkClassName)}
+        >
           Assessa
         </span>
       ) : null}

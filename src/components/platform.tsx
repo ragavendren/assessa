@@ -44,13 +44,7 @@ export function StatTile({
   );
 }
 
-export function ScorePill({
-  score,
-  passed,
-}: {
-  score: number;
-  passed: boolean | null;
-}) {
+export function ScorePill({ score, passed }: { score: number; passed: boolean | null }) {
   return (
     <span
       className={cn(
@@ -62,8 +56,7 @@ export function ScorePill({
             : "bg-muted text-muted-foreground",
       )}
     >
-      {score}%
-      {passed == null ? null : <span>{passed ? "PASSED" : "NOT PASSED"}</span>}
+      {score}%{passed == null ? null : <span>{passed ? "PASSED" : "NOT PASSED"}</span>}
     </span>
   );
 }

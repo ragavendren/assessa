@@ -16,7 +16,10 @@ export const Route = createFileRoute("/_authenticated/profile")({
           "Manage the participant details that auto-fill every assessment registration, plus leaderboard privacy.",
       },
       { property: "og:title", content: "My profile — Assessa" },
-      { property: "og:description", content: "Your participant identity across every assessment." },
+      {
+        property: "og:description",
+        content: "Your participant identity across every assessment.",
+      },
     ],
   }),
   component: ProfilePage,
@@ -26,7 +29,10 @@ function ProfilePage() {
   const fetchMe = useServerFn(getMe);
   const save = useServerFn(saveProfile);
   const queryClient = useQueryClient();
-  const { data, isPending } = useQuery({ queryKey: ["me"], queryFn: () => fetchMe() });
+  const { data, isPending } = useQuery({
+    queryKey: ["me"],
+    queryFn: () => fetchMe(),
+  });
 
   const [form, setForm] = useState({
     full_name: "",
@@ -102,7 +108,11 @@ function ProfilePage() {
             onChange={(v) => set("organization", v)}
           />
           <Text label="Department" value={form.department} onChange={(v) => set("department", v)} />
-          <Text label="Team / group" value={form.team_group} onChange={(v) => set("team_group", v)} />
+          <Text
+            label="Team / group"
+            value={form.team_group}
+            onChange={(v) => set("team_group", v)}
+          />
           <Text
             label="Leaderboard display name"
             value={form.display_name}

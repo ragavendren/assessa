@@ -10,7 +10,9 @@ const ADMIN_NAV = [
 ] as const;
 
 export function AdminNav() {
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
   return (
     <nav className="mb-8 flex flex-wrap gap-2">
       {ADMIN_NAV.map((item) => (

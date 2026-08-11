@@ -87,7 +87,10 @@ export const startGuestAttempt = createServerFn({ method: "POST" })
         .maybeSingle();
       userId = existing?.id ?? null;
       if (!userId) {
-        const { data: listed } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 200 });
+        const { data: listed } = await supabaseAdmin.auth.admin.listUsers({
+          page: 1,
+          perPage: 200,
+        });
         userId = listed.users.find((user) => user.email?.toLowerCase() === email)?.id ?? null;
       }
       if (!userId) {

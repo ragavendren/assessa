@@ -42,7 +42,10 @@ function Briefing() {
   const mutation = useMutation({
     mutationFn: () => start({ data: { examId, extra } }),
     onSuccess: (result) => {
-      navigate({ to: "/attempt/$attemptId", params: { attemptId: result.attemptId } });
+      navigate({
+        to: "/attempt/$attemptId",
+        params: { attemptId: result.attemptId },
+      });
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Could not start"),
   });
@@ -141,7 +144,10 @@ function Briefing() {
                   maxLength={120}
                   value={extra[field.key] ?? ""}
                   onChange={(event) =>
-                    setExtra((prev) => ({ ...prev, [field.key]: event.target.value }))
+                    setExtra((prev) => ({
+                      ...prev,
+                      [field.key]: event.target.value,
+                    }))
                   }
                 />
               </label>
@@ -175,9 +181,7 @@ function Briefing() {
               : "Start assessment"}
         </button>
         {data.notOpenYet ? (
-          <span className="text-sm text-muted-foreground">
-            Opens {formatDate(exam.startsAt)}
-          </span>
+          <span className="text-sm text-muted-foreground">Opens {formatDate(exam.startsAt)}</span>
         ) : null}
         {!data.notOpenYet && data.attemptsLeft <= 0 && !data.openAttemptId ? (
           <span className="text-sm text-muted-foreground">No attempts remaining</span>

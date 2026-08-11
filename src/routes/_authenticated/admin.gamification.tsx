@@ -129,7 +129,11 @@ function GamificationAdmin() {
                 onBlur={(event) => {
                   const points = Number(event.target.value);
                   if (points !== rule.points)
-                    ruleMutation.mutate({ code: rule.code, points, active: rule.active });
+                    ruleMutation.mutate({
+                      code: rule.code,
+                      points,
+                      active: rule.active,
+                    });
                 }}
                 className="field w-24"
                 aria-label={`${rule.label} points`}
@@ -231,7 +235,10 @@ function GamificationAdmin() {
                   className="field mt-1"
                   value={form.condition_type}
                   onChange={(e) =>
-                    setForm({ ...form, condition_type: e.target.value as BadgeForm["condition_type"] })
+                    setForm({
+                      ...form,
+                      condition_type: e.target.value as BadgeForm["condition_type"],
+                    })
                   }
                 >
                   {CONDITIONS.map((value) => (
@@ -249,7 +256,12 @@ function GamificationAdmin() {
                   max={1000}
                   className="field mt-1"
                   value={form.condition_value}
-                  onChange={(e) => setForm({ ...form, condition_value: Number(e.target.value) })}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      condition_value: Number(e.target.value),
+                    })
+                  }
                 />
               </label>
               <label className="block text-sm">
@@ -289,7 +301,8 @@ function GamificationAdmin() {
                   <p className="truncate font-medium">{badge.name}</p>
                   <p className="text-xs text-muted-foreground">
                     {badge.condition_type.replace(/_/g, " ")} · {Number(badge.condition_value)}
-                    {badge.condition_topic ? ` · ${badge.condition_topic}` : ""} · +{badge.xp_reward} XP
+                    {badge.condition_topic ? ` · ${badge.condition_topic}` : ""} · +
+                    {badge.xp_reward} XP
                   </p>
                 </div>
                 <button

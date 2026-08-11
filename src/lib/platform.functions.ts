@@ -20,9 +20,8 @@ export const getDashboard = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { ensureProfile, getXpTotal, getLevels, participantStats } = await import(
-      "@/lib/platform.server"
-    );
+    const { ensureProfile, getXpTotal, getLevels, participantStats } =
+      await import("@/lib/platform.server");
     const { resolveLevel } = await import("@/lib/gamification");
     const userId = context.userId;
 
@@ -34,27 +33,29 @@ export const getDashboard = createServerFn({ method: "POST" })
     const xp = await getXpTotal(userId);
     const level = resolveLevel(xp, await getLevels());
 
-    const [{ data: streaks }, { data: badges }, { data: exams }, { data: recent }, { data: mastery }] =
-      await Promise.all([
-        supabaseAdmin.from("user_streaks").select("*").eq("user_id", userId),
-        supabaseAdmin
-          .from("user_badges")
-          .select("earned_at, badges(code, name, icon, description)")
-          .eq("user_id", userId)
-          .order("earned_at", { ascending: false }),
-        supabaseAdmin.from("exams").select("*").eq("active", true).order("starts_at"),
-        supabaseAdmin
-          .from("exam_attempts")
-          .select("id, score, passed, submitted_at, exams(title, topic, pass_mark)")
-          .eq("user_id", userId)
-          .eq("status", "submitted")
-          .order("submitted_at", { ascending: false })
-          .limit(5),
-        supabaseAdmin
-          .from("topic_mastery")
-          .select("topic, subtopic, mastery")
-          .eq("user_id", userId),
-      ]);
+    const [
+      { data: streaks },
+      { data: badges },
+      { data: exams },
+      { data: recent },
+      { data: mastery },
+    ] = await Promise.all([
+      supabaseAdmin.from("user_streaks").select("*").eq("user_id", userId),
+      supabaseAdmin
+        .from("user_badges")
+        .select("earned_at, badges(code, name, icon, description)")
+        .eq("user_id", userId)
+        .order("earned_at", { ascending: false }),
+      supabaseAdmin.from("exams").select("*").eq("active", true).order("starts_at"),
+      supabaseAdmin
+        .from("exam_attempts")
+        .select("id, score, passed, submitted_at, exams(title, topic, pass_mark)")
+        .eq("user_id", userId)
+        .eq("status", "submitted")
+        .order("submitted_at", { ascending: false })
+        .limit(5),
+      supabaseAdmin.from("topic_mastery").select("topic, subtopic, mastery").eq("user_id", userId),
+    ]);
 
     const { data: accessible } = await supabaseAdmin.rpc("can_access_exam", {
       _user_id: userId,
@@ -96,7 +97,10 @@ export const getDashboard = createServerFn({ method: "POST" })
       })),
       badgeCount: (badges ?? []).length,
       latestBadges: (badges ?? []).slice(0, 4).map((b) => {
-        const badge = b.badges as unknown as { name: string; icon: string } | null;
+        const badge = b.badges as unknown as {
+          name: string;
+          icon: string;
+        } | null;
         return { name: badge?.name ?? "Badge", icon: badge?.icon ?? "🏅" };
       }),
       upcoming: upcoming.map((e) => ({
@@ -109,7 +113,10 @@ export const getDashboard = createServerFn({ method: "POST" })
       })),
       availableCount: available.length,
       recent: (recent ?? []).map((r) => {
-        const exam = r.exams as unknown as { title: string; topic: string } | null;
+        const exam = r.exams as unknown as {
+          title: string;
+          topic: string;
+        } | null;
         return {
           id: r.id,
           title: exam?.title ?? "Assessment",
@@ -208,9 +215,8 @@ export const getExamBriefing = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) => z.object({ examId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
-    const { getExam, assertExamAccess, countAttempts, ensureProfile } = await import(
-      "@/lib/platform.server"
-    );
+    const { getExam, assertExamAccess, countAttempts, ensureProfile } =
+      await import("@/lib/platform.server");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const exam = await getExam(data.examId);
     if (!exam) throw new Error("Assessment not found.");
@@ -259,7 +265,10 @@ export const beginAttempt = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) =>
     z
-      .object({ examId: z.string().uuid(), extra: z.record(z.string(), z.string()).default({}) })
+      .object({
+        examId: z.string().uuid(),
+        extra: z.record(z.string(), z.string()).default({}),
+      })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
@@ -359,7 +368,11 @@ export const getAchievements = createServerFn({ method: "POST" })
         case "pass_count":
           return { current: stats.passes, required: value, unit: "passes" };
         case "attempt_count":
-          return { current: stats.completed, required: value, unit: "assessments" };
+          return {
+            current: stats.completed,
+            required: value,
+            unit: "assessments",
+          };
         case "single_score":
           return { current: stats.best, required: value, unit: "%" };
         case "average_over":
@@ -379,7 +392,9 @@ export const getAchievements = createServerFn({ method: "POST" })
       category: b.category,
       xp: b.xp_reward,
       earnedAt: ownedMap.get(b.id) ?? null,
-      progress: ownedMap.has(b.id) ? null : progressFor(b.condition_type, Number(b.condition_value)),
+      progress: ownedMap.has(b.id)
+        ? null
+        : progressFor(b.condition_type, Number(b.condition_value)),
     }));
   });
 
@@ -392,7 +407,9 @@ export const getProgress = createServerFn({ method: "POST" })
     const stats = await participantStats(userId);
     const { data: journey } = await supabaseAdmin
       .from("exam_attempts")
-      .select("id, score, passed, submitted_at, duration_seconds, exams(title, topic, duration_minutes)")
+      .select(
+        "id, score, passed, submitted_at, duration_seconds, exams(title, topic, duration_minutes)",
+      )
       .eq("user_id", userId)
       .eq("status", "submitted")
       .order("submitted_at", { ascending: true });

@@ -14,7 +14,10 @@ export const Route = createFileRoute("/_authenticated/achievements")({
         content: "Badges earned and badges still locked, with live progress toward each one.",
       },
       { property: "og:title", content: "Achievements — Assessa" },
-      { property: "og:description", content: "Your badge collection and progress." },
+      {
+        property: "og:description",
+        content: "Your badge collection and progress.",
+      },
     ],
   }),
   component: Achievements,

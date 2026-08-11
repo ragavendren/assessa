@@ -23,8 +23,7 @@ export const Route = createFileRoute("/auth")({
       { property: "og:title", content: "Sign in — Assessa" },
       {
         property: "og:description",
-        content:
-          "One account for every assessment, with progress, badges and analytics.",
+        content: "One account for every assessment, with progress, badges and analytics.",
       },
       { name: "robots", content: "noindex,nofollow" },
     ],
@@ -38,17 +37,13 @@ const credentials = z.object({
 });
 
 function safeInternalPath(value: string | undefined) {
-  return value?.startsWith("/") && !value.startsWith("//")
-    ? value
-    : "/dashboard";
+  return value?.startsWith("/") && !value.startsWith("//") ? value : "/dashboard";
 }
 
 function AuthPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
-  const [mode, setMode] = useState<"signin" | "signup">(
-    search.mode ?? "signin",
-  );
+  const [mode, setMode] = useState<"signin" | "signup">(search.mode ?? "signin");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -103,9 +98,7 @@ function AuthPage() {
         navigate({ to: destination, replace: true });
       }
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Authentication failed",
-      );
+      toast.error(error instanceof Error ? error.message : "Authentication failed");
     } finally {
       setBusy(false);
     }
@@ -131,9 +124,7 @@ function AuthPage() {
         setBusy(false);
       }
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Google sign-in failed",
-      );
+      toast.error(error instanceof Error ? error.message : "Google sign-in failed");
       setBusy(false);
     }
   }
@@ -145,8 +136,8 @@ function AuthPage() {
           <span className="font-display text-2xl text-primary">Assessa</span>
           <h1 className="mt-3 font-display text-2xl">Confirm your email</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            We sent a confirmation link to <strong>{email}</strong>. Click it to
-            activate your account, then sign in.
+            We sent a confirmation link to <strong>{email}</strong>. Click it to activate your
+            account, then sign in.
           </p>
           <button
             onClick={() => {
@@ -210,9 +201,7 @@ function AuthPage() {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               maxLength={72}
-              autoComplete={
-                mode === "signup" ? "new-password" : "current-password"
-              }
+              autoComplete={mode === "signup" ? "new-password" : "current-password"}
               className="field"
               placeholder="At least 8 characters"
             />
@@ -223,11 +212,7 @@ function AuthPage() {
             disabled={busy}
             className="w-full rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
           >
-            {busy
-              ? "Please wait…"
-              : mode === "signup"
-                ? "Create account"
-                : "Sign in"}
+            {busy ? "Please wait…" : mode === "signup" ? "Create account" : "Sign in"}
           </button>
         </form>
 
@@ -281,8 +266,8 @@ function AuthLayout({ children }: { children: React.ReactNode }) {
             Every assessment.
           </h2>
           <p className="mt-4 max-w-sm text-sm text-primary-foreground/70">
-            Your results, topic mastery, XP, badges and streaks travel with you
-            across every exam on the platform.
+            Your results, topic mastery, XP, badges and streaks travel with you across every exam on
+            the platform.
           </p>
         </div>
         <p className="relative z-10 text-xs text-primary-foreground/50">
@@ -301,13 +286,7 @@ function AuthLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
       <span className="text-hairline text-muted-foreground">{label}</span>
@@ -318,12 +297,7 @@ function Field({
 
 function GoogleMark() {
   return (
-    <svg
-      aria-hidden
-      viewBox="0 0 24 24"
-      className="h-4 w-4"
-      xmlns="http://www.w3.org/2000/svg"
-    >
+    <svg aria-hidden viewBox="0 0 24 24" className="h-4 w-4" xmlns="http://www.w3.org/2000/svg">
       <path
         fill="#4285F4"
         d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"

@@ -35,10 +35,7 @@ const token = env.SUPABASE_ACCESS_TOKEN;
 const projectRef = (env.SUPABASE_PROJECT_ID || "").trim();
 const clientId = env.GOOGLE_CLIENT_ID;
 const clientSecret = env.GOOGLE_CLIENT_SECRET;
-const appUrl = (env.APP_URL || "https://assessa.sstcloud.com.au").replace(
-  /\/$/,
-  "",
-);
+const appUrl = (env.APP_URL || "https://assessa.sstcloud.com.au").replace(/\/$/, "");
 
 if (!token) {
   console.error("Missing SUPABASE_ACCESS_TOKEN");
@@ -49,10 +46,8 @@ if (!projectRef) {
   process.exit(1);
 }
 
-const developUrl =
-  "https://assessa-git-develop-ragavendrenv-5507s-projects.vercel.app";
-const prodVercelAlias =
-  "https://assessa-ragavendrenv-5507s-projects.vercel.app";
+const developUrl = "https://assessa-git-develop-ragavendrenv-5507s-projects.vercel.app";
+const prodVercelAlias = "https://assessa-ragavendrenv-5507s-projects.vercel.app";
 
 const redirects = [
   "http://localhost:3000/**",
@@ -66,9 +61,7 @@ const redirects = [
 ];
 
 const payload = {
-  site_url: appUrl.startsWith("http")
-    ? appUrl
-    : "https://assessa.sstcloud.com.au",
+  site_url: appUrl.startsWith("http") ? appUrl : "https://assessa.sstcloud.com.au",
   uri_allow_list: [...new Set(redirects)].join(","),
 };
 
@@ -110,7 +103,5 @@ if (clientId && clientSecret) {
       `  https://${projectRef}.supabase.co/auth/v1/callback`,
   );
 } else {
-  console.log(
-    "- Google OAuth: unchanged (still disabled until credentials are set)",
-  );
+  console.log("- Google OAuth: unchanged (still disabled until credentials are set)");
 }

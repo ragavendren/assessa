@@ -63,8 +63,7 @@ function summarize(cfg) {
 const before = await getConfig();
 console.log("before:", JSON.stringify(summarize(before), null, 2));
 
-const usingResend =
-  String(before.smtp_host || "").includes("resend") && Boolean(before.smtp_pass);
+const usingResend = String(before.smtp_host || "").includes("resend") && Boolean(before.smtp_pass);
 
 if (!usingResend) {
   console.error(

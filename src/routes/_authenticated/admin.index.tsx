@@ -104,10 +104,7 @@ function AdminPage() {
       toast.success("Assessment settings saved");
       void queryClient.invalidateQueries({ queryKey: ["admin-overview"] });
     },
-    onError: (err) =>
-      toast.error(
-        err instanceof Error ? err.message : "Could not save settings",
-      ),
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not save settings"),
   });
   const wipeMutation = useMutation({
     mutationFn: () => wipeData({ data: { confirm: "WIPE DATA" as const } }),
@@ -119,8 +116,7 @@ function AdminPage() {
       void queryClient.invalidateQueries({ queryKey: ["admin-overview"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-users"] });
     },
-    onError: (err) =>
-      toast.error(err instanceof Error ? err.message : "Wipe failed"),
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Wipe failed"),
   });
   const deleteMutation = useMutation({
     mutationFn: (examId: string) => removeExam({ data: { examId } }),
@@ -129,23 +125,16 @@ function AdminPage() {
       void queryClient.invalidateQueries({ queryKey: ["admin-overview"] });
     },
     onError: (err) =>
-      toast.error(
-        err instanceof Error ? err.message : "Could not delete assessment",
-      ),
+      toast.error(err instanceof Error ? err.message : "Could not delete assessment"),
   });
   const publishMutation = useMutation({
-    mutationFn: (payload: { examId: string; active: boolean }) =>
-      publishExam({ data: payload }),
+    mutationFn: (payload: { examId: string; active: boolean }) => publishExam({ data: payload }),
     onSuccess: (_, variables) => {
-      toast.success(
-        variables.active ? "Assessment published" : "Assessment unpublished",
-      );
+      toast.success(variables.active ? "Assessment published" : "Assessment unpublished");
       void queryClient.invalidateQueries({ queryKey: ["admin-overview"] });
     },
     onError: (err) =>
-      toast.error(
-        err instanceof Error ? err.message : "Could not update publish state",
-      ),
+      toast.error(err instanceof Error ? err.message : "Could not update publish state"),
   });
 
   async function copyLink(examId: string) {
@@ -179,19 +168,13 @@ function AdminPage() {
         <StatTile label="Participants" value={data.totals.participants} />
         <StatTile label="Assessments" value={data.totals.exams} />
         <StatTile label="Attempts" value={data.totals.attempts} />
-        <StatTile
-          label="Avg score"
-          value={data.totals.averageScore}
-          suffix="%"
-        />
+        <StatTile label="Avg score" value={data.totals.averageScore} suffix="%" />
         <StatTile label="Pass rate" value={data.totals.passRate} suffix="%" />
       </div>
 
       <section className="surface-paper p-5">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-hairline text-muted-foreground">
-            AI cohort insight
-          </p>
+          <p className="text-hairline text-muted-foreground">AI cohort insight</p>
           <button
             onClick={() => insightMutation.mutate()}
             disabled={insightMutation.isPending}
@@ -225,8 +208,7 @@ function AdminPage() {
         <div className="space-y-4">
           {data.exams.length === 0 ? (
             <div className="surface-paper p-6 text-sm text-muted-foreground">
-              No assessments yet. Create one to get a shareable `/take/...`
-              link.
+              No assessments yet. Create one to get a shareable `/take/...` link.
             </div>
           ) : null}
           {data.exams.map((exam) => (
@@ -235,10 +217,9 @@ function AdminPage() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium">{exam.title}</p>
                   <p className="text-xs text-muted-foreground">
-                    Category: {exam.topic} ·{" "}
-                    {MODE_LABELS[exam.mode as ExamMode] ?? exam.mode} ·{" "}
-                    {exam.questionCount} questions · {exam.duration} min · pass{" "}
-                    {exam.passMark}% · {exam.maxAttempts} attempt(s) allowed
+                    Category: {exam.topic} · {MODE_LABELS[exam.mode as ExamMode] ?? exam.mode} ·{" "}
+                    {exam.questionCount} questions · {exam.duration} min · pass {exam.passMark}% ·{" "}
+                    {exam.maxAttempts} attempt(s) allowed
                   </p>
                 </div>
                 <span className="rounded-full bg-secondary px-2.5 py-1 text-[11px] font-semibold">
@@ -253,9 +234,7 @@ function AdminPage() {
                 >
                   {exam.active ? "Published" : "Unpublished"}
                 </span>
-                <span className="text-xs text-muted-foreground">
-                  {exam.attempts} attempts
-                </span>
+                <span className="text-xs text-muted-foreground">{exam.attempts} attempts</span>
                 <button
                   onClick={() => void copyLink(exam.id)}
                   className="inline-flex items-center gap-1.5 rounded-md border border-input bg-card px-2.5 py-1.5 text-xs font-medium hover:bg-secondary"
@@ -435,16 +414,12 @@ function AdminPage() {
           <SectionHeading eyebrow="Insight" title="Weakest topics" />
           <div className="surface-paper space-y-3 p-5">
             {data.weakestTopics.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No mastery data yet.
-              </p>
+              <p className="text-sm text-muted-foreground">No mastery data yet.</p>
             ) : (
               data.weakestTopics.map((topic) => (
                 <div key={topic.key} className="flex justify-between text-sm">
                   <span className="truncate">{topic.key}</span>
-                  <span className="font-semibold tabular-nums">
-                    {topic.average}%
-                  </span>
+                  <span className="font-semibold tabular-nums">{topic.average}%</span>
                 </div>
               ))
             )}
@@ -455,10 +430,9 @@ function AdminPage() {
       <section className="rounded-xl border border-destructive/30 bg-destructive/5 p-5">
         <SectionHeading eyebrow="Danger zone" title="Wipe platform data" />
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-          Permanently delete all assessments, invitations, attempts, and every
-          user except the seeded admin (
-          <code className="text-xs">SEED_ADMIN_EMAIL</code>) and your current
-          admin account. Baseline levels, badges and XP rules are kept.
+          Permanently delete all assessments, invitations, attempts, and every user except the
+          seeded admin (<code className="text-xs">SEED_ADMIN_EMAIL</code>) and your current admin
+          account. Baseline levels, badges and XP rules are kept.
         </p>
         <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
           <label className="block min-w-[16rem] flex-1">

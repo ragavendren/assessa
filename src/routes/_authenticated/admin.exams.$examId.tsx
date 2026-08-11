@@ -8,14 +8,20 @@ import { useServerFn } from "@tanstack/react-start";
 
 export const Route = createFileRoute("/_authenticated/admin/exams/$examId")({
   beforeLoad: ({ params }) => {
-    if (params.examId === "new" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.examId)) {
+    if (
+      params.examId === "new" ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.examId)
+    ) {
       throw redirect({ to: "/admin/exams/new" });
     }
   },
   head: () => ({
     meta: [
       { title: "Edit assessment — Assessa" },
-      { name: "description", content: "Edit assessment details, questions, and publish state." },
+      {
+        name: "description",
+        content: "Edit assessment details, questions, and publish state.",
+      },
       { name: "robots", content: "noindex,nofollow" },
     ],
   }),

@@ -44,28 +44,21 @@ export function createAssessaModel(): LanguageModel {
   const geminiKey = getGeminiApiKey();
   if (geminiKey) {
     const google = createGoogleGenerativeAI({ apiKey: geminiKey });
-    const modelId =
-      stripQuotes(process.env["GEMINI_MODEL"]) || "gemini-3.5-flash-lite";
+    const modelId = stripQuotes(process.env["GEMINI_MODEL"]) || "gemini-3.5-flash-lite";
     return google(modelId);
   }
 
   const gatewayKey = getAiGatewayApiKey();
   if (!gatewayKey) {
-    throw new Error(
-      "AI is not configured. Set GEMINI_API_KEY (preferred) or AI_GATEWAY_API_KEY.",
-    );
+    throw new Error("AI is not configured. Set GEMINI_API_KEY (preferred) or AI_GATEWAY_API_KEY.");
   }
 
-  const baseURL =
-    stripQuotes(process.env["AI_GATEWAY_BASE_URL"]) ||
-    "https://openrouter.ai/api/v1";
+  const baseURL = stripQuotes(process.env["AI_GATEWAY_BASE_URL"]) || "https://openrouter.ai/api/v1";
   const gateway = createOpenAICompatible({
     name: "ai-gateway",
     baseURL,
     apiKey: gatewayKey,
   });
-  const modelId =
-    stripQuotes(process.env["AI_GATEWAY_MODEL"]) ||
-    "google/gemini-3.5-flash-lite";
+  const modelId = stripQuotes(process.env["AI_GATEWAY_MODEL"]) || "google/gemini-3.5-flash-lite";
   return gateway(modelId);
 }

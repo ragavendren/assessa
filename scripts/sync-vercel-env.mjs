@@ -56,15 +56,11 @@ for (const key of keys) {
       stdio: ["ignore", "pipe", "pipe"],
     });
 
-    const result = spawnSync(
-      "npx",
-      ["vercel", "env", "add", key, target, "--yes"],
-      {
-        input: `${val}\n`,
-        encoding: "utf8",
-        shell: true,
-      },
-    );
+    const result = spawnSync("npx", ["vercel", "env", "add", key, target, "--yes"], {
+      input: `${val}\n`,
+      encoding: "utf8",
+      shell: true,
+    });
 
     if (result.status === 0) {
       console.log(`set ${key} ${target} len=${val.length}`);

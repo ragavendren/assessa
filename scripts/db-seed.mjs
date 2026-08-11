@@ -35,8 +35,7 @@ if (password.length < 12) {
   process.exit(1);
 }
 
-const keyLooksValid =
-  serviceRoleKey.startsWith("eyJ") || serviceRoleKey.startsWith("sb_secret_");
+const keyLooksValid = serviceRoleKey.startsWith("eyJ") || serviceRoleKey.startsWith("sb_secret_");
 if (!keyLooksValid) {
   console.error(
     "[db:seed] SUPABASE_SERVICE_ROLE_KEY looks invalid (expected eyJ… JWT or sb_secret_…).",
@@ -65,14 +64,24 @@ if (created.data?.user?.id) {
   userId = created.data.user.id;
   console.log("[db:seed] created admin auth user");
 } else {
-  const { data: profile } = await admin.from("profiles").select("id").eq("email", email).maybeSingle();
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("id")
+    .eq("email", email)
+    .maybeSingle();
   userId = profile?.id ?? null;
   if (!userId) {
-    const { data: listed } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
+    const { data: listed } = await admin.auth.admin.listUsers({
+      page: 1,
+      perPage: 200,
+    });
     userId = listed?.users.find((u) => u.email?.toLowerCase() === email)?.id ?? null;
   }
   if (!userId) {
-    console.error("[db:seed] could not create/find admin:", created.error?.message ?? "unknown error");
+    console.error(
+      "[db:seed] could not create/find admin:",
+      created.error?.message ?? "unknown error",
+    );
     process.exit(1);
   }
   const updated = await admin.auth.admin.updateUserById(userId, {
@@ -87,10 +96,9 @@ if (created.data?.user?.id) {
   console.log("[db:seed] updated existing admin auth user");
 }
 
-const { error: profileError } = await admin.from("profiles").upsert(
-  { id: userId, email, full_name: "Platform Administrator" },
-  { onConflict: "id" },
-);
+const { error: profileError } = await admin
+  .from("profiles")
+  .upsert({ id: userId, email, full_name: "Platform Administrator" }, { onConflict: "id" });
 if (profileError) {
   console.error("[db:seed] profile upsert failed:", profileError.message);
   process.exit(1);

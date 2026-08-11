@@ -77,10 +77,7 @@ function AttemptRunner() {
     if (data && data.submitted) navigate({ to: "/results/$attemptId", params: { attemptId } });
   }, [data, attemptId, navigate]);
 
-  const questions = useMemo(
-    () => (data && !data.submitted ? data.questions : []),
-    [data],
-  );
+  const questions = useMemo(() => (data && !data.submitted ? data.questions : []), [data]);
 
   if (isPending) return <PageLoader />;
   if (error || !data) {
@@ -115,12 +112,7 @@ function AttemptRunner() {
           </div>
           <div className="text-right">
             <p className="text-hairline text-muted-foreground">Time left</p>
-            <p
-              className={cn(
-                "font-display text-lg tabular-nums",
-                lowTime && "text-destructive",
-              )}
-            >
+            <p className={cn("font-display text-lg tabular-nums", lowTime && "text-destructive")}>
               {remaining == null ? "—" : formatClock(remaining)}
             </p>
           </div>

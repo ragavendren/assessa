@@ -15,7 +15,10 @@ export const Route = createFileRoute("/_authenticated/leaderboard")({
         content: "Global, organisation and department leaderboards with privacy-aware names.",
       },
       { property: "og:title", content: "Leaderboard — Assessa" },
-      { property: "og:description", content: "See how you rank across assessments." },
+      {
+        property: "og:description",
+        content: "See how you rank across assessments.",
+      },
     ],
   }),
   component: LeaderboardPage,
@@ -75,10 +78,7 @@ function LeaderboardPage() {
           {data.rows.map((row) => (
             <div
               key={row.rank}
-              className={cn(
-                "flex items-center gap-4 p-4",
-                row.isMe && "bg-accent/10",
-              )}
+              className={cn("flex items-center gap-4 p-4", row.isMe && "bg-accent/10")}
             >
               <span className="w-8 font-display text-lg tabular-nums">{row.rank}</span>
               <span className="flex-1 truncate text-sm font-medium">{row.name}</span>

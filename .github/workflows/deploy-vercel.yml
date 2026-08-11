@@ -1,21 +1,14 @@
 name: Deploy to Vercel
 
-# Production: push/manual on `main` → --prod
-#   → https://assessa.sstcloud.com.au
-#   → https://assessa-ragavendrenv-5507s-projects.vercel.app
-# Development: push/manual on `develop` → preview (not --prod)
-#   → https://assessa-git-develop-ragavendrenv-5507s-projects.vercel.app
-# Pull requests → ephemeral preview URL
+# Runs after CI succeeds on the same commit (workflow_run), or manually.
+# Production: main → --prod → https://assessa.sstcloud.com.au
+# Development: develop → preview → https://assessa-git-develop-ragavendrenv-5507s-projects.vercel.app
 
 on:
-  push:
-    branches:
-      - main
-      - develop
-  pull_request:
-    branches:
-      - main
-      - develop
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main, develop]
   workflow_dispatch:
     inputs:
       environment:
@@ -29,15 +22,13 @@ on:
 
 permissions:
   contents: read
+  actions: read
   pull-requests: write
 
 concurrency:
-  group: vercel-${{ github.ref }}-${{ github.event_name }}
+  group: vercel-deploy-${{ github.event.workflow_run.head_branch || github.ref }}
   cancel-in-progress: true
 
-# Do NOT bind GitHub Environments here — env-scoped VERCEL_TOKEN secrets
-# override the repo secret and commonly break `vercel pull` with
-# "Could not retrieve Project Settings".
 env:
   VERCEL_ORG_ID: team_sKKMMuszjU4cd4Ag6IY6ZLEb
   VERCEL_PROJECT_ID: prj_yXSFIGCjYkIwYAV3FGwAFLVCvhmX
@@ -45,9 +36,16 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Skip failed CI (manual dispatch always allowed)
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success')
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -58,10 +56,12 @@ jobs:
         id: target
         shell: bash
         run: |
+          BRANCH="${{ github.event.workflow_run.head_branch || github.ref_name }}"
           IS_PROD=false
+
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.environment }}" == "production" ]]; then
             IS_PROD=true
-          elif [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main" ]]; then
+          elif [[ "$BRANCH" == "main" ]]; then
             IS_PROD=true
           fi
 
@@ -72,6 +72,7 @@ jobs:
             echo "label=development" >> "$GITHUB_OUTPUT"
             echo "prod=false" >> "$GITHUB_OUTPUT"
           fi
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
 
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
@@ -94,28 +95,13 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         shell: bash
         run: |
-          # Remote build+deploy (avoids local vercel pull/link issues)
           if [[ "${{ steps.target.outputs.prod }}" == "true" ]]; then
             URL=$(vercel deploy --yes --prod --token="$VERCEL_TOKEN")
           else
             URL=$(vercel deploy --yes --token="$VERCEL_TOKEN")
           fi
           echo "url=$URL" >> "$GITHUB_OUTPUT"
-          echo "Deployed (${{ steps.target.outputs.label }}): $URL"
-
-      - name: Comment preview URL on PR
-        if: github.event_name == 'pull_request' && steps.deploy.outputs.url != ''
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const url = '${{ steps.deploy.outputs.url }}';
-            const body = `### Assessa preview\n\n${url}\n\n- Production: https://assessa.sstcloud.com.au\n- Development branch: https://assessa-git-develop-ragavendrenv-5507s-projects.vercel.app`;
-            github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body,
-            });
+          echo "Deployed (${{ steps.target.outputs.label }} / ${{ steps.target.outputs.branch }}): $URL"
 
       - name: Summarize URLs
         if: always()
@@ -124,10 +110,11 @@ jobs:
           {
             echo "## Assessa deploy (${{ steps.target.outputs.label }})"
             echo ""
+            echo "- **Branch:** ${{ steps.target.outputs.branch }}"
             echo "- **This deployment:** ${{ steps.deploy.outputs.url }}"
             echo "- **Production:** https://assessa.sstcloud.com.au"
             echo "- **Production (Vercel):** https://assessa-ragavendrenv-5507s-projects.vercel.app"
             echo "- **Development:** https://assessa-git-develop-ragavendrenv-5507s-projects.vercel.app"
             echo ""
-            echo "Uses repo secret \`VERCEL_TOKEN\` only (do not set the same name under GitHub Environments)."
+            echo "Deploy runs only after **CI** succeeds (format, lint, typecheck, build)."
           } >> "$GITHUB_STEP_SUMMARY"

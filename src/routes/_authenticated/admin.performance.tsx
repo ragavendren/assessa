@@ -54,7 +54,11 @@ function AdminPerformancePage() {
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <StatTile label="Assessments" value={data.totals.assessments} />
-        <StatTile label="Opted-in seats" value={data.totals.opted} hint="Unique starts across exams" />
+        <StatTile
+          label="Opted-in seats"
+          value={data.totals.opted}
+          hint="Unique starts across exams"
+        />
         <StatTile label="Completed seats" value={data.totals.completed} />
         <StatTile label="Avg completion" value={data.totals.averageCompletion} suffix="%" />
         <StatTile label="Avg pass rate" value={data.totals.averagePassRate} suffix="%" />
@@ -62,7 +66,8 @@ function AdminPerformancePage() {
 
       {data.assessments.length === 0 ? (
         <div className="surface-paper p-6 text-sm text-muted-foreground">
-          No assessments yet. Publish one to start tracking opted participants, completion and pass rates.
+          No assessments yet. Publish one to start tracking opted participants, completion and pass
+          rates.
         </div>
       ) : (
         <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
@@ -132,14 +137,19 @@ function AdminPerformancePage() {
                   <p className="text-hairline text-muted-foreground">Leaderboard</p>
                   <h3 className="mt-1 font-display text-2xl">{selected.title}</h3>
                   <p className="text-sm text-muted-foreground">
-                    Best submitted score per opted participant · avg best {selected.averageBestScore}%
+                    Best submitted score per opted participant · avg best{" "}
+                    {selected.averageBestScore}%
                     {selected.inProgress ? ` · ${selected.inProgress} in progress` : ""}
                   </p>
                 </div>
 
                 <div className="grid grid-cols-3 gap-3">
                   <StatTile label="Opted in" value={selected.opted} />
-                  <StatTile label="Completed" value={selected.completed} suffix={` · ${selected.completionRate}%`} />
+                  <StatTile
+                    label="Completed"
+                    value={selected.completed}
+                    suffix={` · ${selected.completionRate}%`}
+                  />
                   <StatTile label="Passed" value={selected.passRate} suffix="%" />
                 </div>
 

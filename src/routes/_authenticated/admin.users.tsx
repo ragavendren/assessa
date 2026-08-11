@@ -94,7 +94,9 @@ function AdminUsersPage() {
     onSuccess: () => {
       toast.success("Role updated");
       void queryClient.invalidateQueries({ queryKey: ["admin-users"] });
-      void queryClient.invalidateQueries({ queryKey: ["admin-user-detail", selectedUserId] });
+      void queryClient.invalidateQueries({
+        queryKey: ["admin-user-detail", selectedUserId],
+      });
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Could not update role"),
   });
@@ -113,7 +115,9 @@ function AdminUsersPage() {
       toast.success("User updated");
       setEditing(false);
       void queryClient.invalidateQueries({ queryKey: ["admin-users"] });
-      void queryClient.invalidateQueries({ queryKey: ["admin-user-detail", selectedUserId] });
+      void queryClient.invalidateQueries({
+        queryKey: ["admin-user-detail", selectedUserId],
+      });
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Could not save user"),
   });
@@ -238,7 +242,8 @@ function AdminUsersPage() {
         <aside className="surface-paper p-5">
           {!selectedUserId ? (
             <p className="text-sm text-muted-foreground">
-              Select a user to view assessment activity, edit profile details, or delete the account.
+              Select a user to view assessment activity, edit profile details, or delete the
+              account.
             </p>
           ) : detailQuery.isPending ? (
             <PageLoader label="Loading activity…" />
@@ -284,11 +289,12 @@ function AdminUsersPage() {
                   disabled={banMutation.isPending}
                   onClick={() => {
                     if (
-                      window.confirm(
-                        "Ban this user from signing in? You can reverse this later.",
-                      )
+                      window.confirm("Ban this user from signing in? You can reverse this later.")
                     ) {
-                      banMutation.mutate({ userId: detailQuery.data.profile.id, banned: true });
+                      banMutation.mutate({
+                        userId: detailQuery.data.profile.id,
+                        banned: true,
+                      });
                     }
                   }}
                   className="rounded-md border border-destructive/40 px-3 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/10 disabled:opacity-60"
@@ -299,7 +305,10 @@ function AdminUsersPage() {
                   type="button"
                   disabled={banMutation.isPending}
                   onClick={() =>
-                    banMutation.mutate({ userId: detailQuery.data.profile.id, banned: false })
+                    banMutation.mutate({
+                      userId: detailQuery.data.profile.id,
+                      banned: false,
+                    })
                   }
                   className="rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-secondary disabled:opacity-60"
                 >
@@ -398,7 +407,10 @@ function AdminUsersPage() {
                 <p className="text-hairline text-muted-foreground">Recent activity</p>
                 <div className="mt-2 space-y-2">
                   {detailQuery.data.activity.slice(0, 8).map((item) => (
-                    <div key={item.id} className="rounded-md border border-border px-3 py-2 text-sm">
+                    <div
+                      key={item.id}
+                      className="rounded-md border border-border px-3 py-2 text-sm"
+                    >
                       <div className="flex items-center justify-between gap-2">
                         <p className="font-medium">{item.title}</p>
                         <span className="text-xs text-muted-foreground">{item.status}</span>
