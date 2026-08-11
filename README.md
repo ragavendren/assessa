@@ -39,9 +39,20 @@ npm run db:setup            # migrate + seed
 
 ## Deploy to Vercel
 
-1. Push this repo to GitHub.
-2. Import the repo in [Vercel](https://vercel.com/new) — framework preset is **TanStack Start** (`vercel.json`).
-3. Add environment variables (Production + Preview):
+### GitHub Actions (recommended)
+
+Workflow: [`.github/workflows/deploy-vercel.yml`](.github/workflows/deploy-vercel.yml)
+
+Triggers on push/`workflow_dispatch` to `main` (production) and on PRs (preview).
+
+1. Create a Vercel token: [vercel.com/account/tokens](https://vercel.com/account/tokens)
+2. Add it as a repo secret named `VERCEL_TOKEN`:
+
+   ```sh
+   gh secret set VERCEL_TOKEN --repo ragavendren/assessa
+   ```
+
+3. In the Vercel project **assessa**, set environment variables (Production + Preview):
 
    **Client (Vite)**
    - `VITE_SUPABASE_URL`
@@ -55,10 +66,19 @@ npm run db:setup            # migrate + seed
    - `SUPABASE_PROJECT_ID`
    - `AI_GATEWAY_API_KEY` (optional)
 
-4. Deploy. Nitro targets Vercel Functions automatically during the Vercel build.
+4. Run the workflow:
+
+   ```sh
+   gh workflow run "Deploy to Vercel" --repo ragavendren/assessa
+   ```
+
 5. In Supabase Auth → URL configuration, add:
    - `https://<your-vercel-domain>/auth/callback`
    - Site URL: `https://<your-vercel-domain>`
+
+### Manual import (optional)
+
+Import the repo in [Vercel](https://vercel.com/new) — framework preset is **TanStack Start** (`vercel.json`). Prefer Actions-only deploys if you enable the workflow above, or disable Vercel’s automatic Git deploys to avoid double builds.
 
 ## Auth notes
 
