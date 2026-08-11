@@ -1,3 +1,4 @@
+import { BrandMark } from "@/components/BrandMark";
 import { createFileRoute, Link } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/")({
@@ -16,7 +17,10 @@ export const Route = createFileRoute("/")({
           "Admin-managed assessments with shareable participant links, secure scoring, and cohort insights.",
       },
       { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
+      { property: "og:image", content: "/brand/assessa-icon-512.png" },
+      { name: "twitter:card", content: "summary" },
+      { name: "twitter:image", content: "/brand/assessa-icon-512.png" },
+      { name: "theme-color", content: "#2A2420" },
       { name: "robots", content: "index,follow" },
     ],
   }),
@@ -48,14 +52,22 @@ const PILLARS = [
 
 function Landing() {
   return (
-    <div className="min-h-screen bg-background">
-      <header className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
-        <div className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-primary font-display text-sm text-primary-foreground">
-            As
-          </span>
-          <span className="font-display text-lg">Assessa</span>
-        </div>
+    <div className="relative min-h-screen overflow-hidden bg-background">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_20%_0%,_oklch(0.9_0.05_80/_0.55),_transparent_50%),linear-gradient(165deg,_oklch(0.99_0.008_92)_0%,_oklch(0.965_0.02_85)_55%,_oklch(0.94_0.03_75)_100%)]"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-[70vh] bg-[url('/brand/assessa-icon-512.png')] bg-[length:min(72vw,34rem)] bg-[position:right_-4rem_top_4rem] bg-no-repeat opacity-[0.08] mix-blend-multiply md:bg-[position:right_6%_top_10%] md:opacity-[0.12]"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-24 right-[-8%] h-[26rem] w-[26rem] rounded-full bg-accent/25 blur-3xl animate-brand-glow"
+      />
+
+      <header className="relative z-10 mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
+        <BrandMark />
         <Link
           to="/auth"
           search={{ mode: "signin" }}
@@ -65,15 +77,16 @@ function Landing() {
         </Link>
       </header>
 
-      <section className="mx-auto max-w-6xl px-4 pt-10 pb-16 md:pt-20">
-        <div className="max-w-3xl">
-          <p className="text-hairline text-muted-foreground">
-            Online assessment & examination platform
-          </p>
-          <h1 className="mt-4 font-display text-4xl leading-[1.05] md:text-6xl">
+      <section className="relative z-10 mx-auto flex min-h-[calc(100vh-4rem)] max-w-6xl flex-col justify-center px-4 pb-20 pt-8 md:pb-28">
+        <div className="max-w-2xl animate-brand-rise">
+          <BrandMark
+            showWordmark={false}
+            markClassName="mb-6 h-14 w-14 rounded-2xl md:h-16 md:w-16"
+          />
+          <h1 className="font-display text-5xl leading-[0.98] tracking-tight text-foreground md:text-7xl">
             Assessa
           </h1>
-          <p className="mt-5 max-w-xl text-base text-muted-foreground md:text-lg">
+          <p className="mt-5 max-w-lg text-base text-muted-foreground md:text-lg">
             Create and publish assessments, or open a shared link to take an exam — participants can
             also start without an account when a public share link is used.
           </p>
@@ -88,7 +101,7 @@ function Landing() {
             <Link
               to="/auth"
               search={{ mode: "signin" }}
-              className="rounded-md border border-input bg-card px-5 py-2.5 text-sm font-medium transition-colors hover:bg-secondary"
+              className="rounded-md border border-input bg-card/70 px-5 py-2.5 text-sm font-medium backdrop-blur transition-colors hover:bg-secondary"
             >
               I already have an account
             </Link>
@@ -96,7 +109,7 @@ function Landing() {
         </div>
       </section>
 
-      <section className="border-t border-border bg-secondary/40 py-16">
+      <section className="relative z-10 border-t border-border bg-secondary/40 py-16">
         <div className="mx-auto max-w-6xl px-4">
           <h2 className="font-display text-2xl">Create → Share → Control → Evaluate</h2>
           <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
@@ -111,8 +124,11 @@ function Landing() {
         </div>
       </section>
 
-      <footer className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-10 text-sm text-muted-foreground">
-        <p>Built for teams, training organisations, institutions and recruiters.</p>
+      <footer className="relative z-10 mx-auto flex max-w-6xl flex-col gap-2 px-4 py-10 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <BrandMark showWordmark={false} markClassName="h-6 w-6 rounded-md" />
+          <span>Built for teams, training organisations, institutions and recruiters.</span>
+        </div>
         <p>© {new Date().getFullYear()} Assessa</p>
       </footer>
     </div>

@@ -1,3 +1,4 @@
+import { BrandMark } from "@/components/BrandMark";
 import { supabase } from "@/integrations/supabase/client";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
@@ -245,11 +246,18 @@ function AuthPage() {
 function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="grid min-h-screen md:grid-cols-2">
-      <div className="hidden flex-col justify-between bg-primary p-10 text-primary-foreground md:flex">
-        <Link to="/" className="font-display text-lg">
-          Assessa
+      <div className="relative hidden flex-col justify-between overflow-hidden bg-primary p-10 text-primary-foreground md:flex">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -right-16 top-20 h-64 w-64 rounded-full bg-accent/25 blur-3xl"
+        />
+        <Link to="/" className="relative z-10 inline-flex">
+          <BrandMark
+            wordmarkClassName="text-primary-foreground"
+            markClassName="ring-1 ring-primary-foreground/15"
+          />
         </Link>
-        <div>
+        <div className="relative z-10">
           <h2 className="font-display text-4xl leading-tight">
             One profile.
             <br />
@@ -260,14 +268,14 @@ function AuthLayout({ children }: { children: React.ReactNode }) {
             on the platform.
           </p>
         </div>
-        <p className="text-xs text-primary-foreground/50">
+        <p className="relative z-10 text-xs text-primary-foreground/50">
           Server-scored assessments · Verified results
         </p>
       </div>
       <div className="flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-sm">
-          <Link to="/" className="mb-6 block font-display text-lg md:hidden">
-            Assessa
+          <Link to="/" className="mb-6 inline-flex md:hidden">
+            <BrandMark />
           </Link>
           {children}
         </div>

@@ -1,12 +1,18 @@
 import { AdminNav } from "@/components/AdminNav";
 import { PageLoader, SectionHeading, StatTile } from "@/components/platform";
 import { getTeamInsight } from "@/lib/ai.functions";
-import { cleanupSeedAssessments, getAdminOverview, updateExamSettings } from "@/lib/admin.functions";
+import {
+  cleanupSeedAssessments,
+  deleteExam,
+  getAdminOverview,
+  setExamPublished,
+  updateExamSettings,
+} from "@/lib/admin.functions";
 import { MODE_LABELS, type ExamMode } from "@/lib/gamification";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { Link2, Sparkles, Trash2 } from "lucide-react";
+import { Link2, Pencil, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
@@ -62,6 +68,8 @@ function AdminPage() {
   const insight = useServerFn(getTeamInsight);
   const saveSettings = useServerFn(updateExamSettings);
   const cleanupSeeds = useServerFn(cleanupSeedAssessments);
+  const removeExam = useServerFn(deleteExam);
+  const publishExam = useServerFn(setExamPublished);
   const queryClient = useQueryClient();
 
   const { data, isPending, error } = useQuery({
@@ -105,6 +113,24 @@ function AdminPage() {
     },
     onError: (err) =>
       toast.error(err instanceof Error ? err.message : "Could not clean up assessments"),
+  });
+  const deleteMutation = useMutation({
+    mutationFn: (examId: string) => removeExam({ data: { examId } }),
+    onSuccess: () => {
+      toast.success("Assessment deleted");
+      void queryClient.invalidateQueries({ queryKey: ["admin-overview"] });
+    },
+    onError: (err) =>
+      toast.error(err instanceof Error ? err.message : "Could not delete assessment"),
+  });
+  const publishMutation = useMutation({
+    mutationFn: (payload: { examId: string; active: boolean }) => publishExam({ data: payload }),
+    onSuccess: (_, variables) => {
+      toast.success(variables.active ? "Assessment published" : "Assessment unpublished");
+      void queryClient.invalidateQueries({ queryKey: ["admin-overview"] });
+    },
+    onError: (err) =>
+      toast.error(err instanceof Error ? err.message : "Could not update publish state"),
   });
 
   async function copyLink(examId: string) {
@@ -200,13 +226,20 @@ function AdminPage() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium">{exam.title}</p>
                   <p className="text-xs text-muted-foreground">
-                    {exam.topic} · {MODE_LABELS[exam.mode as ExamMode] ?? exam.mode} ·{" "}
+                    Category: {exam.topic} · {MODE_LABELS[exam.mode as ExamMode] ?? exam.mode} ·{" "}
                     {exam.questionCount} questions · {exam.duration} min · pass {exam.passMark}% ·{" "}
                     {exam.maxAttempts} attempt(s) allowed
                   </p>
                 </div>
                 <span className="rounded-full bg-secondary px-2.5 py-1 text-[11px] font-semibold">
                   {exam.access}
+                </span>
+                <span
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                    exam.active ? "bg-success/15 text-success" : "bg-secondary text-muted-foreground"
+                  }`}
+                >
+                  {exam.active ? "Published" : "Unpublished"}
                 </span>
                 <span className="text-xs text-muted-foreground">{exam.attempts} attempts</span>
                 <button
@@ -215,6 +248,41 @@ function AdminPage() {
                 >
                   <Link2 className="h-3.5 w-3.5" />
                   Copy share link
+                </button>
+                <Link
+                  to="/admin/exams/$examId"
+                  params={{ examId: exam.id }}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-input bg-card px-2.5 py-1.5 text-xs font-medium hover:bg-secondary"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  Edit
+                </Link>
+                <button
+                  type="button"
+                  disabled={publishMutation.isPending}
+                  onClick={() =>
+                    publishMutation.mutate({ examId: exam.id, active: !exam.active })
+                  }
+                  className="rounded-md border border-input bg-card px-2.5 py-1.5 text-xs font-medium hover:bg-secondary disabled:opacity-60"
+                >
+                  {exam.active ? "Unpublish" : "Publish"}
+                </button>
+                <button
+                  type="button"
+                  disabled={deleteMutation.isPending}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        `Delete “${exam.title}”? This removes questions and attempt history for this assessment.`,
+                      )
+                    ) {
+                      deleteMutation.mutate(exam.id);
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-destructive/40 px-2.5 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/10 disabled:opacity-60"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete
                 </button>
               </div>
 

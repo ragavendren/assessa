@@ -137,11 +137,18 @@ export const updateExamSettings = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { requireAdmin } = await import("@/lib/platform.server");
     await requireAdmin(context.userId);
-    const { examId, ...patch } = data;
-    if (patch.starts_at && patch.ends_at && new Date(patch.ends_at) <= new Date(patch.starts_at)) {
+    const { examId, starts_at, ends_at, ...rest } = data;
+    if (starts_at && ends_at && new Date(ends_at) <= new Date(starts_at)) {
       throw new Error("End date must be after the start date.");
     }
-    const { error } = await supabaseAdmin.from("exams").update(patch).eq("id", examId);
+    const { error } = await supabaseAdmin
+      .from("exams")
+      .update({
+        ...rest,
+        starts_at: starts_at ?? null,
+        ends_at: ends_at ?? null,
+      })
+      .eq("id", examId);
     if (error) throw error;
     return { ok: true };
   });
@@ -299,6 +306,260 @@ export const createExam = createServerFn({ method: "POST" })
       }
     }
     return { examId: exam.id as string };
+  });
+
+const examQuestionSchema = z.object({
+  prompt: z.string().trim().min(4).max(600),
+  options: z.array(z.string().trim().min(1).max(300)).min(2).max(6),
+  correct_index: z.number().int().min(0).max(5),
+  correct_indexes: z.array(z.number().int().min(0).max(5)).min(1).max(6).optional(),
+  multi_select: z.boolean().default(false),
+  subtopic: z.string().trim().max(60).default("general"),
+  explanation: z.string().trim().max(600).default(""),
+});
+
+const examWriteObjectSchema = z.object({
+  title: z.string().trim().min(3).max(140),
+  description: z.string().trim().max(600).default(""),
+  topic: z.string().trim().min(2).max(60),
+  mode: z.enum(["practice", "assessment", "competitive", "certification"]),
+  duration_minutes: z.number().int().min(1).max(300),
+  pass_mark: z.number().int().min(1).max(100),
+  max_attempts: z.number().int().min(1).max(99),
+  access: z.enum(["public", "private", "organization", "group"]),
+  organization: z.string().trim().max(120).optional().or(z.literal("")),
+  team_group: z.string().trim().max(120).optional().or(z.literal("")),
+  invitations: z.string().max(4000).optional().or(z.literal("")),
+  active: z.boolean().default(true),
+  starts_at: z.string().datetime().nullable().optional(),
+  ends_at: z.string().datetime().nullable().optional(),
+  questions: z.array(examQuestionSchema).min(1).max(200),
+});
+
+function refineExamWrite(
+  value: z.infer<typeof examWriteObjectSchema>,
+  ctx: z.RefinementCtx,
+) {
+  if (value.starts_at && value.ends_at && new Date(value.ends_at) <= new Date(value.starts_at)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "End date must be after the start date.",
+    });
+  }
+  for (const [index, question] of value.questions.entries()) {
+    const indexes = [...new Set(question.correct_indexes ?? [question.correct_index])].filter(
+      (item) => item < question.options.length,
+    );
+    if (indexes.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Question ${index + 1} needs a valid correct answer.`,
+      });
+    }
+    if (!question.multi_select && indexes.length > 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Question ${index + 1}: enable multi-select for multiple answers.`,
+      });
+    }
+  }
+}
+
+const examWriteSchema = examWriteObjectSchema.superRefine(refineExamWrite);
+const examUpdateSchema = examWriteObjectSchema
+  .extend({ examId: z.string().uuid() })
+  .superRefine(refineExamWrite);
+
+function mapQuestionsForInsert(examId: string, questions: z.infer<typeof examQuestionSchema>[]) {
+  return questions.map((q) => {
+    const correctIndexes = [...new Set(q.correct_indexes ?? [q.correct_index])]
+      .filter((index) => index < q.options.length)
+      .sort((a, b) => a - b);
+    return {
+      exam_id: examId,
+      prompt: q.prompt,
+      options: q.options,
+      correct_index: correctIndexes[0] ?? 0,
+      correct_indexes: q.multi_select ? correctIndexes : [correctIndexes[0] ?? 0],
+      subtopic: q.subtopic || "general",
+      explanation: q.explanation,
+    };
+  });
+}
+
+/** Admin: load one assessment with questions for editing. */
+export const getExamForEdit = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ examId: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { requireAdmin } = await import("@/lib/platform.server");
+    await requireAdmin(context.userId);
+
+    const [{ data: exam, error }, { data: questions, error: qError }, { data: invitations }] =
+      await Promise.all([
+        supabaseAdmin.from("exams").select("*").eq("id", data.examId).maybeSingle(),
+        supabaseAdmin
+          .from("questions")
+          .select("*")
+          .eq("exam_id", data.examId)
+          .order("created_at", { ascending: true }),
+        supabaseAdmin.from("exam_invitations").select("email").eq("exam_id", data.examId),
+      ]);
+    if (error) throw error;
+    if (qError) throw qError;
+    if (!exam) throw new Error("Assessment not found");
+
+    const { data: categoryRows } = await supabaseAdmin
+      .from("exams")
+      .select("topic")
+      .order("topic", { ascending: true });
+
+    const categories = [
+      ...new Set((categoryRows ?? []).map((row) => row.topic).filter(Boolean)),
+    ].sort((a, b) => a.localeCompare(b));
+
+    return {
+      categories,
+      exam: {
+        id: exam.id,
+        title: exam.title,
+        description: exam.description ?? "",
+        topic: exam.topic,
+        mode: exam.mode,
+        duration_minutes: exam.duration_minutes,
+        pass_mark: exam.pass_mark,
+        max_attempts: exam.max_attempts,
+        access: exam.access,
+        organization: exam.organization ?? "",
+        team_group: exam.team_group ?? "",
+        active: exam.active,
+        starts_at: exam.starts_at,
+        ends_at: (exam as { ends_at?: string | null }).ends_at ?? null,
+        invitations: (invitations ?? []).map((row) => row.email).join(", "),
+        questions: (questions ?? []).map((q) => {
+          const indexes =
+            Array.isArray((q as { correct_indexes?: number[] }).correct_indexes) &&
+            (q as { correct_indexes?: number[] }).correct_indexes!.length > 0
+              ? (q as { correct_indexes: number[] }).correct_indexes
+              : [q.correct_index];
+          return {
+            prompt: q.prompt,
+            options: (q.options as string[]) ?? [],
+            correct_index: indexes[0] ?? 0,
+            correct_indexes: indexes,
+            multi_select: indexes.length > 1,
+            subtopic: q.subtopic || "general",
+            explanation: q.explanation ?? "",
+          };
+        }),
+      },
+    };
+  });
+
+/** Admin: update assessment details and replace its question bank. */
+export const updateExam = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => examUpdateSchema.parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { requireAdmin } = await import("@/lib/platform.server");
+    await requireAdmin(context.userId);
+
+    const { examId, invitations, questions, ...examFields } = data;
+    const { error } = await supabaseAdmin
+      .from("exams")
+      .update({
+        title: examFields.title,
+        description: examFields.description,
+        topic: examFields.topic,
+        mode: examFields.mode,
+        question_count: questions.length,
+        duration_minutes: examFields.duration_minutes,
+        pass_mark: examFields.pass_mark,
+        max_attempts: examFields.max_attempts,
+        access: examFields.access,
+        organization: examFields.organization || null,
+        team_group: examFields.team_group || null,
+        active: examFields.active,
+        starts_at: examFields.starts_at ?? null,
+        ends_at: examFields.ends_at ?? null,
+      })
+      .eq("id", examId);
+    if (error) throw error;
+
+    const { error: deleteError } = await supabaseAdmin
+      .from("questions")
+      .delete()
+      .eq("exam_id", examId);
+    if (deleteError) throw deleteError;
+
+    const { error: qError } = await supabaseAdmin
+      .from("questions")
+      .insert(mapQuestionsForInsert(examId, questions));
+    if (qError) throw qError;
+
+    await supabaseAdmin.from("exam_invitations").delete().eq("exam_id", examId);
+    const emails = (invitations ?? "")
+      .split(/[\s,;]+/)
+      .map((value: string) => value.trim().toLowerCase())
+      .filter((value: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value));
+    if (emails.length > 0) {
+      await supabaseAdmin
+        .from("exam_invitations")
+        .upsert(
+          emails.map((email: string) => ({ exam_id: examId, email })),
+          { onConflict: "exam_id,email" },
+        );
+    }
+
+    return { examId };
+  });
+
+/** Admin: delete an assessment (cascades questions/attempts). */
+export const deleteExam = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ examId: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { requireAdmin } = await import("@/lib/platform.server");
+    await requireAdmin(context.userId);
+    const { error } = await supabaseAdmin.from("exams").delete().eq("id", data.examId);
+    if (error) throw error;
+    return { ok: true };
+  });
+
+/** Admin: publish or unpublish an assessment. */
+export const setExamPublished = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({ examId: z.string().uuid(), active: z.boolean() }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { requireAdmin } = await import("@/lib/platform.server");
+    await requireAdmin(context.userId);
+    const { error } = await supabaseAdmin
+      .from("exams")
+      .update({ active: data.active })
+      .eq("id", data.examId);
+    if (error) throw error;
+    return { ok: true };
+  });
+
+/** Admin: categories already used across assessments (for pickers). */
+export const listExamCategories = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { requireAdmin } = await import("@/lib/platform.server");
+    await requireAdmin(context.userId);
+    const { data, error } = await supabaseAdmin.from("exams").select("topic");
+    if (error) throw error;
+    const categories = [...new Set((data ?? []).map((row) => row.topic).filter(Boolean))].sort(
+      (a, b) => a.localeCompare(b),
+    );
+    return { categories };
   });
 
 export const upsertBadge = createServerFn({ method: "POST" })
@@ -522,11 +783,14 @@ export const getAdminUserDetail = createServerFn({ method: "POST" })
       profile: {
         id: profile.id,
         name: profile.full_name || profile.email,
+        fullName: profile.full_name || "",
         email: profile.email,
-        organization: profile.organization,
-        department: profile.department,
-        participantId: profile.participant_id,
-        mobile: profile.mobile,
+        organization: profile.organization ?? "",
+        department: profile.department ?? "",
+        participantId: profile.participant_id ?? "",
+        mobile: profile.mobile ?? "",
+        displayName: profile.display_name ?? "",
+        teamGroup: profile.team_group ?? "",
         roles: (roles ?? []).map((r) => r.role),
         isAdmin: (roles ?? []).some((r) => r.role === "admin"),
         leaderboardOptOut: profile.leaderboard_opt_out,
@@ -726,6 +990,92 @@ export const setUserBanned = createServerFn({ method: "POST" })
     const { error } = await supabaseAdmin.auth.admin.updateUserById(data.userId, {
       ban_duration: data.banned ? "876000h" : "none",
     });
+    if (error) throw error;
+    return { ok: true };
+  });
+
+/** Admin: edit participant profile fields. */
+export const updateAdminUser = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        userId: z.string().uuid(),
+        full_name: z.string().trim().min(1).max(120),
+        email: z.string().trim().email().max(200),
+        organization: z.string().trim().max(120).optional().or(z.literal("")),
+        department: z.string().trim().max(120).optional().or(z.literal("")),
+        mobile: z.string().trim().max(40).optional().or(z.literal("")),
+        participant_id: z.string().trim().max(80).optional().or(z.literal("")),
+        display_name: z.string().trim().max(80).optional().or(z.literal("")),
+        team_group: z.string().trim().max(120).optional().or(z.literal("")),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { requireAdmin } = await import("@/lib/platform.server");
+    await requireAdmin(context.userId);
+
+    const { userId, ...profile } = data;
+    const { error } = await supabaseAdmin
+      .from("profiles")
+      .update({
+        full_name: profile.full_name,
+        email: profile.email,
+        organization: profile.organization || null,
+        department: profile.department || null,
+        mobile: profile.mobile || null,
+        participant_id: profile.participant_id || null,
+        display_name: profile.display_name || null,
+        team_group: profile.team_group || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", userId);
+    if (error) throw error;
+
+    const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+      email: profile.email,
+      user_metadata: {
+        full_name: profile.full_name,
+        display_name: profile.display_name || profile.full_name,
+      },
+    });
+    if (authError) throw authError;
+
+    return { ok: true };
+  });
+
+/** Admin: permanently delete a user and related profile/role rows. */
+export const deleteAdminUser = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => z.object({ userId: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { requireAdmin } = await import("@/lib/platform.server");
+    await requireAdmin(context.userId);
+
+    if (data.userId === context.userId) {
+      throw new Error("You cannot delete your own account.");
+    }
+
+    await Promise.all([
+      supabaseAdmin.from("exam_attempts").delete().eq("user_id", data.userId),
+      supabaseAdmin.from("user_roles").delete().eq("user_id", data.userId),
+      supabaseAdmin.from("xp_transactions").delete().eq("user_id", data.userId),
+      supabaseAdmin.from("user_badges").delete().eq("user_id", data.userId),
+      supabaseAdmin.from("user_streaks").delete().eq("user_id", data.userId),
+      supabaseAdmin.from("topic_mastery").delete().eq("user_id", data.userId),
+      supabaseAdmin.from("notifications").delete().eq("user_id", data.userId),
+    ]);
+
+    const { error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .delete()
+      .eq("id", data.userId);
+    if (profileError) throw profileError;
+
+    const { error } = await supabaseAdmin.auth.admin.deleteUser(data.userId);
     if (error) throw error;
     return { ok: true };
   });

@@ -8,7 +8,7 @@ export type CsvQuestion = {
 };
 
 const HEADER =
-  "prompt,option_a,option_b,option_c,option_d,option_e,option_f,correct_answers,multi_select,subtopic,explanation";
+  "prompt,option_a,option_b,option_c,option_d,option_e,option_f,correct_answers,multi_select,tag,explanation";
 
 /** Downloadable CSV template for question banks. */
 export function questionCsvTemplate(): string {

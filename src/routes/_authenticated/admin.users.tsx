@@ -1,17 +1,19 @@
 import { AdminNav } from "@/components/AdminNav";
 import { PageLoader, SectionHeading, StatTile, ScorePill } from "@/components/platform";
 import {
+  deleteAdminUser,
   getAdminUserDetail,
   getAdminUsers,
   setUserBanned,
   setUserRole,
+  updateAdminUser,
 } from "@/lib/admin.functions";
 import { formatDate } from "@/lib/gamification";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/admin/users")({
@@ -28,15 +30,30 @@ export const Route = createFileRoute("/_authenticated/admin/users")({
   component: AdminUsersPage,
 });
 
+type EditForm = {
+  full_name: string;
+  email: string;
+  organization: string;
+  department: string;
+  mobile: string;
+  participant_id: string;
+  display_name: string;
+  team_group: string;
+};
+
 function AdminUsersPage() {
   const fetchUsers = useServerFn(getAdminUsers);
   const fetchDetail = useServerFn(getAdminUserDetail);
   const updateRole = useServerFn(setUserRole);
   const updateBan = useServerFn(setUserBanned);
+  const saveUser = useServerFn(updateAdminUser);
+  const removeUser = useServerFn(deleteAdminUser);
   const queryClient = useQueryClient();
 
   const [query, setQuery] = useState("");
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState<EditForm | null>(null);
 
   const { data, isPending, error } = useQuery({
     queryKey: ["admin-users"],
@@ -50,6 +67,26 @@ function AdminUsersPage() {
     enabled: !!selectedUserId,
     retry: false,
   });
+
+  useEffect(() => {
+    setEditing(false);
+    setForm(null);
+  }, [selectedUserId]);
+
+  useEffect(() => {
+    if (!detailQuery.data || !editing) return;
+    const profile = detailQuery.data.profile;
+    setForm({
+      full_name: profile.fullName,
+      email: profile.email,
+      organization: profile.organization,
+      department: profile.department,
+      mobile: profile.mobile,
+      participant_id: profile.participantId,
+      display_name: profile.displayName,
+      team_group: profile.teamGroup,
+    });
+  }, [detailQuery.data, editing]);
 
   const roleMutation = useMutation({
     mutationFn: (payload: { userId: string; role: "admin" | "participant" }) =>
@@ -68,6 +105,27 @@ function AdminUsersPage() {
       toast.success(variables.banned ? "User banned" : "User unbanned");
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Could not update user"),
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: (payload: EditForm & { userId: string }) => saveUser({ data: payload }),
+    onSuccess: () => {
+      toast.success("User updated");
+      setEditing(false);
+      void queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-user-detail", selectedUserId] });
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not save user"),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (userId: string) => removeUser({ data: { userId } }),
+    onSuccess: () => {
+      toast.success("User deleted");
+      setSelectedUserId(null);
+      void queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not delete user"),
   });
 
   const filtered = useMemo(() => {
@@ -180,7 +238,7 @@ function AdminUsersPage() {
         <aside className="surface-paper p-5">
           {!selectedUserId ? (
             <p className="text-sm text-muted-foreground">
-              Select a user to view assessment activity, performance, and management actions.
+              Select a user to view assessment activity, edit profile details, or delete the account.
             </p>
           ) : detailQuery.isPending ? (
             <PageLoader label="Loading activity…" />
@@ -203,6 +261,13 @@ function AdminUsersPage() {
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
+                  onClick={() => setEditing((value) => !value)}
+                  className="rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-secondary"
+                >
+                  {editing ? "Cancel edit" : "Edit user"}
+                </button>
+                <button
+                  type="button"
                   disabled={roleMutation.isPending}
                   onClick={() =>
                     roleMutation.mutate({
@@ -218,13 +283,12 @@ function AdminUsersPage() {
                   type="button"
                   disabled={banMutation.isPending}
                   onClick={() => {
-                    const banned = true;
                     if (
                       window.confirm(
-                        "Ban this user from signing in? You can reverse this later from Auth if needed.",
+                        "Ban this user from signing in? You can reverse this later.",
                       )
                     ) {
-                      banMutation.mutate({ userId: detailQuery.data.profile.id, banned });
+                      banMutation.mutate({ userId: detailQuery.data.profile.id, banned: true });
                     }
                   }}
                   className="rounded-md border border-destructive/40 px-3 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/10 disabled:opacity-60"
@@ -241,7 +305,67 @@ function AdminUsersPage() {
                 >
                   Unban
                 </button>
+                <button
+                  type="button"
+                  disabled={deleteMutation.isPending}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        `Permanently delete ${detailQuery.data.profile.name}? This cannot be undone.`,
+                      )
+                    ) {
+                      deleteMutation.mutate(detailQuery.data.profile.id);
+                    }
+                  }}
+                  className="rounded-md border border-destructive/40 px-3 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/10 disabled:opacity-60"
+                >
+                  Delete user
+                </button>
               </div>
+
+              {editing && form ? (
+                <form
+                  className="space-y-3 rounded-md border border-border p-3"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    saveMutation.mutate({
+                      userId: detailQuery.data.profile.id,
+                      ...form,
+                    });
+                  }}
+                >
+                  <p className="text-hairline text-muted-foreground">Edit profile</p>
+                  {(
+                    [
+                      ["full_name", "Full name"],
+                      ["email", "Email"],
+                      ["display_name", "Display name"],
+                      ["participant_id", "Participant ID"],
+                      ["mobile", "Mobile"],
+                      ["organization", "Organisation"],
+                      ["department", "Department"],
+                      ["team_group", "Team / group"],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <label key={key} className="block text-sm">
+                      <span className="text-xs text-muted-foreground">{label}</span>
+                      <input
+                        className="field mt-1"
+                        value={form[key]}
+                        onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+                        required={key === "full_name" || key === "email"}
+                      />
+                    </label>
+                  ))}
+                  <button
+                    type="submit"
+                    disabled={saveMutation.isPending}
+                    className="w-full rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+                  >
+                    {saveMutation.isPending ? "Saving…" : "Save changes"}
+                  </button>
+                </form>
+              ) : null}
 
               <div>
                 <p className="text-hairline text-muted-foreground">Assessments</p>

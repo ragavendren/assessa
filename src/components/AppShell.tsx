@@ -1,3 +1,4 @@
+import { BrandMark } from "@/components/BrandMark";
 import { supabase } from "@/integrations/supabase/client";
 import { getMe } from "@/lib/platform.functions";
 import { initials } from "@/lib/gamification";
@@ -42,11 +43,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-4">
-          <Link to="/dashboard" className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-md bg-primary font-display text-sm text-primary-foreground">
-              As
-            </span>
-            <span className="hidden font-display text-lg sm:block">Assessa</span>
+          <Link to="/dashboard" className="inline-flex items-center">
+            <BrandMark wordmarkClassName="hidden sm:inline" />
           </Link>
 
           <nav className="ml-4 hidden items-center gap-1 md:flex">

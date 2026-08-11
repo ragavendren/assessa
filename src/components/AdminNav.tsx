@@ -20,7 +20,10 @@ export function AdminNav() {
           className={cn(
             "rounded-full px-3.5 py-1.5 text-sm transition-colors",
             pathname === item.to ||
-              (item.to !== "/admin" && pathname.startsWith(item.to))
+              (item.to === "/admin/exams/new" && pathname.startsWith("/admin/exams/")) ||
+              (item.to !== "/admin" &&
+                item.to !== "/admin/exams/new" &&
+                pathname.startsWith(item.to))
               ? "bg-primary text-primary-foreground"
               : "border border-border bg-card text-muted-foreground hover:text-foreground",
           )}
