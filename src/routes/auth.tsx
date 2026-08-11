@@ -87,6 +87,12 @@ function AuthPage() {
           },
         });
         if (error) throw error;
+        // Existing accounts return 200 with empty identities and no email send.
+        if (data.user && (data.user.identities?.length ?? 0) === 0) {
+          toast.error("An account with this email already exists. Sign in instead.");
+          setMode("signin");
+          return;
+        }
         if (!data.session) {
           setCheckEmail(true);
           return;
