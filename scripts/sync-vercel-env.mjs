@@ -28,6 +28,14 @@ const keys = [
   "SUPABASE_PUBLISHABLE_KEY",
   "VITE_SUPABASE_PUBLISHABLE_KEY",
   "SUPABASE_SERVICE_ROLE_KEY",
+  "RESEND_API_KEY",
+  "RESEND_FROM_EMAIL",
+  "APP_URL",
+  "GEMINI_API_KEY",
+  "GEMINI_MODEL",
+  "AI_GATEWAY_API_KEY",
+  "AI_GATEWAY_BASE_URL",
+  "AI_GATEWAY_MODEL",
 ];
 const targets = ["production", "preview", "development"];
 

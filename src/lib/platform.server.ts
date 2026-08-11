@@ -171,7 +171,17 @@ export async function awardXp(
 
 export async function notify(
   userId: string,
-  payload: { kind: string; title: string; body?: string; icon?: string },
+  payload: {
+    kind: string;
+    title: string;
+    body?: string;
+    icon?: string;
+    /** Deep-link path (e.g. `/results/...`). Prefixed with APP_URL for email. */
+    href?: string;
+    ctaLabel?: string;
+    /** When false, skip Resend and keep in-app only. Default true. */
+    email?: boolean;
+  },
 ) {
   await db.from("notifications").insert({
     user_id: userId,
@@ -180,6 +190,36 @@ export async function notify(
     body: payload.body ?? "",
     icon: payload.icon ?? "🔔",
   });
+
+  if (payload.email === false) return;
+
+  try {
+    const { data: profile } = await db
+      .from("profiles")
+      .select("email")
+      .eq("id", userId)
+      .maybeSingle();
+    const { appBaseUrl, normalizeEmailAddress, sendNotificationEmail } = await import(
+      "@/lib/email.server"
+    );
+    const to = normalizeEmailAddress(profile?.email);
+    if (!to) return;
+
+    const href = payload.href
+      ? `${appBaseUrl()}${payload.href.startsWith("/") ? payload.href : `/${payload.href}`}`
+      : appBaseUrl();
+
+    await sendNotificationEmail({
+      to,
+      kind: payload.kind,
+      title: payload.title,
+      ...(payload.body ? { body: payload.body } : {}),
+      href,
+      ctaLabel: payload.ctaLabel ?? "Open Assessa",
+    });
+  } catch (error) {
+    console.error("[notify] email delivery failed:", error);
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -201,7 +241,7 @@ export async function getExam(examId: string) {
   const { data, error } = await db.from("exams").select("*").eq("id", examId).maybeSingle();
   if (error) throw error;
   if (!data) throw new Error("Assessment not found.");
-  return data as ExamRow;
+  return data as unknown as ExamRow;
 }
 
 export async function assertExamAccess(userId: string, exam: ExamRow) {
@@ -436,6 +476,8 @@ export async function submitAttempt(
     title: `Result available — ${exam.title}`,
     body: `You scored ${score}% (${passed ? "PASSED" : "NOT PASSED"}).`,
     icon: passed ? "✅" : "📄",
+    href: `/results/${attemptId}`,
+    ctaLabel: "View result",
   });
 
   return summariseResult(userId, attemptId, { gains, newBadges });
@@ -659,6 +701,8 @@ async function evaluateBadges(
       title: `Badge earned — ${badge.name}`,
       body: `${badge.description}${badge.xp_reward ? ` +${badge.xp_reward} XP` : ""}`,
       icon: badge.icon,
+      href: "/achievements",
+      ctaLabel: "View achievements",
     });
   }
   return earned;

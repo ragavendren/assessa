@@ -7,6 +7,7 @@ node_modules/
 .output/
 .nitro/
 .vinxi/
+.tanstack/
 dist/
 build/
 .vercel/
@@ -14,7 +15,8 @@ build/
 
 # env & secrets
 .env
-.env.*
+.env.local
+.env.*.local
 !.env.example
 
 # logs / debug
@@ -44,5 +46,3 @@ coverage/
 # misc
 *.local
 .cache/
-.vercel
-.env*

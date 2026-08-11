@@ -1,13 +1,31 @@
 name: Deploy to Vercel
 
+# Production: push/manual on `main` → --prod
+#   → https://assessa.sstcloud.com.au
+#   → https://assessa.vercel.app
+# Development: push/manual on `develop` → preview (not --prod)
+#   → https://assessa-git-develop-ragavendrenv-5507s-projects.vercel.app
+# Pull requests → ephemeral preview URL (commented on the PR)
+
 on:
   push:
     branches:
       - main
+      - develop
   pull_request:
     branches:
       - main
+      - develop
   workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        default: production
+        type: choice
+        options:
+          - production
+          - development
 
 permissions:
   contents: read
@@ -15,7 +33,7 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: vercel-${{ github.ref }}
+  group: vercel-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 env:
@@ -27,11 +45,31 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     environment:
-      name: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && 'production' || 'preview' }}
+      name: ${{ ((github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production') || (github.event_name == 'push' && github.ref == 'refs/heads/main')) && 'production' || 'development' }}
       url: ${{ steps.deploy.outputs.preview-url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Resolve deploy target
+        id: target
+        shell: bash
+        run: |
+          IS_PROD=false
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.environment }}" == "production" ]]; then
+            IS_PROD=true
+          elif [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main" ]]; then
+            IS_PROD=true
+          fi
+
+          if [[ "$IS_PROD" == "true" ]]; then
+            echo "label=production" >> "$GITHUB_OUTPUT"
+            echo "vercel_args=--prod" >> "$GITHUB_OUTPUT"
+          else
+            echo "label=development" >> "$GITHUB_OUTPUT"
+            echo "vercel_args=" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Deploy target resolved (prod=$IS_PROD)"
 
       - name: Deploy to Vercel
         id: deploy
@@ -43,4 +81,19 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           github-comment: true
           github-deployment: true
-          vercel-args: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && '--prod' || '' }}
+          vercel-args: ${{ steps.target.outputs.vercel_args }}
+
+      - name: Summarize URLs
+        if: always() && steps.deploy.outputs.preview-url != ''
+        shell: bash
+        run: |
+          {
+            echo "## Assessa deploy (${{ steps.target.outputs.label }})"
+            echo ""
+            echo "- **This deployment:** ${{ steps.deploy.outputs.preview-url }}"
+            echo "- **Production custom domain:** https://assessa.sstcloud.com.au"
+            echo "- **Production Vercel alias:** https://assessa-ragavendrenv-5507s-projects.vercel.app"
+            echo "- **Development (develop branch):** https://assessa-git-develop-ragavendrenv-5507s-projects.vercel.app"
+            echo ""
+            echo "Repo secret required: \`VERCEL_TOKEN\`"
+          } >> "$GITHUB_STEP_SUMMARY"

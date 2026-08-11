@@ -5,3 +5,20 @@ project_id = "bdktwzctaiqtlyhzegvr"
 [db.seed]
 enabled = true
 sql_paths = ["./seed.sql"]
+
+# Auth email templates (Assessa branded) + Resend SMTP on hosted projects.
+# Local `supabase start` reads content_path below.
+# Hosted Auth: run `npm run db:sync-auth-emails` (Resend SMTP + templates).
+# Google OAuth / Site URL: `npm run db:sync-google-auth` or Dashboard → Auth.
+
+[auth.email.template.confirmation]
+subject = "Confirm your Assessa account"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.recovery]
+subject = "Reset your Assessa password"
+content_path = "./supabase/templates/recovery.html"
+
+[auth.email.template.magic_link]
+subject = "Your Assessa sign-in link"
+content_path = "./supabase/templates/magic_link.html"
