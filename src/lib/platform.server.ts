@@ -184,7 +184,10 @@ export async function notify(
     /** Deep-link path (e.g. `/results/...`). Prefixed with APP_URL for email. */
     href?: string;
     ctaLabel?: string;
-    /** When false, skip Resend and keep in-app only. Default true. */
+    /**
+     * Opt-in Resend delivery. Default false — conserve ~100/day quota.
+     * Exam invites use sendExamInvitationEmails instead.
+     */
     email?: boolean;
   },
 ) {
@@ -196,7 +199,7 @@ export async function notify(
     icon: payload.icon ?? "🔔",
   });
 
-  if (payload.email === false) return;
+  if (payload.email !== true) return;
 
   try {
     const { data: profile } = await db
@@ -486,6 +489,8 @@ export async function submitAttempt(
     icon: passed ? "✅" : "📄",
     href: `/results/${attemptId}`,
     ctaLabel: "View result",
+    // In-app only — do not spend Resend quota on result mail.
+    email: false,
   });
 
   return summariseResult(userId, attemptId, { gains, newBadges });
@@ -709,6 +714,8 @@ async function evaluateBadges(
       icon: badge.icon,
       href: "/achievements",
       ctaLabel: "View achievements",
+      // In-app only — do not spend Resend quota on badge mail.
+      email: false,
     });
   }
   return earned;

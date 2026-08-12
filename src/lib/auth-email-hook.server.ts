@@ -55,8 +55,23 @@ export async function handleSupabaseSendEmailHook(request: Request): Promise<Res
     });
   }
 
-  const ok = await sendAuthEmail(payload);
-  if (!ok) {
+  const result = await sendAuthEmail(payload);
+  if (result === "skipped") {
+    // Fail the Auth op so clients do not show a fake "email sent" for non-critical types.
+    return new Response(
+      JSON.stringify({
+        error: {
+          http_code: 403,
+          message: "This email type is disabled to conserve Resend quota",
+        },
+      }),
+      {
+        status: 403,
+        headers: { "content-type": "application/json" },
+      },
+    );
+  }
+  if (result === "failed") {
     // Non-2xx makes Supabase retry / surface failure to the client
     return new Response(JSON.stringify({ error: "resend_failed" }), {
       status: 500,

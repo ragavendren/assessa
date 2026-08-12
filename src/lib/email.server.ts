@@ -1,9 +1,24 @@
 /**
- * Outbound email via Resend API only.
- * - Auth (confirm / magic link / recovery / invite): Supabase Send Email Hook → this app → Resend
- * - Product (exam invites / results / badges): Resend API directly
+ * Outbound email via Resend API only (budget: ~100/day).
+ *
+ * Allowed sends:
+ * - Auth: signup confirmation, magic link, password recovery
+ * - Product: exam attendance invitations
+ *
+ * Not emailed (in-app notifications only): results, badges, Auth invite /
+ * email_change / reauthentication.
  */
 import { Resend } from "resend";
+
+/** Auth actions that may consume Resend quota. */
+export const CRITICAL_AUTH_EMAIL_ACTIONS = new Set([
+  "signup",
+  "magiclink",
+  "email", // OTP / magic-link alias
+  "recovery", // forgot-password — keep so accounts are recoverable
+]);
+
+export type AuthEmailSendResult = "sent" | "skipped" | "failed";
 
 export type EmailPayload = {
   to: string | string[];
@@ -370,23 +385,22 @@ export function buildAuthEmail(payload: AuthEmailPayload): {
   };
 }
 
-export async function sendAuthEmail(payload: AuthEmailPayload): Promise<boolean> {
+export async function sendAuthEmail(payload: AuthEmailPayload): Promise<AuthEmailSendResult> {
+  const action = payload.email_data.email_action_type;
+  if (!CRITICAL_AUTH_EMAIL_ACTIONS.has(action)) {
+    console.info("[email] auth send skipped (not critical):", action);
+    return "skipped";
+  }
+
   const built = buildAuthEmail(payload);
   if (!built) {
-    console.warn(
-      "[email] auth send skipped — invalid recipient",
-      payload.email_data.email_action_type,
-    );
-    return false;
+    console.warn("[email] auth send failed — invalid recipient", action);
+    return "failed";
   }
   const ok = await sendEmail(built);
   if (ok) {
-    console.info(
-      "[email] Resend Auth mail sent:",
-      payload.email_data.email_action_type,
-      "→",
-      built.to,
-    );
+    console.info("[email] Resend Auth mail sent:", action, "→", built.to);
+    return "sent";
   }
-  return ok;
+  return "failed";
 }

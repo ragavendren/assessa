@@ -67,8 +67,9 @@ Local SSR loads **all** `.env` keys into `process.env` via `vite.config.ts` (not
 | `GEMINI_MODEL`                                     | No           | Default `gemini-3.5-flash-lite`                                |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`        | Google SSO   | Google Cloud OAuth Web client                                  |
 | `SUPABASE_ACCESS_TOKEN`                            | Sync scripts | [Account token](https://supabase.com/dashboard/account/tokens) |
-| `RESEND_API_KEY` / `RESEND_FROM_EMAIL`             | Yes (mail)   | Resend — Auth SMTP + product emails (verified domain)          |
-| `SUPABASE_RATE_LIMIT_EMAIL_SENT`                   | No           | Auth email triggers/hour (default `100`; needs Resend SMTP)    |
+| `RESEND_API_KEY` / `RESEND_FROM_EMAIL`             | Yes (mail)   | Resend — Auth hook + exam invites (verified domain)            |
+| `SEND_EMAIL_HOOK_SECRET`                           | Yes (mail)   | Supabase Send Email Hook secret (`v1,whsec_…`)                 |
+| `SUPABASE_RATE_LIMIT_EMAIL_SENT`                   | No           | Auth email triggers/hour (default `100`)                       |
 | `AI_GATEWAY_API_KEY`                               | No           | Optional OpenRouter-style fallback                             |
 
 ## Scripts
@@ -92,15 +93,26 @@ npm run env:sync-vercel         # push selected .env keys to Vercel
 
 ## Auth & email
 
-### Delivery: Resend API only
+### Delivery: Resend API only (quota-aware)
 
-- **Auth** (confirm / magic link / reset / invite): Supabase **Send Email Hook** → `POST /api/auth/send-email` → **Resend API** (Supabase does not send mail)
-- **Product** (exam invites / results / badges): Resend API from the app
-- Enable: `npm run db:sync-auth-emails` (needs `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `APP_URL`, writes `SEND_EMAIL_HOOK_SECRET`)
-- Verify: `npm run db:inspect-auth-mail` (must say `Resend API via Send Email Hook`)
-- Deploy with `RESEND_*` + `SEND_EMAIL_HOOK_SECRET` on Vercel (`npm run env:sync-vercel`)
-- Verify domain in [Resend → Domains](https://resend.com/domains); Auth sends appear in Resend → Emails
-- **"Email rate limit exceeded"** is still a **Supabase Auth** trigger gate (`SUPABASE_RATE_LIMIT_EMAIL_SENT`), not Resend
+Resend free tier is ~**100 emails/day**. Assessa only sends for critical flows:
+
+| Trigger | When | Resend? |
+| --- | --- | --- |
+| Signup confirmation | User creates an account with email/password | Yes |
+| Magic link / email OTP | Auth magic-link or email OTP sign-in | Yes |
+| Password recovery | Forgot-password flow | Yes (account access) |
+| Exam invite | Admin invites emails on create/update exam | Yes (1 per invitee) |
+| Result ready | Attempt submitted | No — in-app notification |
+| Badge earned | Badge unlocked | No — in-app notification |
+| Auth invite / email change / reauth | Other Supabase Auth mail types | No — blocked by hook |
+
+- **Auth path:** Supabase **Send Email Hook** → `POST /api/auth/send-email` → Resend
+- **Exam invites:** app → Resend (`sendExamInvitationEmails`)
+- Enable: `npm run db:sync-auth-emails` (needs `RESEND_*`, `APP_URL`, writes `SEND_EMAIL_HOOK_SECRET`)
+- Verify: `npm run db:inspect-auth-mail`
+- Deploy with `RESEND_*` + `SEND_EMAIL_HOOK_SECRET` (`npm run env:sync-vercel`)
+- Supabase Auth also has an hourly trigger gate (`SUPABASE_RATE_LIMIT_EMAIL_SENT`, default 100/hour)
 
 ### Email / password routes
 
