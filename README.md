@@ -97,15 +97,15 @@ npm run env:sync-vercel         # push selected .env keys to Vercel
 
 Resend free tier is ~**100 emails/day**. Assessa only sends for critical flows:
 
-| Trigger | When | Resend? |
-| --- | --- | --- |
-| Signup confirmation | User creates an account with email/password | Yes |
-| Magic link / email OTP | Auth magic-link or email OTP sign-in | Yes |
-| Password recovery | Forgot-password flow | Yes (account access) |
-| Exam invite | Admin invites emails on create/update exam | Yes (1 per invitee) |
-| Result ready | Attempt submitted | No — in-app notification |
-| Badge earned | Badge unlocked | No — in-app notification |
-| Auth invite / email change / reauth | Other Supabase Auth mail types | No — blocked by hook |
+| Trigger                             | When                                        | Resend?                  |
+| ----------------------------------- | ------------------------------------------- | ------------------------ |
+| Signup confirmation                 | User creates an account with email/password | Yes                      |
+| Magic link / email OTP              | Auth magic-link or email OTP sign-in        | Yes                      |
+| Password recovery                   | Forgot-password flow                        | Yes (account access)     |
+| Exam invite                         | Admin invites emails on create/update exam  | Yes (1 per invitee)      |
+| Result ready                        | Attempt submitted                           | No — in-app notification |
+| Badge earned                        | Badge unlocked                              | No — in-app notification |
+| Auth invite / email change / reauth | Other Supabase Auth mail types              | No — blocked by hook     |
 
 - **Auth path:** Supabase **Send Email Hook** → `POST /api/auth/send-email` → Resend
 - **Exam invites:** app → Resend (`sendExamInvitationEmails`)
