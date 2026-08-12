@@ -9,6 +9,7 @@ import {
   SectionHeading,
   StatTile,
 } from "@/components/platform";
+import { ScoreTrendChart } from "@/components/ScoreTrendChart";
 import { getParticipantInsight } from "@/lib/ai.functions";
 import { formatDate } from "@/lib/gamification";
 import { getDashboard } from "@/lib/platform.functions";
@@ -58,7 +59,6 @@ function Dashboard() {
   const examStreak = streak("exam");
   const passStreak = streak("pass");
   const focusAreas = [...data.mastery].sort((a, b) => a.mastery - b.mastery).slice(0, 3);
-  const trendMax = Math.max(100, ...data.trend.map((t) => t.score), 1);
   const availableExams = (data.available ?? []).slice(0, 8);
   const earnedBadges = (data.earnedBadges ?? data.latestBadges ?? []).slice(0, 12);
   const recent = data.recent.slice(0, 6);
@@ -311,36 +311,15 @@ function Dashboard() {
       <MotionSection delayMs={50} className="grid gap-4 lg:grid-cols-2">
         <div className="surface-paper dash-lift p-5">
           <SectionHeading eyebrow="Trend" title="Score trend" />
-          {data.trend.length <= 1 ? (
-            <p className="text-sm text-muted-foreground">
-              Complete a few assessments to unlock trend.
-            </p>
-          ) : (
-            <div className="mt-1 flex h-28 items-end gap-1.5">
-              {data.trend.slice(-6).map((point, index) => (
-                <div
-                  key={`${point.label}-${index}`}
-                  className="animate-dash-rise flex min-w-0 flex-1 flex-col items-center gap-1"
-                  style={delay(index * 50)}
-                >
-                  <div
-                    className={cn(
-                      "animate-score-fill w-full rounded-t-md",
-                      point.passed ? "bg-success/80" : "bg-destructive/70",
-                    )}
-                    style={{
-                      height: `${Math.max(8, (point.score / trendMax) * 100)}%`,
-                      animationDelay: `${index * 60}ms`,
-                    }}
-                    title={`${point.score}%`}
-                  />
-                  <span className="text-[10px] tabular-nums text-muted-foreground">
-                    {point.score}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
+          <div className="mt-3">
+            {data.trend.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Complete assessments to unlock your score trend.
+              </p>
+            ) : (
+              <ScoreTrendChart points={data.trend} limit={8} />
+            )}
+          </div>
         </div>
 
         <div className="surface-paper dash-lift space-y-4 p-5">
