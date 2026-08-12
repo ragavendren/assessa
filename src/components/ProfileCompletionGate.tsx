@@ -2,16 +2,14 @@ import { OrgDepartmentFields } from "@/components/OrgDepartmentFields";
 import { useMe } from "@/hooks/use-me";
 import { saveProfile } from "@/lib/platform.functions";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-/** Blocks the app until organisation + department are set (asked at login / first session). */
+/** Blocks the app until organisation + team/group are set (email or Google first session). */
 export function ProfileCompletionGate({ children }: { children: React.ReactNode }) {
   const save = useServerFn(saveProfile);
   const queryClient = useQueryClient();
-  // Reuse shared ["me"] query — do not double-fetch on every page.
   const { data, isPending } = useMe();
 
   const [organization, setOrganization] = useState("");
@@ -33,7 +31,7 @@ export function ProfileCompletionGate({ children }: { children: React.ReactNode 
           organization,
           department,
           display_name: data!.profile.display_name ?? "",
-          team_group: data!.profile.team_group ?? "",
+          team_group: department,
           leaderboard_opt_out: !!data!.profile.leaderboard_opt_out,
           avatar_id: data!.profile.avatar_id ?? null,
         },
@@ -49,34 +47,14 @@ export function ProfileCompletionGate({ children }: { children: React.ReactNode 
   if (isPending || !data) return children;
   if (!data.needsOrg) return children;
 
-  // Admins with an empty catalog can still reach Orgs admin to seed it.
-  if (data.isAdmin) {
-    return (
-      <>
-        {children}
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-amber-500/40 bg-amber-50 px-4 py-3 text-center text-sm text-amber-950">
-          Set your organisation and team / group in{" "}
-          <Link to="/profile" className="font-semibold underline">
-            Profile
-          </Link>
-          , or manage the catalog under{" "}
-          <Link to="/admin/organizations" className="font-semibold underline">
-            Admin → Organisations
-          </Link>
-          .
-        </div>
-      </>
-    );
-  }
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
       <div className="surface-paper w-full max-w-lg p-6 shadow-lg">
         <p className="font-display text-2xl text-primary">Assessa</p>
         <h1 className="mt-2 font-display text-xl">Complete your profile</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Choose your organisation and team / group to continue. These are managed by your
-          administrator and used for access and leaderboards.
+          Choose your organisation and team / group to continue. Google and email accounts both need
+          these for access control and leaderboards.
         </p>
 
         <form

@@ -580,6 +580,35 @@ export const saveProfile = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+/** Attach organisation + team/group after Google (or any OAuth) without rewriting the full profile. */
+export const saveOrgMembership = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) =>
+    z
+      .object({
+        organization: z.string().trim().min(2).max(120),
+        department: z.string().trim().min(2).max(120),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { ensureProfile } = await import("@/lib/platform.server");
+    await ensureProfile(context.userId, context.claims as unknown as Record<string, unknown>);
+
+    const { error } = await supabaseAdmin
+      .from("profiles")
+      .update({
+        organization: data.organization,
+        department: data.department,
+        team_group: data.department,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", context.userId);
+    if (error) throw error;
+    return { ok: true };
+  });
+
 export const listNotifications = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {

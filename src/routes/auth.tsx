@@ -1,6 +1,7 @@
 import { BrandMark } from "@/components/BrandMark";
 import { OrgDepartmentFields } from "@/components/OrgDepartmentFields";
 import { supabase } from "@/integrations/supabase/client";
+import { stashPendingOrgSignup } from "@/lib/pending-org-signup";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -122,8 +123,20 @@ function AuthPage() {
   }
 
   async function onGoogle() {
+    const hasOrg = Boolean(organization.trim() && department.trim());
+    if (!hasOrg && mode === "signup") {
+      toast.error("Select your organisation and team / group before continuing with Google");
+      return;
+    }
+
     setBusy(true);
     try {
+      if (hasOrg) {
+        stashPendingOrgSignup({
+          organization: organization.trim(),
+          department: department.trim(),
+        });
+      }
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
@@ -190,26 +203,35 @@ function AuthPage() {
 
         <form onSubmit={onSubmit} className="mt-6 space-y-4">
           {mode === "signup" ? (
-            <>
-              <Field label="Full name *">
-                <input
-                  value={fullName}
-                  onChange={(event) => setFullName(event.target.value)}
-                  maxLength={100}
-                  autoComplete="name"
-                  className="field"
-                  placeholder="Ada Lovelace"
-                  required
-                />
-              </Field>
-              <OrgDepartmentFields
-                organization={organization}
-                department={department}
-                onOrganizationChange={setOrganization}
-                onDepartmentChange={setDepartment}
+            <Field label="Full name *">
+              <input
+                value={fullName}
+                onChange={(event) => setFullName(event.target.value)}
+                maxLength={100}
+                autoComplete="name"
+                className="field"
+                placeholder="Ada Lovelace"
+                required
               />
-            </>
+            </Field>
           ) : null}
+
+          <div className="space-y-2 rounded-lg border border-border bg-secondary/40 p-3.5">
+            <div>
+              <p className="text-sm font-medium text-foreground">Organisation & team</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Required for email signup and Google sign-in. Used for access and leaderboards.
+              </p>
+            </div>
+            <OrgDepartmentFields
+              organization={organization}
+              department={department}
+              onOrganizationChange={setOrganization}
+              onDepartmentChange={setDepartment}
+              required={mode === "signup"}
+            />
+          </div>
+
           <Field label="Email *">
             <input
               type="email"
@@ -260,6 +282,10 @@ function AuthPage() {
           <GoogleMark />
           {busy ? "Redirecting…" : "Continue with Google"}
         </button>
+        <p className="mt-2 text-center text-xs text-muted-foreground">
+          New Google accounts: select organisation and team / group above first. Existing accounts
+          can continue and will be asked only if those details are missing.
+        </p>
 
         {mode === "signin" ? (
           <Link

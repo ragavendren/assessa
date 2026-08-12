@@ -1,6 +1,9 @@
-import { supabase } from "@/integrations/supabase/client";
 import { PageLoader } from "@/components/platform";
+import { supabase } from "@/integrations/supabase/client";
+import { clearPendingOrgSignup, readPendingOrgSignup } from "@/lib/pending-org-signup";
+import { saveProfile } from "@/lib/platform.functions";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { z } from "zod";
 
@@ -22,6 +25,7 @@ export const Route = createFileRoute("/auth/callback")({
 function AuthCallbackPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
+  const save = useServerFn(saveProfile);
   const [message, setMessage] = useState("Completing sign-in…");
 
   useEffect(() => {
@@ -46,6 +50,37 @@ function AuthCallbackPage() {
         const { data: userData } = await supabase.auth.getUser();
         if (!userData.user) throw new Error("Signed in, but no user was returned.");
 
+        const pending = readPendingOrgSignup();
+        if (pending) {
+          const meta = (userData.user.user_metadata ?? {}) as Record<string, unknown>;
+          const fullName = String(
+            meta.full_name ?? meta.name ?? userData.user.email?.split("@")[0] ?? "Participant",
+          );
+
+          await supabase.auth.updateUser({
+            data: {
+              organization: pending.organization,
+              department: pending.department,
+              team_group: pending.department,
+            },
+          });
+
+          await save({
+            data: {
+              full_name: fullName.trim().length >= 2 ? fullName.trim() : "Participant",
+              mobile: typeof meta.mobile === "string" ? meta.mobile : "",
+              participant_id: typeof meta.participant_id === "string" ? meta.participant_id : "",
+              organization: pending.organization,
+              department: pending.department,
+              display_name: typeof meta.display_name === "string" ? meta.display_name : "",
+              team_group: pending.department,
+              leaderboard_opt_out: false,
+              avatar_id: null,
+            },
+          });
+          clearPendingOrgSignup();
+        }
+
         const next =
           search.next?.startsWith("/") && !search.next.startsWith("//")
             ? search.next
@@ -55,6 +90,7 @@ function AuthCallbackPage() {
           navigate({ to: next, replace: true });
         }
       } catch (error) {
+        clearPendingOrgSignup();
         if (!cancelled) {
           setMessage(error instanceof Error ? error.message : "Sign-in failed");
         }
@@ -65,7 +101,7 @@ function AuthCallbackPage() {
     return () => {
       cancelled = true;
     };
-  }, [navigate, search.code, search.error, search.error_description, search.next]);
+  }, [navigate, save, search.code, search.error, search.error_description, search.next]);
 
   if (message !== "Completing sign-in…") {
     return (
