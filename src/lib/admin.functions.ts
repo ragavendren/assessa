@@ -189,13 +189,13 @@ export const createExam = createServerFn({ method: "POST" })
         questions: z
           .array(
             z.object({
-              prompt: z.string().trim().min(4).max(600),
-              options: z.array(z.string().trim().min(1).max(300)).min(2).max(6),
+              prompt: z.string().trim().min(4).max(4000),
+              options: z.array(z.string().trim().min(1).max(1000)).min(2).max(6),
               correct_index: z.number().int().min(0).max(5),
               correct_indexes: z.array(z.number().int().min(0).max(5)).min(1).max(6).optional(),
               multi_select: z.boolean().default(false),
               subtopic: z.string().trim().max(60).default("general"),
-              explanation: z.string().trim().max(600).default(""),
+              explanation: z.string().trim().max(4000).default(""),
             }),
           )
           .min(1)
@@ -316,13 +316,13 @@ export const createExam = createServerFn({ method: "POST" })
   });
 
 const examQuestionSchema = z.object({
-  prompt: z.string().trim().min(4).max(600),
-  options: z.array(z.string().trim().min(1).max(300)).min(2).max(6),
+  prompt: z.string().trim().min(4).max(4000),
+  options: z.array(z.string().trim().min(1).max(1000)).min(2).max(6),
   correct_index: z.number().int().min(0).max(5),
   correct_indexes: z.array(z.number().int().min(0).max(5)).min(1).max(6).optional(),
   multi_select: z.boolean().default(false),
   subtopic: z.string().trim().max(60).default("general"),
-  explanation: z.string().trim().max(600).default(""),
+  explanation: z.string().trim().max(4000).default(""),
 });
 
 const examWriteObjectSchema = z.object({

@@ -326,9 +326,21 @@ export function ExamEditor({
         toast.error(`Question ${index + 1} needs a prompt`);
         return false;
       }
+      if (q.prompt.trim().length > 4000) {
+        toast.error(`Question ${index + 1} prompt must be at most 4000 characters`);
+        return false;
+      }
       const options = q.options.filter((o) => o.trim());
       if (options.length < 2) {
         toast.error(`Question ${index + 1} needs at least two options`);
+        return false;
+      }
+      if (options.some((option) => option.trim().length > 1000)) {
+        toast.error(`Question ${index + 1} has an option over 1000 characters`);
+        return false;
+      }
+      if (q.explanation.trim().length > 4000) {
+        toast.error(`Question ${index + 1} explanation must be at most 4000 characters`);
         return false;
       }
       if (q.correctIndexes.length === 0) {
@@ -758,12 +770,16 @@ export function ExamEditor({
                     <label className="block flex-1 text-sm">
                       <span className="text-xs text-muted-foreground">Question</span>
                       <textarea
-                        className="field mt-1"
+                        className="field mt-1 min-h-24"
                         value={question.prompt}
                         onChange={(e) => patchQuestion(index, { prompt: e.target.value })}
                         required
                         minLength={4}
+                        maxLength={4000}
                       />
+                      <span className="mt-1 block text-[11px] tabular-nums text-muted-foreground">
+                        {question.prompt.trim().length}/4000
+                      </span>
                     </label>
                     {values.questions.length > 1 ? (
                       <button
@@ -819,6 +835,7 @@ export function ExamEditor({
                           }
                           placeholder={`Option ${String.fromCharCode(65 + optionIndex)}`}
                           required={optionIndex < 2}
+                          maxLength={1000}
                         />
                       </label>
                     ))}
@@ -886,11 +903,15 @@ export function ExamEditor({
 
                   <label className="block text-sm">
                     <span className="text-xs text-muted-foreground">Explanation</span>
-                    <input
-                      className="field mt-1"
+                    <textarea
+                      className="field mt-1 min-h-20"
                       value={question.explanation}
                       onChange={(e) => patchQuestion(index, { explanation: e.target.value })}
+                      maxLength={4000}
                     />
+                    <span className="mt-1 block text-[11px] tabular-nums text-muted-foreground">
+                      {question.explanation.trim().length}/4000
+                    </span>
                   </label>
                 </div>
               ))}
