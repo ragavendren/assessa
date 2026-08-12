@@ -1,5 +1,7 @@
 import { AdminNav } from "@/components/AdminNav";
+import { ListToolbar, listViewClass, useListViewMode } from "@/components/ListToolbar";
 import { PageLoader, SectionHeading, StatTile, ScorePill } from "@/components/platform";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   deleteAdminUser,
   getAdminUserDetail,
@@ -49,8 +51,11 @@ function AdminUsersPage() {
   const saveUser = useServerFn(updateAdminUser);
   const removeUser = useServerFn(deleteAdminUser);
   const queryClient = useQueryClient();
+  const confirm = useConfirm();
 
   const [query, setQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState<"all" | "admin" | "participant">("all");
+  const [view, setView] = useListViewMode("admin-users", "table");
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<EditForm | null>(null);
@@ -135,15 +140,18 @@ function AdminUsersPage() {
   const filtered = useMemo(() => {
     const users = data?.users ?? [];
     const needle = query.trim().toLowerCase();
-    if (!needle) return users;
-    return users.filter(
-      (user) =>
+    return users.filter((user) => {
+      if (roleFilter === "admin" && !user.isAdmin) return false;
+      if (roleFilter === "participant" && user.isAdmin) return false;
+      if (!needle) return true;
+      return (
         user.name.toLowerCase().includes(needle) ||
         user.email.toLowerCase().includes(needle) ||
         (user.organization ?? "").toLowerCase().includes(needle) ||
-        (user.department ?? "").toLowerCase().includes(needle),
-    );
-  }, [data?.users, query]);
+        (user.department ?? "").toLowerCase().includes(needle)
+      );
+    });
+  }, [data?.users, query, roleFilter]);
 
   if (isPending) return <PageLoader label="Loading users…" />;
   if (error || !data) {
@@ -177,66 +185,127 @@ function AdminUsersPage() {
 
       <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <section className="space-y-3">
-          <input
-            className="field"
-            placeholder="Search name, email, organisation…"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
+          <ListToolbar
+            search={query}
+            onSearchChange={setQuery}
+            searchPlaceholder="Search name, email, organisation…"
+            filters={
+              [
+                { value: "all" as const, label: "All", count: data.users.length },
+                {
+                  value: "admin" as const,
+                  label: "Admins",
+                  count: data.users.filter((u) => u.isAdmin).length,
+                },
+                {
+                  value: "participant" as const,
+                  label: "Participants",
+                  count: data.users.filter((u) => !u.isAdmin).length,
+                },
+              ] as const
+            }
+            filter={roleFilter}
+            onFilterChange={setRoleFilter}
+            view={view}
+            onViewChange={setView}
           />
-          <div className="surface-paper overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-left text-xs text-muted-foreground">
-                <tr>
-                  <th className="p-3 font-medium">User</th>
-                  <th className="p-3 font-medium">Role</th>
-                  <th className="p-3 font-medium">Opted</th>
-                  <th className="p-3 font-medium">Done</th>
-                  <th className="p-3 font-medium">Pass</th>
-                  <th className="p-3 font-medium">Avg</th>
-                  <th className="p-3 font-medium">Last activity</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {filtered.map((user) => (
-                  <tr
-                    key={user.id}
-                    className={cn(
-                      "cursor-pointer transition-colors hover:bg-secondary/40",
-                      selectedUserId === user.id && "bg-secondary/50",
-                    )}
-                    onClick={() => setSelectedUserId(user.id)}
-                  >
-                    <td className="p-3">
+          {view === "table" ? (
+            <div className="surface-paper overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-left text-xs text-muted-foreground">
+                  <tr>
+                    <th className="p-3 font-medium">User</th>
+                    <th className="p-3 font-medium">Role</th>
+                    <th className="p-3 font-medium">Opted</th>
+                    <th className="p-3 font-medium">Done</th>
+                    <th className="p-3 font-medium">Pass</th>
+                    <th className="p-3 font-medium">Avg</th>
+                    <th className="p-3 font-medium">Last activity</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {filtered.map((user) => (
+                    <tr
+                      key={user.id}
+                      className={cn(
+                        "cursor-pointer transition-colors hover:bg-secondary/40",
+                        selectedUserId === user.id && "bg-secondary/50",
+                      )}
+                      onClick={() => setSelectedUserId(user.id)}
+                    >
+                      <td className="p-3">
+                        <p className="font-medium">{user.name}</p>
+                        <p className="text-xs text-muted-foreground">{user.email}</p>
+                      </td>
+                      <td className="p-3">
+                        <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-semibold">
+                          {user.isAdmin ? "admin" : "participant"}
+                        </span>
+                      </td>
+                      <td className="p-3 tabular-nums">{user.optedAssessments}</td>
+                      <td className="p-3 tabular-nums">
+                        {user.completedAssessments}
+                        <span className="text-muted-foreground"> ({user.completionRate}%)</span>
+                      </td>
+                      <td className="p-3 tabular-nums">{user.passRate}%</td>
+                      <td className="p-3 tabular-nums">{user.averageScore}%</td>
+                      <td className="p-3 text-xs text-muted-foreground">
+                        {user.lastActivity ? formatDate(user.lastActivity) : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                  {filtered.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="p-6 text-center text-muted-foreground">
+                        No users match your search.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className={listViewClass(view)}>
+              {filtered.map((user) => (
+                <button
+                  key={user.id}
+                  type="button"
+                  onClick={() => setSelectedUserId(user.id)}
+                  className={cn(
+                    "surface-paper w-full p-4 text-left transition-colors hover:bg-secondary/30",
+                    selectedUserId === user.id && "ring-1 ring-accent",
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
                       <p className="font-medium">{user.name}</p>
                       <p className="text-xs text-muted-foreground">{user.email}</p>
-                    </td>
-                    <td className="p-3">
-                      <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-semibold">
-                        {user.isAdmin ? "admin" : "participant"}
-                      </span>
-                    </td>
-                    <td className="p-3 tabular-nums">{user.optedAssessments}</td>
-                    <td className="p-3 tabular-nums">
-                      {user.completedAssessments}
-                      <span className="text-muted-foreground"> ({user.completionRate}%)</span>
-                    </td>
-                    <td className="p-3 tabular-nums">{user.passRate}%</td>
-                    <td className="p-3 tabular-nums">{user.averageScore}%</td>
-                    <td className="p-3 text-xs text-muted-foreground">
-                      {user.lastActivity ? formatDate(user.lastActivity) : "—"}
-                    </td>
-                  </tr>
-                ))}
-                {filtered.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="p-6 text-center text-muted-foreground">
-                      No users match your search.
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
+                    </div>
+                    <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-semibold">
+                      {user.isAdmin ? "admin" : "participant"}
+                    </span>
+                  </div>
+                  <dl className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <dt className="text-muted-foreground">Done</dt>
+                      <dd className="font-semibold tabular-nums">{user.completedAssessments}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Pass</dt>
+                      <dd className="font-semibold tabular-nums">{user.passRate}%</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Avg</dt>
+                      <dd className="font-semibold tabular-nums">{user.averageScore}%</dd>
+                    </div>
+                  </dl>
+                </button>
+              ))}
+              {filtered.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No users match your search.</p>
+              ) : null}
+            </div>
+          )}
         </section>
 
         <aside className="surface-paper p-5">
@@ -288,14 +357,20 @@ function AdminUsersPage() {
                   type="button"
                   disabled={banMutation.isPending}
                   onClick={() => {
-                    if (
-                      window.confirm("Ban this user from signing in? You can reverse this later.")
-                    ) {
+                    void (async () => {
+                      const ok = await confirm({
+                        title: "Ban this user?",
+                        description:
+                          "They will be blocked from signing in. You can reverse this later.",
+                        confirmLabel: "Ban user",
+                        tone: "destructive",
+                      });
+                      if (!ok) return;
                       banMutation.mutate({
                         userId: detailQuery.data.profile.id,
                         banned: true,
                       });
-                    }
+                    })();
                   }}
                   className="rounded-md border border-destructive/40 px-3 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/10 disabled:opacity-60"
                 >
@@ -318,13 +393,16 @@ function AdminUsersPage() {
                   type="button"
                   disabled={deleteMutation.isPending}
                   onClick={() => {
-                    if (
-                      window.confirm(
-                        `Permanently delete ${detailQuery.data.profile.name}? This cannot be undone.`,
-                      )
-                    ) {
+                    void (async () => {
+                      const ok = await confirm({
+                        title: "Delete user permanently?",
+                        description: `Permanently delete ${detailQuery.data.profile.name}? This cannot be undone.`,
+                        confirmLabel: "Delete user",
+                        tone: "destructive",
+                      });
+                      if (!ok) return;
                       deleteMutation.mutate(detailQuery.data.profile.id);
-                    }
+                    })();
                   }}
                   className="rounded-md border border-destructive/40 px-3 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/10 disabled:opacity-60"
                 >
@@ -346,24 +424,31 @@ function AdminUsersPage() {
                   <p className="text-hairline text-muted-foreground">Edit profile</p>
                   {(
                     [
-                      ["full_name", "Full name"],
-                      ["email", "Email"],
-                      ["display_name", "Display name"],
-                      ["participant_id", "Participant ID"],
-                      ["mobile", "Mobile"],
-                      ["organization", "Organisation"],
-                      ["department", "Department"],
-                      ["team_group", "Team / group"],
+                      ["full_name", "Full name *", true],
+                      ["email", "Email *", true],
+                      ["display_name", "Display name", false],
+                      ["participant_id", "Participant ID", false],
+                      ["mobile", "Mobile", false],
+                      ["organization", "Organisation *", true],
+                      ["department", "Team / Group *", true],
                     ] as const
-                  ).map(([key, label]) => (
+                  ).map(([key, label, required]) => (
                     <label key={key} className="block text-sm">
                       <span className="text-xs text-muted-foreground">{label}</span>
                       <input
-                        className="field mt-1"
+                        className={
+                          key === "participant_id" ? "field mt-1 bg-secondary/50" : "field mt-1"
+                        }
                         value={form[key]}
+                        readOnly={key === "participant_id"}
                         onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-                        required={key === "full_name" || key === "email"}
+                        required={required}
                       />
+                      {key === "participant_id" ? (
+                        <span className="mt-1 block text-xs text-muted-foreground">
+                          Auto-generated. Leave blank to assign a new ID on save if missing.
+                        </span>
+                      ) : null}
                     </label>
                   ))}
                   <button

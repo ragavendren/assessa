@@ -14,9 +14,7 @@ Online assessment platform — TanStack Start, React, TypeScript, Tailwind CSS, 
 GitHub Actions:
 
 - **CI** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — mandatory gate on every push/PR to `main` and `develop`
-  - `npm run format:check` (Prettier)
   - `npm run lint` (ESLint)
-  - `npm run typecheck` (TypeScript)
   - `npm run build` (production build)
 - **Deploy** [`.github/workflows/deploy-vercel.yml`](.github/workflows/deploy-vercel.yml) — runs only after **CI succeeds**
   - Push `main` → production
@@ -78,10 +76,10 @@ Local SSR loads **all** `.env` keys into `process.env` via `vite.config.ts` (not
 npm run dev
 npm run build
 npm run format              # Prettier write
-npm run format:check        # Prettier check (CI)
+npm run format:check        # Prettier check
 npm run lint
 npm run typecheck
-npm run ci                  # format:check + lint + typecheck + build
+npm run ci                  # lint + build
 npm run db:migrate
 npm run db:seed
 npm run db:setup

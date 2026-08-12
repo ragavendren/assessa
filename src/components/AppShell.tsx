@@ -1,31 +1,21 @@
 import { BrandMark } from "@/components/BrandMark";
+import { ProfileCompletionGate } from "@/components/ProfileCompletionGate";
+import { UserAvatar } from "@/components/UserAvatar";
+import { useMe } from "@/hooks/use-me";
 import { supabase } from "@/integrations/supabase/client";
-import { getMe } from "@/lib/platform.functions";
-import { initials } from "@/lib/gamification";
 import { cn } from "@/lib/utils";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
 import { Bell, LogOut, Menu } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 const NAV = [
   { to: "/dashboard", label: "Dashboard" },
   { to: "/exams", label: "My Exams" },
-  { to: "/progress", label: "Progress" },
   { to: "/achievements", label: "Achievements" },
   { to: "/leaderboard", label: "Leaderboard" },
   { to: "/profile", label: "Profile" },
 ] as const;
-
-export function useMe() {
-  const fetchMe = useServerFn(getMe);
-  return useQuery({
-    queryKey: ["me"],
-    queryFn: () => fetchMe(),
-    staleTime: 60_000,
-  });
-}
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { data } = useMe();
@@ -80,10 +70,15 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Link>
             <Link
               to="/profile"
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-foreground"
+              className="transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:scale-105"
               aria-label="Profile"
             >
-              {initials(data?.profile.full_name ?? "")}
+              <UserAvatar
+                avatarId={data?.profile.avatar_id}
+                name={data?.profile.full_name}
+                className="h-8 w-8"
+                emojiClassName="text-sm"
+              />
             </Link>
             <button
               onClick={signOut}
@@ -116,7 +111,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           </nav>
         ) : null}
       </header>
-      <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
+      <main className="mx-auto max-w-6xl px-4 py-8">
+        <ProfileCompletionGate>{children}</ProfileCompletionGate>
+      </main>
     </div>
   );
 }

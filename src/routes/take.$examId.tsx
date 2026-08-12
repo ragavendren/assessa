@@ -38,7 +38,6 @@ function TakeExamPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [organization, setOrganization] = useState("");
-  const [participantId, setParticipantId] = useState("");
   const [mobile, setMobile] = useState("");
   const [extra, setExtra] = useState<Record<string, string>>({});
 
@@ -56,7 +55,7 @@ function TakeExamPage() {
           fullName,
           email,
           organization,
-          participantId,
+          participantId: "",
           mobile,
           extra,
         },
@@ -170,7 +169,7 @@ function TakeExamPage() {
             No account needed. Enter your details to begin — your progress is scored on the server.
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Full name">
+            <Field label="Full name *">
               <input
                 className="field"
                 value={fullName}
@@ -179,7 +178,7 @@ function TakeExamPage() {
                 maxLength={100}
               />
             </Field>
-            <Field label="Email">
+            <Field label="Email *">
               <input
                 className="field"
                 type="email"
@@ -189,7 +188,7 @@ function TakeExamPage() {
                 maxLength={255}
               />
             </Field>
-            <Field label="Organisation (optional)">
+            <Field label="Organisation">
               <input
                 className="field"
                 value={organization}
@@ -197,15 +196,7 @@ function TakeExamPage() {
                 maxLength={120}
               />
             </Field>
-            <Field label="Participant ID (optional)">
-              <input
-                className="field"
-                value={participantId}
-                onChange={(e) => setParticipantId(e.target.value)}
-                maxLength={60}
-              />
-            </Field>
-            <Field label="Mobile (optional)">
+            <Field label="Mobile">
               <input
                 className="field"
                 value={mobile}

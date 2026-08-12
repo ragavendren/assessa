@@ -1,10 +1,12 @@
 import { PageLoader, ScorePill } from "@/components/platform";
+import { ResultCelebration } from "@/components/ResultCelebration";
 import { formatDuration } from "@/lib/gamification";
 import { getResult } from "@/lib/platform.functions";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
+import { useEffect, useState } from "react";
 
 export const Route = createFileRoute("/_authenticated/results/$attemptId")({
   head: () => ({
@@ -33,8 +35,16 @@ function ResultPage() {
     queryFn: () => fetchResult({ data: { attemptId } }),
     retry: false,
   });
+  const [revealed, setRevealed] = useState(false);
 
-  if (isPending) return <PageLoader />;
+  useEffect(() => {
+    if (!data) return;
+    setRevealed(false);
+    const timer = window.setTimeout(() => setRevealed(true), 120);
+    return () => window.clearTimeout(timer);
+  }, [data, attemptId]);
+
+  if (isPending) return <PageLoader label="Preparing your result…" />;
   if (error || !data) {
     return (
       <div className="surface-paper p-8 text-center">
@@ -50,17 +60,21 @@ function ResultPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <div className="surface-paper p-7 text-center">
-        <p className="text-hairline text-muted-foreground">{exam.title}</p>
-        <p
-          className={cn(
-            "mt-3 font-display text-6xl",
-            attempt.passed ? "text-success" : "text-destructive",
-          )}
-        >
-          {attempt.score}%
-        </p>
-        <p className="mt-2">
+      <div
+        className={cn(
+          "transition-all duration-500",
+          revealed ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0",
+        )}
+      >
+        <ResultCelebration
+          passed={!!attempt.passed}
+          score={attempt.score ?? 0}
+          title={exam.title}
+        />
+      </div>
+
+      <div className="animate-brand-rise-delayed surface-paper p-5 text-center">
+        <p className="mt-1">
           <ScorePill score={attempt.score} passed={attempt.passed} />
         </p>
         <p className="mt-3 text-sm text-muted-foreground">
@@ -71,7 +85,10 @@ function ResultPage() {
       </div>
 
       {data.gains.length > 0 ? (
-        <div className="surface-paper p-5">
+        <div
+          className="animate-achievement-card surface-paper p-5"
+          style={{ animationDelay: "80ms" }}
+        >
           <p className="text-hairline text-muted-foreground">XP earned</p>
           <ul className="mt-3 space-y-1.5 text-sm">
             {data.gains.map((gain) => (
@@ -91,12 +108,20 @@ function ResultPage() {
       ) : null}
 
       {data.newBadges.length > 0 ? (
-        <div className="surface-paper p-5">
+        <div
+          className="animate-achievement-card surface-paper p-5"
+          style={{ animationDelay: "140ms" }}
+        >
           <p className="text-hairline text-muted-foreground">New badges unlocked</p>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            {data.newBadges.map((badge) => (
+            {data.newBadges.map((badge, index) => (
               <div key={badge.code} className="flex items-start gap-3 rounded-md bg-secondary p-3">
-                <span className="text-2xl">{badge.icon}</span>
+                <span
+                  className="animate-medal-pop text-2xl"
+                  style={{ animationDelay: `${180 + index * 90}ms` }}
+                >
+                  {badge.icon}
+                </span>
                 <div>
                   <p className="font-medium">{badge.name}</p>
                   <p className="text-xs text-muted-foreground">{badge.description}</p>
@@ -112,7 +137,11 @@ function ResultPage() {
         <div className="space-y-3">
           <p className="text-hairline text-muted-foreground">Answer review</p>
           {data.review.map((item, index) => (
-            <article key={item.id} className="surface-paper p-5">
+            <article
+              key={item.id}
+              className="animate-achievement-card surface-paper p-5"
+              style={{ animationDelay: `${200 + index * 40}ms` }}
+            >
               <p className="text-xs text-muted-foreground">
                 Question {index + 1} · {item.subtopic}
               </p>
@@ -161,9 +190,26 @@ function ResultPage() {
         >
           Back to my exams
         </Link>
+        {attempt.passed ? (
+          <Link
+            to="/achievements"
+            className="rounded-md border border-input px-4 py-2 text-sm font-medium hover:bg-secondary"
+          >
+            View achievements
+          </Link>
+        ) : (
+          <Link
+            to="/exams/$examId"
+            params={{ examId: exam.id }}
+            className="rounded-md border border-input px-4 py-2 text-sm font-medium hover:bg-secondary"
+          >
+            Try again
+          </Link>
+        )}
         {exam.enableLeaderboard ? (
           <Link
             to="/leaderboard"
+            search={{ examId: exam.id }}
             className="rounded-md border border-input px-4 py-2 text-sm font-medium hover:bg-secondary"
           >
             View leaderboard

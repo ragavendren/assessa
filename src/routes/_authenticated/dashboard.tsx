@@ -1,3 +1,5 @@
+import { BadgeDriftWall } from "@/components/BadgeDriftWall";
+import { Carousel } from "@/components/Carousel";
 import {
   EmptyState,
   LevelMeter,
@@ -10,10 +12,12 @@ import {
 import { getParticipantInsight } from "@/lib/ai.functions";
 import { formatDate } from "@/lib/gamification";
 import { getDashboard } from "@/lib/platform.functions";
+import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { Sparkles } from "lucide-react";
+import { ArrowRight, Award, Flame, Sparkles, Target, Trophy, Zap } from "lucide-react";
+import type { CSSProperties, ReactNode } from "react";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
@@ -21,24 +25,28 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
       { title: "Dashboard — Assessa" },
       {
         name: "description",
-        content:
-          "Your assessment dashboard: level, XP, recent results, topic mastery and upcoming exams.",
+        content: "Your Assessa home: level, assessments, results and badges.",
       },
       { property: "og:title", content: "Dashboard — Assessa" },
       {
         property: "og:description",
-        content: "Track your level, XP, badges and assessment results in one place.",
+        content: "Track progress, badges and assessment results in one place.",
       },
     ],
   }),
   component: Dashboard,
 });
 
+function delay(ms: number): CSSProperties {
+  return { animationDelay: `${ms}ms` };
+}
+
 function Dashboard() {
   const fetchDashboard = useServerFn(getDashboard);
   const { data, isPending } = useQuery({
     queryKey: ["dashboard"],
     queryFn: () => fetchDashboard(),
+    staleTime: 30_000,
   });
 
   const insight = useServerFn(getParticipantInsight);
@@ -46,241 +54,378 @@ function Dashboard() {
 
   if (isPending || !data) return <PageLoader />;
 
-  const passStreak = data.streaks.find((s) => s.type === "pass");
-  const topMastery = [...data.mastery].sort((a, b) => b.mastery - a.mastery).slice(0, 5);
-  const weakest = [...data.mastery].sort((a, b) => a.mastery - b.mastery).slice(0, 3);
-  const trendMax = Math.max(100, ...data.trend.map((t) => t.score));
+  const streak = (type: string) => data.streaks.find((s) => s.type === type);
+  const examStreak = streak("exam");
+  const passStreak = streak("pass");
+  const focusAreas = [...data.mastery].sort((a, b) => a.mastery - b.mastery).slice(0, 3);
+  const trendMax = Math.max(100, ...data.trend.map((t) => t.score), 1);
+  const availableExams = (data.available ?? []).slice(0, 8);
+  const earnedBadges = (data.earnedBadges ?? data.latestBadges ?? []).slice(0, 12);
+  const recent = data.recent.slice(0, 6);
+
+  const displayName = data.profile.display_name || data.profile.full_name || "Participant";
+  const greeting = timeGreeting();
 
   return (
-    <div className="space-y-10">
-      <header>
-        <p className="text-hairline text-muted-foreground">Welcome back</p>
-        <h1 className="mt-1 font-display text-3xl">
-          {data.profile.display_name || data.profile.full_name || "Participant"}
-        </h1>
+    <div className="space-y-8">
+      {/* Hero — Assessa Yourself with badge drift */}
+      <header className="animate-dash-rise relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-card via-card to-secondary/50 p-6 md:p-7">
+        <BadgeDriftWall badges={earnedBadges} limit={10} />
+        <div
+          className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-accent/15 blur-3xl animate-dash-float"
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute -bottom-24 left-[30%] h-44 w-44 rounded-full bg-primary/10 blur-3xl animate-dash-float-alt"
+          aria-hidden
+        />
+
+        <div className="relative z-10 flex flex-wrap items-end justify-between gap-5">
+          <div className="min-w-0 max-w-xl">
+            <p className="animate-dash-chip inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-accent">
+              <Zap className="h-3.5 w-3.5 animate-dash-flame" />
+              Assessa Yourself
+            </p>
+            <p className="animate-dash-rise mt-2 text-sm text-muted-foreground" style={delay(40)}>
+              {greeting}
+            </p>
+            <h1
+              className="animate-dash-rise mt-1 font-display text-3xl md:text-4xl"
+              style={delay(70)}
+            >
+              {displayName}
+            </h1>
+            <div className="mt-3 flex flex-wrap gap-2 text-xs">
+              <QuestChip
+                icon={<Target className="h-3.5 w-3.5" />}
+                label={`${data.availableCount} ready`}
+                style={delay(140)}
+              />
+              <QuestChip
+                icon={<Flame className="h-3.5 w-3.5 animate-dash-flame" />}
+                label={`${examStreak?.current ?? 0} streak`}
+                style={delay(190)}
+              />
+              <QuestChip
+                icon={<Award className="h-3.5 w-3.5" />}
+                label={`${data.badgeCount} badges`}
+                style={delay(240)}
+              />
+              <QuestChip
+                icon={<Trophy className="h-3.5 w-3.5" />}
+                label={`${passStreak?.current ?? 0} pass streak`}
+                style={delay(290)}
+              />
+            </div>
+          </div>
+          <Link
+            to="/exams"
+            className="animate-dash-pop group inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-all duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:bg-primary/90 hover:shadow-md active:scale-[0.98]"
+            style={delay(160)}
+          >
+            Start assessment
+            <ArrowRight className="h-4 w-4 animate-dash-cta-arrow transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:translate-x-1" />
+          </Link>
+        </div>
       </header>
 
-      <div className="grid gap-4 md:grid-cols-[1.1fr_2fr]">
-        <LevelMeter {...data.level} />
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <StatTile label="Average" value={data.stats.average} suffix="%" />
-          <StatTile label="Completed" value={data.stats.completed} />
-          <StatTile label="Pass rate" value={data.stats.passRate} suffix="%" />
+      {/* Level + key stats only */}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1.8fr)]">
+        <LevelMeter {...data.level} className="animate-dash-rise" style={delay(40)} />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatTile
-            label="Pass streak"
-            value={passStreak?.current ?? 0}
-            hint={`Longest ${passStreak?.longest ?? 0}`}
+            label="Average"
+            value={data.stats.average}
+            suffix="%"
+            className="animate-dash-pop"
+            style={delay(80)}
+          />
+          <StatTile
+            label="Best"
+            value={data.stats.best}
+            suffix="%"
+            className="animate-dash-pop"
+            style={delay(130)}
+          />
+          <StatTile
+            label="Completed"
+            value={data.stats.completed}
+            className="animate-dash-pop"
+            style={delay(180)}
+          />
+          <StatTile
+            label="Pass rate"
+            value={data.stats.passRate}
+            suffix="%"
+            className="animate-dash-pop"
+            style={delay(230)}
           />
         </div>
       </div>
 
-      <section className="grid gap-6 lg:grid-cols-2">
-        <div>
-          <SectionHeading
-            eyebrow="Next up"
-            title="Available assessments"
-            action={
-              <Link to="/exams" className="text-sm text-accent underline-offset-4 hover:underline">
-                View all
+      {/* Available assessments */}
+      <MotionSection delayMs={40}>
+        <SectionHeading
+          eyebrow="Next up"
+          title="Available assessments"
+          action={
+            <Link to="/exams" className="text-sm text-accent underline-offset-4 hover:underline">
+              View all
+            </Link>
+          }
+        />
+        {availableExams.length === 0 && data.upcoming.length === 0 ? (
+          <EmptyState
+            icon="🗂"
+            title="No assessments yet"
+            body="Assigned and public assessments will show here."
+          />
+        ) : (
+          <Carousel
+            label="Available assessments"
+            itemClassName="w-[min(100%,16.5rem)]"
+            autoPlay={4500}
+          >
+            {availableExams.map((exam) => (
+              <Link
+                key={exam.id}
+                to="/exams/$examId"
+                params={{ examId: exam.id }}
+                className="group surface-paper dash-lift dash-lift-hover flex h-full min-h-[9.5rem] flex-col justify-between p-4"
+              >
+                <div>
+                  <p className="truncate text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                    {exam.topic || "General"}
+                  </p>
+                  <p className="mt-2 line-clamp-2 font-display text-lg leading-snug transition-colors duration-300 group-hover:text-accent">
+                    {exam.title}
+                  </p>
+                </div>
+                <div className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <span>
+                    {exam.questionCount} Q · {exam.duration} min
+                  </span>
+                  <ArrowRight className="h-3.5 w-3.5 -translate-x-1 opacity-0 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:translate-x-0 group-hover:opacity-100" />
+                </div>
               </Link>
+            ))}
+            {data.upcoming.map((exam) => (
+              <Link
+                key={`up-${exam.id}`}
+                to="/exams/$examId"
+                params={{ examId: exam.id }}
+                className="surface-paper dash-lift dash-lift-hover flex h-full min-h-[9.5rem] flex-col justify-between border-dashed p-4"
+              >
+                <div>
+                  <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-accent">
+                    Upcoming
+                  </p>
+                  <p className="mt-2 line-clamp-2 font-display text-lg leading-snug">
+                    {exam.title}
+                  </p>
+                </div>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  {exam.startsAt ? formatDate(exam.startsAt) : "Soon"} · {exam.duration} min
+                </p>
+              </Link>
+            ))}
+          </Carousel>
+        )}
+      </MotionSection>
+
+      {/* Recent results */}
+      <MotionSection delayMs={60}>
+        <SectionHeading eyebrow="History" title="Recent results" />
+        {recent.length === 0 ? (
+          <EmptyState
+            icon="📈"
+            title="No results yet"
+            body="Complete an assessment to see scores here."
+          />
+        ) : (
+          <Carousel label="Recent results" itemClassName="w-[min(100%,15.5rem)]" autoPlay={5000}>
+            {recent.map((result) => (
+              <Link
+                key={result.id}
+                to="/results/$attemptId"
+                params={{ attemptId: result.id }}
+                className="surface-paper dash-lift dash-lift-hover flex h-full min-h-[8.75rem] flex-col justify-between p-4"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{result.title}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {result.submittedAt ? formatDate(result.submittedAt) : result.topic}
+                  </p>
+                </div>
+                <div className="mt-3">
+                  <ScorePill score={result.score} passed={result.passed} />
+                </div>
+              </Link>
+            ))}
+          </Carousel>
+        )}
+      </MotionSection>
+
+      {/* Badges — interactive carousel */}
+      <MotionSection delayMs={80}>
+        <SectionHeading
+          eyebrow="Trophy case"
+          title="Pinned badges"
+          action={
+            <Link
+              to="/achievements"
+              className="text-sm text-accent underline-offset-4 hover:underline"
+            >
+              All
+            </Link>
+          }
+        />
+        {earnedBadges.length === 0 ? (
+          <EmptyState
+            icon="🏅"
+            title="No badges yet"
+            body="Pass an assessment to pin your first badge."
+          />
+        ) : (
+          <Carousel label="Pinned badges" itemClassName="w-[min(100%,11.5rem)]" autoPlay={3800}>
+            {earnedBadges.map((badge, index) => (
+              <div
+                key={`${"code" in badge && badge.code ? badge.code : badge.name}-${index}`}
+                className="surface-paper dash-lift dash-lift-hover flex h-full min-h-[7.5rem] flex-col items-center justify-center gap-2 px-3 py-4 text-center"
+                title={badge.description || badge.name}
+              >
+                <span className="text-3xl leading-none" aria-hidden>
+                  {badge.icon}
+                </span>
+                <p className="line-clamp-2 text-xs font-medium leading-snug">{badge.name}</p>
+                {"earnedAt" in badge && badge.earnedAt ? (
+                  <p className="text-[10px] text-muted-foreground">{formatDate(badge.earnedAt)}</p>
+                ) : null}
+              </div>
+            ))}
+          </Carousel>
+        )}
+      </MotionSection>
+
+      {/* Trend + focus — one compact row */}
+      <MotionSection delayMs={50} className="grid gap-4 lg:grid-cols-2">
+        <div className="surface-paper dash-lift p-5">
+          <SectionHeading eyebrow="Trend" title="Score trend" />
+          {data.trend.length <= 1 ? (
+            <p className="text-sm text-muted-foreground">
+              Complete a few assessments to unlock trend.
+            </p>
+          ) : (
+            <div className="mt-1 flex h-28 items-end gap-1.5">
+              {data.trend.slice(-6).map((point, index) => (
+                <div
+                  key={`${point.label}-${index}`}
+                  className="animate-dash-rise flex min-w-0 flex-1 flex-col items-center gap-1"
+                  style={delay(index * 50)}
+                >
+                  <div
+                    className={cn(
+                      "animate-score-fill w-full rounded-t-md",
+                      point.passed ? "bg-success/80" : "bg-destructive/70",
+                    )}
+                    style={{
+                      height: `${Math.max(8, (point.score / trendMax) * 100)}%`,
+                      animationDelay: `${index * 60}ms`,
+                    }}
+                    title={`${point.score}%`}
+                  />
+                  <span className="text-[10px] tabular-nums text-muted-foreground">
+                    {point.score}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="surface-paper dash-lift space-y-4 p-5">
+          <SectionHeading
+            eyebrow="Focus"
+            title="Practice next"
+            action={
+              <button
+                type="button"
+                onClick={() => insightMutation.mutate()}
+                disabled={insightMutation.isPending}
+                className="inline-flex items-center gap-1 text-xs font-medium text-accent underline-offset-4 hover:underline disabled:opacity-60"
+              >
+                <Sparkles
+                  className={cn("h-3.5 w-3.5", insightMutation.isPending && "animate-dash-flame")}
+                />
+                {insightMutation.isPending ? "…" : "Coach"}
+              </button>
             }
           />
-          {data.upcoming.length === 0 && data.availableCount === 0 ? (
-            <EmptyState
-              icon="🗂"
-              title="No assessments assigned yet"
-              body="Public assessments and invitations will appear here."
-            />
+          {focusAreas.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Mastery tips appear after your first attempt.
+            </p>
           ) : (
             <div className="space-y-3">
-              <div className="surface-paper p-4">
-                <p className="text-hairline text-muted-foreground">Ready to take</p>
-                <p className="mt-1 font-display text-2xl">
-                  {data.availableCount} assessment
-                  {data.availableCount === 1 ? "" : "s"}
-                </p>
-                <Link
-                  to="/exams"
-                  className="mt-3 inline-flex rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-                >
-                  Browse assessments
-                </Link>
-              </div>
-              {data.upcoming.map((exam) => (
-                <Link
-                  key={exam.id}
-                  to="/exams/$examId"
-                  params={{ examId: exam.id }}
-                  className="surface-paper block p-4 transition-colors hover:bg-secondary/40"
-                >
-                  <p className="text-hairline text-muted-foreground">{exam.topic}</p>
-                  <p className="mt-1 font-medium">{exam.title}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {exam.questionCount} questions · {exam.duration} min ·{" "}
-                    {exam.startsAt ? `Opens ${formatDate(exam.startsAt)}` : "Open now"}
-                  </p>
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div>
-          <SectionHeading eyebrow="History" title="Recent results" />
-          {data.recent.length === 0 ? (
-            <EmptyState
-              icon="📈"
-              title="No results yet"
-              body="Complete an assessment to start building your performance history."
-            />
-          ) : (
-            <div className="surface-paper divide-y divide-border">
-              {data.recent.map((result) => (
-                <Link
-                  key={result.id}
-                  to="/results/$attemptId"
-                  params={{ attemptId: result.id }}
-                  className="flex items-center justify-between gap-4 p-4 transition-colors hover:bg-secondary/40"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">{result.title}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {result.topic} · {formatDate(result.submittedAt)}
-                    </p>
-                  </div>
-                  <ScorePill score={result.score} passed={result.passed} />
-                </Link>
-              ))}
-            </div>
-          )}
-
-          {data.trend.length > 1 ? (
-            <div className="surface-paper mt-4 p-4">
-              <p className="text-hairline text-muted-foreground">Score trend</p>
-              <div className="mt-4 flex h-28 items-end gap-2">
-                {data.trend.map((point, index) => (
-                  <div key={index} className="flex flex-1 flex-col items-center gap-1">
-                    <div
-                      className="w-full rounded-t bg-accent/80"
-                      style={{ height: `${(point.score / trendMax) * 100}%` }}
-                      title={`${point.score}%`}
-                    />
-                    <span className="text-[10px] text-muted-foreground">{point.label}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </div>
-      </section>
-
-      <section className="grid gap-6 lg:grid-cols-2">
-        <div>
-          <SectionHeading
-            eyebrow="Skills"
-            title="Topic mastery"
-            action={
-              <Link
-                to="/progress"
-                className="text-sm text-accent underline-offset-4 hover:underline"
-              >
-                Full report
-              </Link>
-            }
-          />
-          {topMastery.length === 0 ? (
-            <EmptyState
-              icon="🎯"
-              title="Mastery unlocks after your first assessment"
-              body="Every answer feeds your per-topic mastery score."
-            />
-          ) : (
-            <div className="surface-paper space-y-4 p-5">
-              {topMastery.map((row) => (
+              {focusAreas.map((row) => (
                 <MasteryBar
                   key={`${row.topic}-${row.subtopic}`}
-                  label={`${row.topic} · ${row.subtopic}`}
+                  label={row.subtopic || row.topic}
                   value={row.mastery}
                 />
               ))}
             </div>
           )}
-        </div>
-
-        <div>
-          <SectionHeading
-            eyebrow="Rewards"
-            title="Achievements"
-            action={
-              <Link
-                to="/achievements"
-                className="text-sm text-accent underline-offset-4 hover:underline"
-              >
-                All badges
-              </Link>
-            }
-          />
-          <div className="surface-paper p-5">
-            <p className="font-display text-3xl">
-              {data.badgeCount}
-              <span className="ml-2 text-sm text-muted-foreground">earned</span>
+          {insightMutation.data?.text ? (
+            <p className="animate-dash-rise line-clamp-4 text-xs leading-relaxed text-muted-foreground">
+              {insightMutation.data.text.split("\n").filter(Boolean)[0]}
             </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {data.latestBadges.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Pass your first assessment to earn a badge.
-                </p>
-              ) : (
-                data.latestBadges.map((badge) => (
-                  <span
-                    key={badge.name}
-                    className="inline-flex items-center gap-2 rounded-full bg-secondary px-3 py-1.5 text-sm"
-                  >
-                    <span>{badge.icon}</span>
-                    {badge.name}
-                  </span>
-                ))
-              )}
-            </div>
-          </div>
-
-          <div className="surface-paper mt-4 p-5">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-hairline text-muted-foreground">AI performance coach</p>
-              <button
-                onClick={() => insightMutation.mutate()}
-                disabled={insightMutation.isPending}
-                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
-              >
-                <Sparkles className="h-3.5 w-3.5" />
-                {insightMutation.isPending ? "Thinking…" : "Generate"}
-              </button>
-            </div>
-            {insightMutation.data?.text ? (
-              <div className="mt-3 space-y-2 text-sm leading-relaxed text-muted-foreground">
-                {insightMutation.data.text
-                  .split("\n")
-                  .filter(Boolean)
-                  .map((line, index) => (
-                    <p key={index}>{line}</p>
-                  ))}
-              </div>
-            ) : (
-              <p className="mt-3 text-sm text-muted-foreground">
-                {insightMutation.data?.error ??
-                  (insightMutation.isError
-                    ? "Could not generate insights right now."
-                    : "Get a personalised read on your trajectory, strengths and next step.")}
-              </p>
-            )}
-            {weakest.length > 0 ? (
-              <p className="mt-4 text-xs text-muted-foreground">
-                Focus areas: {weakest.map((w) => `${w.subtopic} (${w.mastery}%)`).join(", ")}
-              </p>
-            ) : null}
-          </div>
+          ) : null}
         </div>
-      </section>
+      </MotionSection>
     </div>
+  );
+}
+
+function timeGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+function MotionSection({
+  children,
+  className,
+  delayMs = 0,
+}: {
+  children: ReactNode;
+  className?: string;
+  delayMs?: number;
+}) {
+  return (
+    <section className={cn("animate-dash-rise", className)} style={delay(delayMs)}>
+      {children}
+    </section>
+  );
+}
+
+function QuestChip({
+  icon,
+  label,
+  style,
+}: {
+  icon: ReactNode;
+  label: string;
+  style?: CSSProperties;
+}) {
+  return (
+    <span
+      className="animate-dash-chip inline-flex items-center gap-1.5 rounded-md border border-border bg-card/80 px-2.5 py-1 font-medium text-foreground backdrop-blur-sm transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:border-accent/40"
+      style={style}
+    >
+      <span className="text-accent">{icon}</span>
+      {label}
+    </span>
   );
 }

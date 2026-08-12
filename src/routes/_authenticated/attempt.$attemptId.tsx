@@ -1,4 +1,6 @@
 import { PageLoader } from "@/components/platform";
+import { SubmitScoringOverlay } from "@/components/ResultCelebration";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { getAttemptPaper, finishAttempt } from "@/lib/platform.functions";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -27,6 +29,7 @@ function AttemptRunner() {
   const navigate = useNavigate();
   const fetchPaper = useServerFn(getAttemptPaper);
   const submit = useServerFn(finishAttempt);
+  const confirm = useConfirm();
 
   const { data, isPending, error } = useQuery({
     queryKey: ["paper", attemptId],
@@ -38,6 +41,7 @@ function AttemptRunner() {
   const [answers, setAnswers] = useState<Record<string, number | number[]>>({});
   const [index, setIndex] = useState(0);
   const [remaining, setRemaining] = useState<number | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const submittedRef = useRef(false);
 
   const mutation = useMutation({
@@ -46,6 +50,7 @@ function AttemptRunner() {
     onSuccess: () => navigate({ to: "/results/$attemptId", params: { attemptId } }),
     onError: (err) => {
       submittedRef.current = false;
+      setIsSubmitting(false);
       toast.error(err instanceof Error ? err.message : "Submission failed");
     },
   });
@@ -54,6 +59,7 @@ function AttemptRunner() {
     (payload: Record<string, number | number[]>) => {
       if (submittedRef.current) return;
       submittedRef.current = true;
+      setIsSubmitting(true);
       mutation.mutate(payload);
     },
     [mutation],
@@ -98,6 +104,8 @@ function AttemptRunner() {
 
   return (
     <div className="mx-auto max-w-3xl">
+      <SubmitScoringOverlay active={isSubmitting || mutation.isPending} />
+
       <div className="surface-paper sticky top-20 z-30 mb-6 flex flex-wrap items-center justify-between gap-4 p-4">
         <div className="min-w-0">
           <p className="text-hairline text-muted-foreground">{data.exam.topic}</p>
@@ -204,13 +212,18 @@ function AttemptRunner() {
         </div>
         <button
           onClick={() => {
-            if (answeredCount < questions.length) {
-              const ok = window.confirm(
-                `${questions.length - answeredCount} question(s) unanswered. Submit anyway?`,
-              );
-              if (!ok) return;
-            }
-            doSubmit(answers);
+            void (async () => {
+              if (answeredCount < questions.length) {
+                const ok = await confirm({
+                  title: "Submit with unanswered questions?",
+                  description: `${questions.length - answeredCount} question(s) unanswered. Submit anyway?`,
+                  confirmLabel: "Submit anyway",
+                  tone: "destructive",
+                });
+                if (!ok) return;
+              }
+              doSubmit(answers);
+            })();
           }}
           disabled={mutation.isPending}
           className="rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"

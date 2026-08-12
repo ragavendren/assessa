@@ -1,4 +1,5 @@
 import { BrandMark } from "@/components/BrandMark";
+import { OrgDepartmentFields } from "@/components/OrgDepartmentFields";
 import { supabase } from "@/integrations/supabase/client";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
@@ -45,6 +46,8 @@ function AuthPage() {
   const navigate = useNavigate();
   const [mode, setMode] = useState<"signin" | "signup">(search.mode ?? "signin");
   const [fullName, setFullName] = useState("");
+  const [organization, setOrganization] = useState("");
+  const [department, setDepartment] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -74,6 +77,10 @@ function AuthPage() {
       toast.error("Enter your full name");
       return;
     }
+    if (mode === "signup" && (!organization.trim() || !department.trim())) {
+      toast.error("Select your organisation and team / group");
+      return;
+    }
 
     setBusy(true);
     try {
@@ -83,7 +90,11 @@ function AuthPage() {
           password: parsed.data.password,
           options: {
             emailRedirectTo: `${window.location.origin}/dashboard`,
-            data: { full_name: fullName.trim() },
+            data: {
+              full_name: fullName.trim(),
+              organization: organization.trim(),
+              department: department.trim(),
+            },
           },
         });
         if (error) throw error;
@@ -179,18 +190,27 @@ function AuthPage() {
 
         <form onSubmit={onSubmit} className="mt-6 space-y-4">
           {mode === "signup" ? (
-            <Field label="Full name">
-              <input
-                value={fullName}
-                onChange={(event) => setFullName(event.target.value)}
-                maxLength={100}
-                autoComplete="name"
-                className="field"
-                placeholder="Ada Lovelace"
+            <>
+              <Field label="Full name *">
+                <input
+                  value={fullName}
+                  onChange={(event) => setFullName(event.target.value)}
+                  maxLength={100}
+                  autoComplete="name"
+                  className="field"
+                  placeholder="Ada Lovelace"
+                  required
+                />
+              </Field>
+              <OrgDepartmentFields
+                organization={organization}
+                department={department}
+                onOrganizationChange={setOrganization}
+                onDepartmentChange={setDepartment}
               />
-            </Field>
+            </>
           ) : null}
-          <Field label="Email">
+          <Field label="Email *">
             <input
               type="email"
               value={email}
@@ -199,9 +219,10 @@ function AuthPage() {
               autoComplete="email"
               className="field"
               placeholder="you@example.com"
+              required
             />
           </Field>
-          <Field label="Password">
+          <Field label="Password *">
             <input
               type="password"
               value={password}
@@ -210,6 +231,8 @@ function AuthPage() {
               autoComplete={mode === "signup" ? "new-password" : "current-password"}
               className="field"
               placeholder="At least 8 characters"
+              required
+              minLength={8}
             />
           </Field>
 
@@ -281,7 +304,7 @@ function AuthLayout({ children }: { children: React.ReactNode }) {
         </p>
       </div>
       <div className="flex items-center justify-center px-4 py-12">
-        <div className="w-full max-w-sm">
+        <div className="w-full max-w-md">
           <Link to="/" className="mb-6 inline-flex md:hidden">
             <BrandMark />
           </Link>

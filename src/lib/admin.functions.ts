@@ -607,6 +607,7 @@ export const upsertBadge = createServerFn({ method: "POST" })
         description: z.string().trim().max(240).default(""),
         icon: z.string().trim().min(1).max(8),
         category: z.string().trim().max(40).default("custom"),
+        track: z.enum(["beginner", "intermediate", "expertise", "elite"]).default("intermediate"),
         condition_type: z.enum([
           "pass_count",
           "attempt_count",
@@ -1042,21 +1043,31 @@ export const updateAdminUser = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { requireAdmin } = await import("@/lib/platform.server");
+    const { allocateParticipantIdForSave, requireAdmin } = await import("@/lib/platform.server");
     await requireAdmin(context.userId);
 
     const { userId, ...profile } = data;
+    const { data: existing } = await supabaseAdmin
+      .from("profiles")
+      .select("participant_id")
+      .eq("id", userId)
+      .maybeSingle();
+    const teamGroup = profile.department || profile.team_group || null;
+    const participantId =
+      existing?.participant_id?.trim() ||
+      (await allocateParticipantIdForSave(profile.participant_id || null));
+
     const { error } = await supabaseAdmin
       .from("profiles")
       .update({
         full_name: profile.full_name,
         email: profile.email,
         organization: profile.organization || null,
-        department: profile.department || null,
+        department: teamGroup,
         mobile: profile.mobile || null,
-        participant_id: profile.participant_id || null,
+        participant_id: participantId,
         display_name: profile.display_name || null,
-        team_group: profile.team_group || null,
+        team_group: teamGroup,
         updated_at: new Date().toISOString(),
       })
       .eq("id", userId);
@@ -1240,4 +1251,132 @@ export const wipePlatformData = createServerFn({ method: "POST" })
       deletedUsers,
       preservedUsers: preserveIds.size,
     };
+  });
+
+/** Admin: full org/department catalog including inactive rows. */
+export const getAdminOrganizations = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { requireAdmin } = await import("@/lib/platform.server");
+    await requireAdmin(context.userId);
+
+    const [{ data: organizations, error: orgError }, { data: departments, error: deptError }] =
+      await Promise.all([
+        supabaseAdmin
+          .from("organizations")
+          .select("id, name, active, created_at")
+          .order("name", { ascending: true }),
+        supabaseAdmin
+          .from("departments")
+          .select("id, organization_id, name, active, created_at")
+          .order("name", { ascending: true }),
+      ]);
+    if (orgError) throw orgError;
+    if (deptError) throw deptError;
+
+    return {
+      organizations: organizations ?? [],
+      departments: departments ?? [],
+    };
+  });
+
+export const upsertOrganization = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) =>
+    z
+      .object({
+        id: z.string().uuid().optional(),
+        name: z.string().trim().min(2).max(120),
+        active: z.boolean().default(true),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { requireAdmin } = await import("@/lib/platform.server");
+    await requireAdmin(context.userId);
+
+    const payload = {
+      name: data.name,
+      active: data.active,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (data.id) {
+      const { error } = await supabaseAdmin.from("organizations").update(payload).eq("id", data.id);
+      if (error) throw error;
+      return { id: data.id };
+    }
+
+    const { data: created, error } = await supabaseAdmin
+      .from("organizations")
+      .insert(payload)
+      .select("id")
+      .single();
+    if (error) throw error;
+    return { id: created.id as string };
+  });
+
+export const upsertDepartment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) =>
+    z
+      .object({
+        id: z.string().uuid().optional(),
+        organizationId: z.string().uuid(),
+        name: z.string().trim().min(2).max(120),
+        active: z.boolean().default(true),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { requireAdmin } = await import("@/lib/platform.server");
+    await requireAdmin(context.userId);
+
+    const payload = {
+      organization_id: data.organizationId,
+      name: data.name,
+      active: data.active,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (data.id) {
+      const { error } = await supabaseAdmin.from("departments").update(payload).eq("id", data.id);
+      if (error) throw error;
+      return { id: data.id };
+    }
+
+    const { data: created, error } = await supabaseAdmin
+      .from("departments")
+      .insert(payload)
+      .select("id")
+      .single();
+    if (error) throw error;
+    return { id: created.id as string };
+  });
+
+export const deleteOrganization = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { requireAdmin } = await import("@/lib/platform.server");
+    await requireAdmin(context.userId);
+    const { error } = await supabaseAdmin.from("organizations").delete().eq("id", data.id);
+    if (error) throw error;
+    return { ok: true as const };
+  });
+
+export const deleteDepartment = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) => z.object({ id: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { requireAdmin } = await import("@/lib/platform.server");
+    await requireAdmin(context.userId);
+    const { error } = await supabaseAdmin.from("departments").delete().eq("id", data.id);
+    if (error) throw error;
+    return { ok: true as const };
   });

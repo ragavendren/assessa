@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 const ADMIN_NAV = [
   { to: "/admin", label: "Overview" },
   { to: "/admin/users", label: "Users" },
+  { to: "/admin/organizations", label: "Organisations" },
   { to: "/admin/performance", label: "Performance" },
   { to: "/admin/exams/new", label: "New assessment" },
   { to: "/admin/gamification", label: "Gamification" },

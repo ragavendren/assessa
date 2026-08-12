@@ -1,5 +1,6 @@
+import { SKILL_TRACK_LABELS, trackForLevel } from "@/lib/gamification";
 import { cn } from "@/lib/utils";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 export function SectionHeading({
   eyebrow,
@@ -26,20 +27,38 @@ export function StatTile({
   value,
   suffix,
   hint,
+  className,
+  style,
 }: {
   label: string;
   value: string | number;
   suffix?: string;
   hint?: string;
+  className?: string;
+  style?: CSSProperties;
 }) {
   return (
-    <div className="surface-paper p-4">
-      <p className="text-hairline text-muted-foreground">{label}</p>
-      <p className="mt-2 font-display text-3xl leading-none">
-        {value}
-        {suffix ? <span className="text-lg text-muted-foreground">{suffix}</span> : null}
+    <div
+      className={cn(
+        "surface-paper dash-lift dash-lift-hover flex min-h-[7.5rem] flex-col justify-between gap-2 overflow-hidden p-4",
+        className,
+      )}
+      style={style}
+    >
+      <p className="truncate text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+        {label}
       </p>
-      {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
+      <p className="font-display text-2xl leading-none tabular-nums sm:text-3xl">
+        <span className="break-all">{value}</span>
+        {suffix ? (
+          <span className="ml-0.5 text-base font-normal text-muted-foreground">{suffix}</span>
+        ) : null}
+      </p>
+      {hint ? (
+        <p className="line-clamp-2 text-xs leading-snug text-muted-foreground">{hint}</p>
+      ) : (
+        <span className="h-4" aria-hidden />
+      )}
     </div>
   );
 }
@@ -92,6 +111,8 @@ export function LevelMeter({
   xpToNext,
   nextLevel,
   progress,
+  className,
+  style,
 }: {
   level: number;
   name: string;
@@ -99,22 +120,37 @@ export function LevelMeter({
   xpToNext: number;
   nextLevel: number | null;
   progress: number;
+  className?: string;
+  style?: CSSProperties;
 }) {
   return (
-    <div className="surface-paper p-5">
-      <div className="flex items-baseline justify-between">
-        <div>
-          <p className="text-hairline text-muted-foreground">Level {level}</p>
-          <p className="font-display text-2xl">{name}</p>
+    <div
+      className={cn(
+        "surface-paper dash-lift dash-lift-hover flex h-full min-h-[7.5rem] flex-col justify-between gap-3 p-5",
+        className,
+      )}
+      style={style}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+            Level {level} · {SKILL_TRACK_LABELS[trackForLevel(level)]}
+          </p>
+          <p className="mt-1 truncate font-display text-xl sm:text-2xl">{name}</p>
         </div>
-        <p className="font-display text-2xl text-accent">{xp.toLocaleString()} XP</p>
+        <p className="shrink-0 font-display text-xl tabular-nums text-accent sm:text-2xl">
+          {xp.toLocaleString()}
+          <span className="ml-1 text-xs font-normal text-muted-foreground">XP</span>
+        </p>
       </div>
-      <Meter className="mt-4" value={progress * 100} />
-      <p className="mt-2 text-xs text-muted-foreground">
-        {nextLevel
-          ? `${xpToNext.toLocaleString()} XP to Level ${nextLevel}`
-          : "Highest level reached"}
-      </p>
+      <div>
+        <Meter value={progress * 100} />
+        <p className="mt-2 text-xs text-muted-foreground">
+          {nextLevel
+            ? `${xpToNext.toLocaleString()} XP to Level ${nextLevel}`
+            : "Highest level reached"}
+        </p>
+      </div>
     </div>
   );
 }

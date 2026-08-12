@@ -1,3 +1,5 @@
+import { randomBytes } from "node:crypto";
+
 /**
  * Server-only assessment engine: question serving, authoritative scoring,
  * XP ledger, badge evaluation, streaks, topic mastery and leaderboards.
@@ -19,6 +21,7 @@ export type Profile = {
   display_name: string | null;
   team_group: string | null;
   leaderboard_opt_out: boolean;
+  avatar_id: string | null;
 };
 
 export type AttemptRow = {
@@ -67,6 +70,30 @@ export type ExamRow = {
 /* identity                                                            */
 /* ------------------------------------------------------------------ */
 
+/** Stable public participant code, e.g. AS-A1B2C3D4 */
+export function generateParticipantId() {
+  return `AS-${randomBytes(4).toString("hex").toUpperCase()}`;
+}
+
+async function allocateParticipantId(preferred?: string | null) {
+  const candidate = preferred?.trim() || generateParticipantId();
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const value = attempt === 0 ? candidate : generateParticipantId();
+    const { data } = await db
+      .from("profiles")
+      .select("id")
+      .eq("participant_id", value)
+      .maybeSingle();
+    if (!data) return value;
+  }
+  return `AS-${randomBytes(6).toString("hex").toUpperCase()}`;
+}
+
+/** Public helper for profile saves that must keep/assign a participant id. */
+export async function allocateParticipantIdForSave(preferred?: string | null) {
+  return allocateParticipantId(preferred);
+}
+
 export async function ensureProfile(
   userId: string,
   claims: Record<string, unknown>,
@@ -78,6 +105,13 @@ export async function ensureProfile(
 
   let profile = existing as Profile | null;
   if (!profile) {
+    const teamGroup =
+      (meta["department"] as string | undefined) ||
+      (meta["team_group"] as string | undefined) ||
+      null;
+    const participantId = await allocateParticipantId(
+      (meta["participant_id"] as string | undefined) ?? null,
+    );
     const { data, error } = await db
       .from("profiles")
       .insert({
@@ -87,17 +121,38 @@ export async function ensureProfile(
           meta["full_name"] ?? meta["name"] ?? email.split("@")[0] ?? "Participant",
         ),
         mobile: (meta["mobile"] as string | undefined) ?? null,
-        participant_id: (meta["participant_id"] as string | undefined) ?? null,
+        participant_id: participantId,
         organization: (meta["organization"] as string | undefined) ?? null,
-        department: (meta["department"] as string | undefined) ?? null,
+        department: teamGroup,
+        team_group: teamGroup,
       })
       .select("*")
       .single();
     if (error) throw error;
     profile = data as Profile;
-  } else if (email && profile.email !== email) {
-    await db.from("profiles").update({ email }).eq("id", userId);
-    profile.email = email;
+  } else {
+    const patch: {
+      email?: string;
+      participant_id?: string;
+      team_group?: string;
+    } = {};
+    if (email && profile.email !== email) {
+      patch.email = email;
+      profile.email = email;
+    }
+    if (!profile.participant_id?.trim()) {
+      const participantId = await allocateParticipantId(null);
+      patch.participant_id = participantId;
+      profile.participant_id = participantId;
+    }
+    // Keep team_group aligned with department (Team / Group).
+    if (profile.department?.trim() && profile.team_group !== profile.department) {
+      patch.team_group = profile.department;
+      profile.team_group = profile.department;
+    }
+    if (Object.keys(patch).length > 0) {
+      await db.from("profiles").update(patch).eq("id", userId);
+    }
   }
 
   const { data: roles } = await db.from("user_roles").select("role").eq("user_id", userId);
@@ -141,20 +196,43 @@ export async function requireAdmin(userId: string) {
 /* xp + levels                                                         */
 /* ------------------------------------------------------------------ */
 
+let levelsCache: { at: number; rows: LevelRow[] } | null = null;
+let xpRulesCache: { at: number; map: Record<string, number> } | null = null;
+const CATALOG_TTL_MS = 60_000;
+
 export async function getLevels(): Promise<LevelRow[]> {
+  if (levelsCache && Date.now() - levelsCache.at < CATALOG_TTL_MS) {
+    return levelsCache.rows;
+  }
   const { data } = await db.from("levels").select("level, name, min_xp").order("min_xp");
-  return (data ?? []) as LevelRow[];
+  const rows = (data ?? []) as LevelRow[];
+  levelsCache = { at: Date.now(), rows };
+  return rows;
 }
 
 export async function getXpTotal(userId: string) {
-  const { data } = await db.from("xp_transactions").select("points").eq("user_id", userId);
-  return (data ?? []).reduce((sum, row) => sum + (row.points ?? 0), 0);
+  // Aggregate in Postgres instead of shipping every XP row to the app server.
+  const { data, error } = await db
+    .from("xp_transactions")
+    .select("points.sum()")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (!error && data && typeof (data as { sum?: number }).sum === "number") {
+    return Number((data as { sum: number }).sum);
+  }
+  // Fallback for older PostgREST shapes.
+  const { data: rows } = await db.from("xp_transactions").select("points").eq("user_id", userId);
+  return (rows ?? []).reduce((sum, row) => sum + (row.points ?? 0), 0);
 }
 
 async function xpRules() {
+  if (xpRulesCache && Date.now() - xpRulesCache.at < CATALOG_TTL_MS) {
+    return xpRulesCache.map;
+  }
   const { data } = await db.from("xp_rules").select("code, points, active");
   const map: Record<string, number> = {};
   for (const row of data ?? []) if (row.active) map[row.code] = row.points;
+  xpRulesCache = { at: Date.now(), map };
   return map;
 }
 
@@ -172,6 +250,22 @@ export async function awardXp(
     reference_id: referenceId ?? null,
   });
   return points;
+}
+
+async function awardXpBatch(
+  userId: string,
+  rows: { source: string; points: number; referenceId?: string | null }[],
+) {
+  const payload = rows
+    .filter((row) => row.points > 0)
+    .map((row) => ({
+      user_id: userId,
+      source: row.source,
+      points: row.points,
+      reference_id: row.referenceId ?? null,
+    }));
+  if (payload.length === 0) return;
+  await db.from("xp_transactions").insert(payload);
 }
 
 export async function notify(
@@ -249,6 +343,28 @@ export async function getExam(examId: string) {
   if (error) throw error;
   if (!data) throw new Error("Assessment not found.");
   return data as unknown as ExamRow;
+}
+
+/** Parallel access checks for non-public exams (avoids sequential N+1 RPCs). */
+export async function filterAccessibleExams<T extends { id: string; access: string }>(
+  userId: string,
+  exams: T[],
+): Promise<T[]> {
+  if (exams.length === 0) return [];
+  const publicExams = exams.filter((exam) => exam.access === "public");
+  const restricted = exams.filter((exam) => exam.access !== "public");
+  if (restricted.length === 0) return publicExams;
+
+  const checks = await Promise.all(
+    restricted.map(async (exam) => {
+      const { data: ok } = await db.rpc("can_access_exam", {
+        _user_id: userId,
+        _exam_id: exam.id,
+      });
+      return ok ? exam : null;
+    }),
+  );
+  return [...publicExams, ...checks.filter((exam): exam is T => exam != null)];
 }
 
 export async function assertExamAccess(userId: string, exam: ExamRow) {
@@ -450,50 +566,81 @@ export async function submitAttempt(
     .eq("id", attemptId)
     .eq("status", "in_progress");
 
-  await updateMastery(userId, exam.topic, perSubtopic);
-  const streaks = await updateStreaks(userId, passed, score);
+  // Run independent post-score work in parallel to keep submit snappy under load.
+  const [streaks, , previousFails, rules, rank] = await Promise.all([
+    updateStreaks(userId, passed, score),
+    updateMastery(userId, exam.topic, perSubtopic),
+    db
+      .from("exam_attempts")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("exam_id", exam.id)
+      .eq("status", "submitted")
+      .eq("passed", false)
+      .neq("id", attemptId)
+      .limit(1),
+    exam.enable_xp ? xpRules() : Promise.resolve({} as Record<string, number>),
+    exam.enable_leaderboard ? examRank(exam.id, userId) : Promise.resolve(null),
+  ]);
 
+  const hadPriorFail = (previousFails.data ?? []).length > 0;
   const gains: { label: string; points: number }[] = [];
+
   if (exam.enable_xp) {
-    const rules = await xpRules();
-    const add = async (code: string, label: string) => {
+    const pending: {
+      source: string;
+      points: number;
+      referenceId?: string | null;
+      label: string;
+    }[] = [];
+    const queue = (code: string, label: string) => {
       const points = rules[code] ?? 0;
-      if (points > 0) {
-        await awardXp(userId, code, points, attemptId);
-        gains.push({ label, points });
-      }
+      if (points > 0) pending.push({ source: code, points, referenceId: attemptId, label });
     };
-    await add("exam_completed", "Assessment completed");
-    if (passed) await add("exam_passed", "Passed");
-    if (score === 100) await add("perfect_score", "Perfect score");
-    else if (score > 95) await add("score_95", "Scored above 95%");
-    else if (score > 90) await add("score_90", "Scored above 90%");
-    else if (score > 80) await add("score_80", "Scored above 80%");
+    queue("exam_completed", "Assessment completed");
+    if (passed) queue("exam_passed", "Passed");
+    if (passed && hadPriorFail) queue("exam_failed_retry", "Retried after a fail");
+    if (score === 100) queue("perfect_score", "Perfect score");
+    else if (score >= 95) queue("score_95", "Scored above 95%");
+    else if (score >= 90) queue("score_90", "Scored above 90%");
+    else if (score >= 85) queue("score_85", "Scored above 85%");
+    else if (score >= 80) queue("score_80", "Scored above 80%");
+    else if (score >= 70) queue("score_70", "Scored above 70%");
+    if (streaks.pass >= 3) queue("streak_bonus_3", "3-pass streak bonus");
+    if (rank?.rank && rank.rank <= 10 && rank.total >= 3) {
+      queue("leaderboard_top10", "Top 10 on leaderboard");
+    }
+    await awardXpBatch(
+      userId,
+      pending.map(({ source, points, referenceId }) => ({ source, points, referenceId })),
+    );
+    for (const row of pending) gains.push({ label: row.label, points: row.points });
   }
 
-  const newBadges = exam.enable_badges
-    ? await evaluateBadges(userId, {
-        exam,
-        attemptId,
-        score,
-        passed,
-        durationSeconds,
-        passStreak: streaks.pass,
-      })
-    : [];
+  const [newBadges] = await Promise.all([
+    exam.enable_badges
+      ? evaluateBadges(userId, {
+          exam,
+          attemptId,
+          score,
+          passed,
+          durationSeconds,
+          passStreak: streaks.pass,
+          rank,
+        })
+      : Promise.resolve([] as BadgeRow[]),
+    notify(userId, {
+      kind: "result",
+      title: `Result available — ${exam.title}`,
+      body: `You scored ${score}% (${passed ? "PASSED" : "NOT PASSED"}).`,
+      icon: passed ? "✅" : "📄",
+      href: `/results/${attemptId}`,
+      ctaLabel: "View result",
+      email: false,
+    }),
+  ]);
 
-  await notify(userId, {
-    kind: "result",
-    title: `Result available — ${exam.title}`,
-    body: `You scored ${score}% (${passed ? "PASSED" : "NOT PASSED"}).`,
-    icon: passed ? "✅" : "📄",
-    href: `/results/${attemptId}`,
-    ctaLabel: "View result",
-    // In-app only — do not spend Resend quota on result mail.
-    email: false,
-  });
-
-  return summariseResult(userId, attemptId, { gains, newBadges });
+  return summariseResult(userId, attemptId, { gains, newBadges, rank });
 }
 
 async function updateMastery(
@@ -501,29 +648,34 @@ async function updateMastery(
   topic: string,
   perSubtopic: Map<string, { correct: number; total: number }>,
 ) {
-  for (const [subtopic, stats] of perSubtopic) {
-    const { data: existing } = await db
-      .from("topic_mastery")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("topic", topic)
-      .eq("subtopic", subtopic)
-      .maybeSingle();
-    const correct = (existing?.correct_count ?? 0) + stats.correct;
-    const total = (existing?.total_count ?? 0) + stats.total;
-    await db.from("topic_mastery").upsert(
-      {
-        user_id: userId,
-        topic,
-        subtopic,
-        correct_count: correct,
-        total_count: total,
-        mastery: total > 0 ? Math.round((correct / total) * 100) : 0,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id,topic,subtopic" },
-    );
-  }
+  const entries = [...perSubtopic.entries()];
+  if (entries.length === 0) return;
+
+  await Promise.all(
+    entries.map(async ([subtopic, stats]) => {
+      const { data: existing } = await db
+        .from("topic_mastery")
+        .select("correct_count, total_count")
+        .eq("user_id", userId)
+        .eq("topic", topic)
+        .eq("subtopic", subtopic)
+        .maybeSingle();
+      const correct = (existing?.correct_count ?? 0) + stats.correct;
+      const total = (existing?.total_count ?? 0) + stats.total;
+      await db.from("topic_mastery").upsert(
+        {
+          user_id: userId,
+          topic,
+          subtopic,
+          correct_count: correct,
+          total_count: total,
+          mastery: total > 0 ? Math.round((correct / total) * 100) : 0,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id,topic,subtopic" },
+      );
+    }),
+  );
 }
 
 async function updateStreaks(userId: string, passed: boolean, score: number) {
@@ -533,7 +685,7 @@ async function updateStreaks(userId: string, passed: boolean, score: number) {
   const apply = async (type: keyof typeof result, keep: boolean) => {
     const { data } = await db
       .from("user_streaks")
-      .select("*")
+      .select("current_count, longest_count")
       .eq("user_id", userId)
       .eq("streak_type", type)
       .maybeSingle();
@@ -552,9 +704,7 @@ async function updateStreaks(userId: string, passed: boolean, score: number) {
     result[type] = current;
   };
 
-  await apply("exam", true);
-  await apply("pass", passed);
-  await apply("high_score", score >= 80);
+  await Promise.all([apply("exam", true), apply("pass", passed), apply("high_score", score >= 80)]);
   return result;
 }
 
@@ -569,6 +719,7 @@ export type BadgeRow = {
   description: string;
   icon: string;
   category: string;
+  track?: string;
   condition_type: string;
   condition_value: number;
   condition_topic: string | null;
@@ -628,27 +779,40 @@ async function evaluateBadges(
     passed: boolean;
     durationSeconds: number;
     passStreak: number;
+    rank?: { rank: number | null; total: number; top: number; average: number } | null;
   },
 ) {
-  const { data: badgeRows } = await db.from("badges").select("*").eq("active", true);
-  const { data: owned } = await db.from("user_badges").select("badge_id").eq("user_id", userId);
+  const [{ data: badgeRows }, { data: owned }, stats] = await Promise.all([
+    db.from("badges").select("*").eq("active", true),
+    db.from("user_badges").select("badge_id").eq("user_id", userId),
+    participantStats(userId),
+  ]);
   const ownedSet = new Set((owned ?? []).map((b) => b.badge_id));
-  const stats = await participantStats(userId);
-  const rank = ctx.exam.enable_leaderboard ? await examRank(ctx.exam.id, userId) : null;
+  const rank =
+    ctx.rank !== undefined
+      ? ctx.rank
+      : ctx.exam.enable_leaderboard
+        ? await examRank(ctx.exam.id, userId)
+        : null;
 
-  const topicRows = await db
-    .from("exam_attempts")
-    .select("score, exams!inner(topic)")
-    .eq("user_id", userId)
-    .eq("status", "submitted");
+  const needsTopicAverage = (badgeRows ?? []).some(
+    (b) => !ownedSet.has(b.id) && b.condition_type === "topic_average",
+  );
   const topicScores = new Map<string, number[]>();
-  for (const row of (topicRows.data ?? []) as unknown as {
-    score: number;
-    exams: { topic: string };
-  }[]) {
-    const list = topicScores.get(row.exams.topic) ?? [];
-    list.push(Number(row.score ?? 0));
-    topicScores.set(row.exams.topic, list);
+  if (needsTopicAverage) {
+    const topicRows = await db
+      .from("exam_attempts")
+      .select("score, exams!inner(topic)")
+      .eq("user_id", userId)
+      .eq("status", "submitted");
+    for (const row of (topicRows.data ?? []) as unknown as {
+      score: number;
+      exams: { topic: string };
+    }[]) {
+      const list = topicScores.get(row.exams.topic) ?? [];
+      list.push(Number(row.score ?? 0));
+      topicScores.set(row.exams.topic, list);
+    }
   }
 
   const previous = stats.attempts.filter(
@@ -658,6 +822,9 @@ async function evaluateBadges(
   const hadFailure = stats.attempts.some((a) => a.id !== ctx.attemptId && a.passed === false);
 
   const earned: BadgeRow[] = [];
+  const badgeXp: { source: string; points: number }[] = [];
+  const badgeNotices: Parameters<typeof notify>[1][] = [];
+
   for (const badge of (badgeRows ?? []) as BadgeRow[]) {
     if (ownedSet.has(badge.id)) continue;
     const value = Number(badge.condition_value);
@@ -706,18 +873,28 @@ async function evaluateBadges(
     const { error } = await db.from("user_badges").insert({ user_id: userId, badge_id: badge.id });
     if (error) continue;
     earned.push(badge);
-    if (badge.xp_reward > 0) await awardXp(userId, `badge:${badge.code}`, badge.xp_reward, null);
-    await notify(userId, {
+    if (badge.xp_reward > 0) {
+      badgeXp.push({ source: `badge:${badge.code}`, points: badge.xp_reward });
+    }
+    badgeNotices.push({
       kind: "badge",
       title: `Badge earned — ${badge.name}`,
       body: `${badge.description}${badge.xp_reward ? ` +${badge.xp_reward} XP` : ""}`,
       icon: badge.icon,
       href: "/achievements",
       ctaLabel: "View achievements",
-      // In-app only — do not spend Resend quota on badge mail.
       email: false,
     });
   }
+
+  await Promise.all([
+    awardXpBatch(
+      userId,
+      badgeXp.map((row) => ({ ...row, referenceId: null })),
+    ),
+    ...badgeNotices.map((payload) => notify(userId, payload)),
+  ]);
+
   return earned;
 }
 
@@ -731,15 +908,25 @@ export async function summariseResult(
   extras?: {
     gains?: { label: string; points: number }[];
     newBadges?: BadgeRow[];
+    rank?: { rank: number | null; total: number; top: number; average: number } | null;
   },
 ) {
   const { attempt, exam } = await loadAttempt(userId, attemptId);
   const showReview = exam.mode === "practice" || exam.mode === "assessment";
 
-  const { data: keys } = await db
-    .from("questions")
-    .select("id, prompt, options, correct_index, correct_indexes, explanation, subtopic")
-    .in("id", attempt.question_ids);
+  const [{ data: keys }, xp, levels, rank] = await Promise.all([
+    db
+      .from("questions")
+      .select("id, prompt, options, correct_index, correct_indexes, explanation, subtopic")
+      .in("id", attempt.question_ids),
+    getXpTotal(userId),
+    getLevels(),
+    extras?.rank !== undefined
+      ? Promise.resolve(extras.rank)
+      : exam.enable_leaderboard && exam.show_rank
+        ? examRank(exam.id, userId)
+        : Promise.resolve(null),
+  ]);
   const byId = new Map((keys ?? []).map((q) => [q.id, q]));
 
   const review = showReview
@@ -765,10 +952,6 @@ export async function summariseResult(
           };
         })
     : [];
-
-  const rank = exam.enable_leaderboard && exam.show_rank ? await examRank(exam.id, userId) : null;
-  const xp = await getXpTotal(userId);
-  const levels = await getLevels();
 
   return {
     attempt: {
@@ -829,31 +1012,58 @@ export function maskName(
   }
 }
 
+export async function listLeaderboardExams(userId: string) {
+  const { data: exams } = await db
+    .from("exams")
+    .select("id, title, topic, access")
+    .eq("active", true)
+    .eq("enable_leaderboard", true)
+    .order("title", { ascending: true });
+
+  const visible = await filterAccessibleExams(userId, exams ?? []);
+  return visible.map((exam) => ({ id: exam.id, title: exam.title, topic: exam.topic }));
+}
+
 export async function leaderboard(
   userId: string,
   scope: "global" | "organization" | "department" | "exam" | "topic",
   target?: string,
+  examId?: string | null,
 ) {
   const { data: me } = await db.from("profiles").select("*").eq("id", userId).maybeSingle();
   const viewer = me as Profile | null;
 
   let nameMode: ExamRow["leaderboard_name_display"] = "first_initial";
-  let title = "Global leaderboard";
+  let examIdFilter: string | null = examId?.trim() || null;
+  let topicFilter: string | null = null;
 
-  const query = db
+  // Legacy: scope=exam|topic with target
+  if (scope === "exam" && target) examIdFilter = target;
+  if (scope === "topic" && target) topicFilter = target;
+
+  let examTitle: string | null = null;
+  if (examIdFilter) {
+    const exam = await getExam(examIdFilter);
+    if (!exam) throw new Error("Assessment not found.");
+    if (!exam.enable_leaderboard) {
+      return {
+        title: exam.title,
+        examId: exam.id,
+        disabled: true,
+        rows: [],
+        myRank: null,
+      };
+    }
+    nameMode = exam.leaderboard_name_display;
+    examTitle = exam.title;
+  }
+
+  let query = db
     .from("exam_attempts")
     .select("user_id, score, exam_id, exams!inner(topic, enable_leaderboard)")
     .eq("status", "submitted");
 
-  if (scope === "exam" && target) {
-    const exam = await getExam(target);
-    if (!exam) throw new Error("Assessment not found.");
-    if (!exam.enable_leaderboard)
-      return { title: exam.title, disabled: true, rows: [], myRank: null };
-    nameMode = exam.leaderboard_name_display;
-    title = exam.title;
-    query.eq("exam_id", target);
-  }
+  if (examIdFilter) query = query.eq("exam_id", examIdFilter);
 
   const { data: rows } = await query;
   let records = (rows ?? []) as unknown as {
@@ -864,9 +1074,8 @@ export async function leaderboard(
   }[];
   records = records.filter((r) => r.exams.enable_leaderboard);
 
-  if (scope === "topic" && target) {
-    records = records.filter((r) => r.exams.topic === target);
-    title = `${target} leaderboard`;
+  if (topicFilter) {
+    records = records.filter((r) => r.exams.topic === topicFilter);
   }
 
   const userIds = [...new Set(records.map((r) => r.user_id))];
@@ -876,38 +1085,44 @@ export async function leaderboard(
     .in("id", userIds.length ? userIds : ["00000000-0000-0000-0000-000000000000"]);
   const profileMap = new Map((profiles ?? []).map((p) => [p.id, p]));
 
-  const agg = new Map<string, { scores: number[]; exams: Set<string> }>();
+  const audienceScope = scope === "organization" || scope === "department" ? scope : "global";
+
+  // Best score per exam per user, then rank by that (one exam) or average of bests (all).
+  const agg = new Map<string, Map<string, number>>();
   for (const row of records) {
     const profile = profileMap.get(row.user_id);
     if (!profile) continue;
-    if (scope === "organization") {
+    if (audienceScope === "organization") {
       if (!viewer?.organization || profile.organization !== viewer.organization) continue;
-      title = `${viewer.organization} leaderboard`;
     }
-    if (scope === "department") {
+    if (audienceScope === "department") {
       if (!viewer?.department || profile.department !== viewer.department) continue;
-      title = `${viewer.department} leaderboard`;
     }
     // Opted-out participants are excluded from public boards, but always see themselves.
     if (profile.leaderboard_opt_out && row.user_id !== userId) continue;
-    const bucket = agg.get(row.user_id) ?? {
-      scores: [],
-      exams: new Set<string>(),
-    };
-    bucket.scores.push(Number(row.score ?? 0));
-    bucket.exams.add(row.exam_id);
-    agg.set(row.user_id, bucket);
+
+    const byExam = agg.get(row.user_id) ?? new Map<string, number>();
+    const score = Number(row.score ?? 0);
+    byExam.set(row.exam_id, Math.max(byExam.get(row.exam_id) ?? 0, score));
+    agg.set(row.user_id, byExam);
+  }
+
+  const boardLabel = examTitle ?? (topicFilter ? `${topicFilter}` : "All assessments");
+  let title = boardLabel;
+  if (audienceScope === "organization" && viewer?.organization) {
+    title = `${viewer.organization} · ${boardLabel}`;
+  } else if (audienceScope === "department" && viewer?.department) {
+    title = `${viewer.department} · ${boardLabel}`;
   }
 
   const ordered = [...agg.entries()]
-    .map(([id, bucket]) => ({
-      id,
-      score:
-        scope === "exam"
-          ? Math.max(...bucket.scores)
-          : Math.round(bucket.scores.reduce((s, v) => s + v, 0) / bucket.scores.length),
-      exams: bucket.exams.size,
-    }))
+    .map(([id, byExam]) => {
+      const bests = [...byExam.values()];
+      const score = examIdFilter
+        ? Math.max(...bests)
+        : Math.round(bests.reduce((sum, value) => sum + value, 0) / bests.length);
+      return { id, score, exams: byExam.size };
+    })
     .sort((a, b) => b.score - a.score || b.exams - a.exams);
 
   const rowsOut = ordered.slice(0, 25).map((entry, index) => {
@@ -934,6 +1149,7 @@ export async function leaderboard(
   const myIndex = ordered.findIndex((entry) => entry.id === userId);
   return {
     title,
+    examId: examIdFilter,
     disabled: false,
     rows: rowsOut,
     myRank: myIndex >= 0 ? { rank: myIndex + 1, total: ordered.length } : null,

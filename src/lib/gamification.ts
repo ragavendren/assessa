@@ -11,7 +11,35 @@ export type LevelState = {
   nextLevelXp: number | null;
   xpToNext: number;
   progress: number; // 0..1
+  /** Skill band derived from level number. */
+  track: SkillTrack;
 };
+
+/** Career / skill tracks for levels and badges. */
+export const SKILL_TRACKS = ["beginner", "intermediate", "expertise", "elite"] as const;
+export type SkillTrack = (typeof SKILL_TRACKS)[number];
+
+export const SKILL_TRACK_LABELS: Record<SkillTrack, string> = {
+  beginner: "Beginner",
+  intermediate: "Intermediate",
+  expertise: "Expertise",
+  elite: "Elite",
+};
+
+export const SKILL_TRACK_BLURB: Record<SkillTrack, string> = {
+  beginner: "First attempts, early passes, and building confidence.",
+  intermediate: "Steady progress — streaks, speed, and score improvements.",
+  expertise: "Strong accuracy, topic mastery, and consistent results.",
+  elite: "Perfect scores, top ranks, and long-term excellence.",
+};
+
+/** Map a numeric level onto a skill track. */
+export function trackForLevel(level: number): SkillTrack {
+  if (level <= 3) return "beginner";
+  if (level <= 6) return "intermediate";
+  if (level <= 8) return "expertise";
+  return "elite";
+}
 
 export function resolveLevel(xp: number, levels: LevelRow[]): LevelState {
   const sorted = [...levels].sort((a, b) => a.min_xp - b.min_xp);
@@ -30,6 +58,7 @@ export function resolveLevel(xp: number, levels: LevelRow[]): LevelState {
     nextLevelXp: next?.min_xp ?? null,
     xpToNext: next ? Math.max(0, next.min_xp - xp) : 0,
     progress: next ? Math.min(1, Math.max(0, gained / span)) : 1,
+    track: trackForLevel(current.level),
   };
 }
 
@@ -56,6 +85,12 @@ export const ACCESS_LABELS: Record<string, string> = {
   organization: "Organization",
   group: "Group",
 };
+
+export const LEADERBOARD_SCOPE_LABELS = {
+  global: { label: "Global", hint: "Everyone" },
+  organization: { label: "Organisation", hint: "Your company" },
+  department: { label: "Team / Group", hint: "Your team" },
+} as const;
 
 export function scoreTone(score: number, passMark: number) {
   if (score >= 90) return "excellent" as const;

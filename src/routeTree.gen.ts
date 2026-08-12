@@ -24,6 +24,7 @@ import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as TakeExamIdRouteImport } from './routes/take.$examId'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin.index'
 import { Route as AuthenticatedAdminGamificationRouteImport } from './routes/_authenticated/admin.gamification'
+import { Route as AuthenticatedAdminOrganizationsRouteImport } from './routes/_authenticated/admin.organizations'
 import { Route as AuthenticatedAdminPerformanceRouteImport } from './routes/_authenticated/admin.performance'
 import { Route as AuthenticatedAdminUsersRouteImport } from './routes/_authenticated/admin.users'
 import { Route as AuthenticatedAttemptAttemptIdRouteImport } from './routes/_authenticated/attempt.$attemptId'
@@ -111,6 +112,12 @@ const AuthenticatedAdminGamificationRoute =
     path: '/admin/gamification',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedAdminOrganizationsRoute =
+  AuthenticatedAdminOrganizationsRouteImport.update({
+    id: '/admin/organizations',
+    path: '/admin/organizations',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedAdminPerformanceRoute =
   AuthenticatedAdminPerformanceRouteImport.update({
     id: '/admin/performance',
@@ -172,6 +179,7 @@ export interface FileRoutesByFullPath {
   '/auth/callback': typeof AuthCallbackRoute
   '/take/$examId': typeof TakeExamIdRoute
   '/admin/gamification': typeof AuthenticatedAdminGamificationRoute
+  '/admin/organizations': typeof AuthenticatedAdminOrganizationsRoute
   '/admin/performance': typeof AuthenticatedAdminPerformanceRoute
   '/admin/users': typeof AuthenticatedAdminUsersRoute
   '/attempt/$attemptId': typeof AuthenticatedAttemptAttemptIdRoute
@@ -196,6 +204,7 @@ export interface FileRoutesByTo {
   '/auth/callback': typeof AuthCallbackRoute
   '/take/$examId': typeof TakeExamIdRoute
   '/admin/gamification': typeof AuthenticatedAdminGamificationRoute
+  '/admin/organizations': typeof AuthenticatedAdminOrganizationsRoute
   '/admin/performance': typeof AuthenticatedAdminPerformanceRoute
   '/admin/users': typeof AuthenticatedAdminUsersRoute
   '/attempt/$attemptId': typeof AuthenticatedAttemptAttemptIdRoute
@@ -222,6 +231,7 @@ export interface FileRoutesById {
   '/auth/callback': typeof AuthCallbackRoute
   '/take/$examId': typeof TakeExamIdRoute
   '/_authenticated/admin/gamification': typeof AuthenticatedAdminGamificationRoute
+  '/_authenticated/admin/organizations': typeof AuthenticatedAdminOrganizationsRoute
   '/_authenticated/admin/performance': typeof AuthenticatedAdminPerformanceRoute
   '/_authenticated/admin/users': typeof AuthenticatedAdminUsersRoute
   '/_authenticated/attempt/$attemptId': typeof AuthenticatedAttemptAttemptIdRoute
@@ -248,6 +258,7 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/take/$examId'
     | '/admin/gamification'
+    | '/admin/organizations'
     | '/admin/performance'
     | '/admin/users'
     | '/attempt/$attemptId'
@@ -272,6 +283,7 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/take/$examId'
     | '/admin/gamification'
+    | '/admin/organizations'
     | '/admin/performance'
     | '/admin/users'
     | '/attempt/$attemptId'
@@ -297,6 +309,7 @@ export interface FileRouteTypes {
     | '/auth/callback'
     | '/take/$examId'
     | '/_authenticated/admin/gamification'
+    | '/_authenticated/admin/organizations'
     | '/_authenticated/admin/performance'
     | '/_authenticated/admin/users'
     | '/_authenticated/attempt/$attemptId'
@@ -424,6 +437,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminGamificationRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/admin/organizations': {
+      id: '/_authenticated/admin/organizations'
+      path: '/admin/organizations'
+      fullPath: '/admin/organizations'
+      preLoaderRoute: typeof AuthenticatedAdminOrganizationsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/admin/performance': {
       id: '/_authenticated/admin/performance'
       path: '/admin/performance'
@@ -491,6 +511,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedProgressRoute: typeof AuthenticatedProgressRoute
   AuthenticatedAdminGamificationRoute: typeof AuthenticatedAdminGamificationRoute
+  AuthenticatedAdminOrganizationsRoute: typeof AuthenticatedAdminOrganizationsRoute
   AuthenticatedAdminPerformanceRoute: typeof AuthenticatedAdminPerformanceRoute
   AuthenticatedAdminUsersRoute: typeof AuthenticatedAdminUsersRoute
   AuthenticatedAttemptAttemptIdRoute: typeof AuthenticatedAttemptAttemptIdRoute
@@ -510,6 +531,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedProgressRoute: AuthenticatedProgressRoute,
   AuthenticatedAdminGamificationRoute: AuthenticatedAdminGamificationRoute,
+  AuthenticatedAdminOrganizationsRoute: AuthenticatedAdminOrganizationsRoute,
   AuthenticatedAdminPerformanceRoute: AuthenticatedAdminPerformanceRoute,
   AuthenticatedAdminUsersRoute: AuthenticatedAdminUsersRoute,
   AuthenticatedAttemptAttemptIdRoute: AuthenticatedAttemptAttemptIdRoute,

@@ -1,5 +1,6 @@
 import { AdminNav } from "@/components/AdminNav";
-import { Meter, PageLoader, SectionHeading, StatTile } from "@/components/platform";
+import { ListToolbar, listViewClass, useListViewMode } from "@/components/ListToolbar";
+import { PageLoader, SectionHeading, StatTile } from "@/components/platform";
 import { getAdminAssessmentPerformance } from "@/lib/admin.functions";
 import { MODE_LABELS, type ExamMode } from "@/lib/gamification";
 import { cn } from "@/lib/utils";
@@ -26,6 +27,9 @@ export const Route = createFileRoute("/_authenticated/admin/performance")({
 function AdminPerformancePage() {
   const fetchPerformance = useServerFn(getAdminAssessmentPerformance);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState<"all" | "published" | "inactive">("all");
+  const [view, setView] = useListViewMode("admin-performance", "stack");
 
   const { data, isPending, error } = useQuery({
     queryKey: ["admin-performance"],
@@ -33,10 +37,24 @@ function AdminPerformancePage() {
     retry: false,
   });
 
+  const assessments = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return (data?.assessments ?? []).filter((exam) => {
+      if (status === "published" && !exam.active) return false;
+      if (status === "inactive" && exam.active) return false;
+      if (!q) return true;
+      return (
+        exam.title.toLowerCase().includes(q) ||
+        exam.topic.toLowerCase().includes(q) ||
+        exam.mode.toLowerCase().includes(q)
+      );
+    });
+  }, [data?.assessments, search, status]);
+
   const selected = useMemo(() => {
-    if (!data?.assessments.length) return null;
-    return data.assessments.find((exam) => exam.id === selectedId) ?? data.assessments[0] ?? null;
-  }, [data?.assessments, selectedId]);
+    if (!assessments.length) return null;
+    return assessments.find((exam) => exam.id === selectedId) ?? assessments[0] ?? null;
+  }, [assessments, selectedId]);
 
   if (isPending) return <PageLoader label="Loading performance…" />;
   if (error || !data) {
@@ -64,68 +82,114 @@ function AdminPerformancePage() {
         <StatTile label="Avg pass rate" value={data.totals.averagePassRate} suffix="%" />
       </div>
 
-      {data.assessments.length === 0 ? (
+      <ListToolbar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search assessments…"
+        filters={
+          [
+            { value: "all" as const, label: "All", count: data.assessments.length },
+            {
+              value: "published" as const,
+              label: "Published",
+              count: data.assessments.filter((e) => e.active).length,
+            },
+            {
+              value: "inactive" as const,
+              label: "Inactive",
+              count: data.assessments.filter((e) => !e.active).length,
+            },
+          ] as const
+        }
+        filter={status}
+        onFilterChange={setStatus}
+        view={view}
+        onViewChange={setView}
+      />
+
+      {assessments.length === 0 ? (
         <div className="surface-paper p-6 text-sm text-muted-foreground">
-          No assessments yet. Publish one to start tracking opted participants, completion and pass
-          rates.
+          No assessments match your filters.
         </div>
       ) : (
         <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
-          <section className="space-y-3">
-            {data.assessments.map((exam) => {
-              const active = selected?.id === exam.id;
-              return (
-                <button
-                  key={exam.id}
-                  type="button"
-                  onClick={() => setSelectedId(exam.id)}
-                  className={cn(
-                    "w-full rounded-md border p-4 text-left transition-colors",
-                    active
-                      ? "border-accent bg-accent/10"
-                      : "border-border bg-card hover:bg-secondary/40",
-                  )}
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="font-medium">{exam.title}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {exam.topic} · {MODE_LABELS[exam.mode as ExamMode] ?? exam.mode}
-                        {exam.active ? " · published" : " · inactive"}
-                      </p>
-                    </div>
-                    <span className="rounded-full bg-secondary px-2.5 py-1 text-[11px] font-semibold">
-                      pass mark {exam.passMark}%
-                    </span>
-                  </div>
-
-                  <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
-                    <Metric label="Opted" value={String(exam.opted)} />
-                    <Metric label="Completion" value={`${exam.completionRate}%`} />
-                    <Metric label="Pass rate" value={`${exam.passRate}%`} />
-                  </div>
-
-                  <div className="mt-3 space-y-2">
-                    <div>
-                      <div className="mb-1 flex justify-between text-[11px] text-muted-foreground">
-                        <span>Completion</span>
-                        <span>
-                          {exam.completed}/{exam.opted || 0}
-                        </span>
+          <section className={cn(view === "grid" ? listViewClass("grid") : "space-y-3")}>
+            {view === "table" ? (
+              <div className="surface-paper overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-left text-xs text-muted-foreground">
+                    <tr>
+                      <th className="p-3 font-medium">Assessment</th>
+                      <th className="p-3 font-medium">Completion</th>
+                      <th className="p-3 font-medium">Pass</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {assessments.map((exam) => (
+                      <tr
+                        key={exam.id}
+                        className={cn(
+                          "cursor-pointer hover:bg-secondary/40",
+                          selected?.id === exam.id && "bg-secondary/50",
+                        )}
+                        onClick={() => setSelectedId(exam.id)}
+                      >
+                        <td className="p-3">
+                          <p className="font-medium">{exam.title}</p>
+                          <p className="text-xs text-muted-foreground">{exam.topic}</p>
+                        </td>
+                        <td className="p-3 tabular-nums">{exam.completionRate}%</td>
+                        <td className="p-3 tabular-nums">{exam.passRate}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              assessments.map((exam) => {
+                const active = selected?.id === exam.id;
+                return (
+                  <button
+                    key={exam.id}
+                    type="button"
+                    onClick={() => setSelectedId(exam.id)}
+                    className={cn(
+                      "w-full rounded-md border p-4 text-left transition-colors",
+                      active
+                        ? "border-accent bg-accent/10"
+                        : "border-border bg-card hover:bg-secondary/40",
+                    )}
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium">{exam.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {exam.topic} · {MODE_LABELS[exam.mode as ExamMode] ?? exam.mode}
+                          {exam.active ? " · published" : " · inactive"}
+                        </p>
                       </div>
-                      <Meter value={exam.completionRate} tone="accent" />
+                      <span className="rounded-full bg-secondary px-2.5 py-1 text-[11px] font-semibold">
+                        pass mark {exam.passMark}%
+                      </span>
                     </div>
-                    <div>
-                      <div className="mb-1 flex justify-between text-[11px] text-muted-foreground">
-                        <span>Passing</span>
-                        <span>{exam.passRate}%</span>
+                    <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                      <div>
+                        <p className="text-muted-foreground">Opted</p>
+                        <p className="font-semibold tabular-nums">{exam.opted}</p>
                       </div>
-                      <Meter value={exam.passRate} tone="success" />
+                      <div>
+                        <p className="text-muted-foreground">Done</p>
+                        <p className="font-semibold tabular-nums">{exam.completionRate}%</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Pass</p>
+                        <p className="font-semibold tabular-nums">{exam.passRate}%</p>
+                      </div>
                     </div>
-                  </div>
-                </button>
-              );
-            })}
+                  </button>
+                );
+              })
+            )}
           </section>
 
           <section className="surface-paper p-5">
@@ -201,15 +265,6 @@ function AdminPerformancePage() {
           </section>
         </div>
       )}
-    </div>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-[11px] text-muted-foreground">{label}</p>
-      <p className="font-display text-xl">{value}</p>
     </div>
   );
 }

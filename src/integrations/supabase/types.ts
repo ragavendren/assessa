@@ -12,6 +12,7 @@ export type Database = {
         Row: {
           active: boolean;
           category: string;
+          track: string;
           code: string;
           condition_topic: string | null;
           condition_type: string;
@@ -26,6 +27,7 @@ export type Database = {
         Insert: {
           active?: boolean;
           category?: string;
+          track?: string;
           code: string;
           condition_topic?: string | null;
           condition_type: string;
@@ -40,6 +42,7 @@ export type Database = {
         Update: {
           active?: boolean;
           category?: string;
+          track?: string;
           code?: string;
           condition_topic?: string | null;
           condition_type?: string;
@@ -134,6 +137,41 @@ export type Database = {
             columns: ["exam_id"];
             isOneToOne: false;
             referencedRelation: "exams";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      departments: {
+        Row: {
+          active: boolean;
+          created_at: string;
+          id: string;
+          name: string;
+          organization_id: string;
+          updated_at: string;
+        };
+        Insert: {
+          active?: boolean;
+          created_at?: string;
+          id?: string;
+          name: string;
+          organization_id: string;
+          updated_at?: string;
+        };
+        Update: {
+          active?: boolean;
+          created_at?: string;
+          id?: string;
+          name?: string;
+          organization_id?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "departments_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
             referencedColumns: ["id"];
           },
         ];
@@ -270,8 +308,33 @@ export type Database = {
         };
         Relationships: [];
       };
+      organizations: {
+        Row: {
+          active: boolean;
+          created_at: string;
+          id: string;
+          name: string;
+          updated_at: string;
+        };
+        Insert: {
+          active?: boolean;
+          created_at?: string;
+          id?: string;
+          name: string;
+          updated_at?: string;
+        };
+        Update: {
+          active?: boolean;
+          created_at?: string;
+          id?: string;
+          name?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       profiles: {
         Row: {
+          avatar_id: string | null;
           created_at: string;
           department: string | null;
           display_name: string | null;
@@ -286,6 +349,7 @@ export type Database = {
           updated_at: string;
         };
         Insert: {
+          avatar_id?: string | null;
           created_at?: string;
           department?: string | null;
           display_name?: string | null;
@@ -300,6 +364,7 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
+          avatar_id?: string | null;
           created_at?: string;
           department?: string | null;
           display_name?: string | null;

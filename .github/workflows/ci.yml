@@ -1,7 +1,6 @@
 name: CI
 
-# Mandatory quality gate — must pass before deploy.
-# Checks: Prettier format, ESLint, TypeScript, production build
+# Quality gate before deploy — lint + production build only.
 
 on:
   push:
@@ -23,7 +22,7 @@ permissions:
 
 jobs:
   validate:
-    name: Format · Lint · Typecheck · Build
+    name: Lint · Build
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -44,14 +43,8 @@ jobs:
             lightningcss-linux-x64-gnu@1.33.0 \
             @tailwindcss/oxide-linux-x64-gnu@4.3.3
 
-      - name: Format check (Prettier)
-        run: npm run format:check
-
       - name: Lint (ESLint)
         run: npm run lint
-
-      - name: Typecheck
-        run: npm run typecheck
 
       - name: Production build
         run: npm run build

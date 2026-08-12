@@ -1,10 +1,13 @@
 import { AdminNav } from "@/components/AdminNav";
-import { PageLoader, SectionHeading } from "@/components/platform";
+import { PageLoader, SectionHeading, StatTile } from "@/components/platform";
 import { listBadgeConfig, updateXpRule, upsertBadge } from "@/lib/admin.functions";
+import { SKILL_TRACK_LABELS, type SkillTrack } from "@/lib/gamification";
+import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { Pencil, Plus, Sparkles, Zap } from "lucide-react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/admin/gamification")({
@@ -45,6 +48,7 @@ type BadgeForm = {
   description: string;
   icon: string;
   category: string;
+  track: "beginner" | "intermediate" | "expertise" | "elite";
   condition_type: (typeof CONDITIONS)[number];
   condition_value: number;
   condition_topic: string;
@@ -58,6 +62,7 @@ const EMPTY: BadgeForm = {
   description: "",
   icon: "🏅",
   category: "custom",
+  track: "intermediate",
   condition_type: "pass_count",
   condition_value: 1,
   condition_topic: "",
@@ -65,12 +70,18 @@ const EMPTY: BadgeForm = {
   active: true,
 };
 
+type Panel = "badges" | "xp";
+
 function GamificationAdmin() {
   const fetchConfig = useServerFn(listBadgeConfig);
   const saveBadge = useServerFn(upsertBadge);
   const saveRule = useServerFn(updateXpRule);
   const queryClient = useQueryClient();
   const [form, setForm] = useState<BadgeForm>(EMPTY);
+  const [editingCode, setEditingCode] = useState<string | null>(null);
+  const [panel, setPanel] = useState<Panel>("badges");
+  const [trackFilter, setTrackFilter] = useState<"all" | SkillTrack>("all");
+  const [badgeSearch, setBadgeSearch] = useState("");
 
   const { data, isPending, error } = useQuery({
     queryKey: ["badge-config"],
@@ -81,8 +92,9 @@ function GamificationAdmin() {
   const badgeMutation = useMutation({
     mutationFn: (payload: BadgeForm) => saveBadge({ data: payload }),
     onSuccess: () => {
-      toast.success("Badge saved");
+      toast.success(editingCode ? "Badge updated" : "Badge created");
       setForm(EMPTY);
+      setEditingCode(null);
       queryClient.invalidateQueries({ queryKey: ["badge-config"] });
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Could not save badge"),
@@ -98,6 +110,20 @@ function GamificationAdmin() {
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Could not update rule"),
   });
 
+  const filteredBadges = useMemo(() => {
+    const q = badgeSearch.trim().toLowerCase();
+    return (data?.badges ?? []).filter((badge) => {
+      const track = (badge.track as SkillTrack) || "intermediate";
+      if (trackFilter !== "all" && track !== trackFilter) return false;
+      if (!q) return true;
+      return (
+        badge.name.toLowerCase().includes(q) ||
+        badge.code.toLowerCase().includes(q) ||
+        badge.category.toLowerCase().includes(q)
+      );
+    });
+  }, [badgeSearch, data?.badges, trackFilter]);
+
   if (isPending) return <PageLoader />;
   if (error || !data) {
     return (
@@ -107,231 +133,409 @@ function GamificationAdmin() {
     );
   }
 
-  return (
-    <div>
-      <AdminNav />
-      <SectionHeading eyebrow="Configure" title="Gamification" />
+  const activeBadges = data.badges.filter((b) => b.active).length;
+  const activeRules = data.rules.filter((r) => r.active).length;
+  const totalXpPool = data.badges.reduce((sum, b) => sum + (b.active ? b.xp_reward : 0), 0);
 
-      <section className="mb-10">
-        <p className="text-hairline mb-3 text-muted-foreground">XP rules</p>
-        <div className="surface-paper divide-y divide-border">
-          {data.rules.map((rule) => (
-            <div key={rule.code} className="flex flex-wrap items-center gap-3 p-4">
-              <div className="min-w-0 flex-1">
-                <p className="font-medium">{rule.label}</p>
-                <p className="text-xs text-muted-foreground">{rule.code}</p>
-              </div>
+  function loadBadge(badge: (typeof filteredBadges)[number]) {
+    setEditingCode(badge.code);
+    setPanel("badges");
+    setForm({
+      code: badge.code,
+      name: badge.name,
+      description: badge.description,
+      icon: badge.icon,
+      category: badge.category,
+      track: (badge.track as BadgeForm["track"]) || "intermediate",
+      condition_type: badge.condition_type as BadgeForm["condition_type"],
+      condition_value: Number(badge.condition_value),
+      condition_topic: badge.condition_topic ?? "",
+      xp_reward: badge.xp_reward,
+      active: badge.active,
+    });
+  }
+
+  function startCreate() {
+    setEditingCode(null);
+    setForm(EMPTY);
+    setPanel("badges");
+  }
+
+  return (
+    <div className="space-y-8">
+      <AdminNav />
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <SectionHeading eyebrow="Configure" title="Gamification" />
+        <div className="inline-flex rounded-[var(--radius-md)] border border-border bg-card p-0.5">
+          <button
+            type="button"
+            onClick={() => setPanel("badges")}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-[calc(var(--radius-md)-2px)] px-3 py-1.5 text-xs font-medium",
+              panel === "badges"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            Badges
+          </button>
+          <button
+            type="button"
+            onClick={() => setPanel("xp")}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-[calc(var(--radius-md)-2px)] px-3 py-1.5 text-xs font-medium",
+              panel === "xp"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <Zap className="h-3.5 w-3.5" />
+            XP rules
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatTile label="Badges" value={data.badges.length} hint={`${activeBadges} active`} />
+        <StatTile label="XP rules" value={data.rules.length} hint={`${activeRules} active`} />
+        <StatTile label="Badge XP pool" value={totalXpPool} />
+        <StatTile
+          label="Editing"
+          value={editingCode ? "Update" : "Create"}
+          hint={editingCode ?? "New badge"}
+        />
+      </div>
+
+      {panel === "xp" ? (
+        <section>
+          <p className="mb-3 text-sm text-muted-foreground">
+            Points awarded when participants start or finish assessments. Changes save on blur.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {data.rules.map((rule) => (
+              <article key={rule.code} className="surface-paper p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium">{rule.label}</p>
+                    <p className="text-xs text-muted-foreground">{rule.code}</p>
+                  </div>
+                  <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={rule.active}
+                      onChange={(event) =>
+                        ruleMutation.mutate({
+                          code: rule.code,
+                          points: rule.points,
+                          active: event.target.checked,
+                        })
+                      }
+                    />
+                    On
+                  </label>
+                </div>
+                <label className="mt-4 block text-xs text-muted-foreground">
+                  Points
+                  <input
+                    type="number"
+                    defaultValue={rule.points}
+                    min={0}
+                    max={1000}
+                    onBlur={(event) => {
+                      const points = Number(event.target.value);
+                      if (points !== rule.points)
+                        ruleMutation.mutate({
+                          code: rule.code,
+                          points,
+                          active: rule.active,
+                        });
+                    }}
+                    className="field mt-1.5"
+                    aria-label={`${rule.label} points`}
+                  />
+                </label>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : (
+        <section className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)]">
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
               <input
-                type="number"
-                defaultValue={rule.points}
-                min={0}
-                max={1000}
-                onBlur={(event) => {
-                  const points = Number(event.target.value);
-                  if (points !== rule.points)
-                    ruleMutation.mutate({
-                      code: rule.code,
-                      points,
-                      active: rule.active,
-                    });
-                }}
-                className="field w-24"
-                aria-label={`${rule.label} points`}
+                className="field min-w-[12rem] flex-1"
+                placeholder="Search badge library…"
+                value={badgeSearch}
+                onChange={(event) => setBadgeSearch(event.target.value)}
               />
-              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <button
+                type="button"
+                onClick={startCreate}
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                <Plus className="h-4 w-4" />
+                New badge
+              </button>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {(["all", "beginner", "intermediate", "expertise", "elite"] as const).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setTrackFilter(value)}
+                  className={cn(
+                    "rounded-full px-3 py-1 text-xs font-medium transition-colors",
+                    trackFilter === value
+                      ? "bg-primary text-primary-foreground"
+                      : "border border-border bg-card text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {value === "all" ? "All tracks" : SKILL_TRACK_LABELS[value]}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              {filteredBadges.map((badge) => {
+                const track = (badge.track as SkillTrack) || "intermediate";
+                const selected = editingCode === badge.code;
+                return (
+                  <article
+                    key={badge.id}
+                    className={cn(
+                      "surface-paper flex flex-col p-4 transition-colors",
+                      selected && "ring-1 ring-accent",
+                      !badge.active && "opacity-70",
+                    )}
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className="text-2xl">{badge.icon}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="truncate font-medium">{badge.name}</p>
+                          <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
+                            {SKILL_TRACK_LABELS[track]}
+                          </span>
+                          {!badge.active ? (
+                            <span className="text-[10px] uppercase text-muted-foreground">Off</span>
+                          ) : null}
+                        </div>
+                        <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                          {badge.description || "No description"}
+                        </p>
+                      </div>
+                    </div>
+                    <p className="mt-3 text-[11px] text-muted-foreground">
+                      {badge.condition_type.replace(/_/g, " ")} · {Number(badge.condition_value)}
+                      {badge.condition_topic ? ` · ${badge.condition_topic}` : ""} · +
+                      {badge.xp_reward} XP
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => loadBadge(badge)}
+                      className="mt-3 inline-flex w-fit items-center gap-1.5 rounded-md border border-input px-2.5 py-1.5 text-xs font-medium hover:bg-secondary"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      Edit
+                    </button>
+                  </article>
+                );
+              })}
+              {filteredBadges.length === 0 ? (
+                <p className="text-sm text-muted-foreground sm:col-span-2">
+                  No badges match this filter.
+                </p>
+              ) : null}
+            </div>
+          </div>
+
+          <aside className="xl:sticky xl:top-4 xl:self-start">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <p className="text-hairline text-muted-foreground">
+                {editingCode ? `Editing · ${editingCode}` : "Create badge"}
+              </p>
+              {editingCode ? (
+                <button
+                  type="button"
+                  onClick={startCreate}
+                  className="text-xs text-accent underline-offset-4 hover:underline"
+                >
+                  Clear form
+                </button>
+              ) : null}
+            </div>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                badgeMutation.mutate(form);
+              }}
+              className="surface-paper space-y-3 p-5"
+            >
+              <div className="flex items-center gap-3 rounded-[var(--radius-md)] border border-border bg-secondary/40 px-3 py-3">
+                <span className="text-3xl">{form.icon || "🏅"}</span>
+                <div className="min-w-0">
+                  <p className="truncate font-display text-lg">{form.name || "Badge name"}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {form.description || "Description preview"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-sm">
+                  <span className="text-xs text-muted-foreground">Code</span>
+                  <input
+                    className="field mt-1"
+                    value={form.code}
+                    onChange={(e) => setForm({ ...form, code: e.target.value })}
+                    placeholder="topic_master"
+                    required
+                    disabled={Boolean(editingCode)}
+                  />
+                </label>
+                <label className="block text-sm">
+                  <span className="text-xs text-muted-foreground">Name</span>
+                  <input
+                    className="field mt-1"
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    placeholder="Topic Master"
+                    required
+                  />
+                </label>
+              </div>
+
+              <label className="block text-sm">
+                <span className="text-xs text-muted-foreground">Description</span>
+                <input
+                  className="field mt-1"
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  placeholder="Reach 90% mastery in a topic"
+                />
+              </label>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-sm">
+                  <span className="text-xs text-muted-foreground">Icon</span>
+                  <input
+                    className="field mt-1"
+                    value={form.icon}
+                    onChange={(e) => setForm({ ...form, icon: e.target.value })}
+                    maxLength={8}
+                  />
+                </label>
+                <label className="block text-sm">
+                  <span className="text-xs text-muted-foreground">Category</span>
+                  <input
+                    className="field mt-1"
+                    value={form.category}
+                    onChange={(e) => setForm({ ...form, category: e.target.value })}
+                  />
+                </label>
+                <label className="block text-sm">
+                  <span className="text-xs text-muted-foreground">Skill track</span>
+                  <select
+                    className="field mt-1"
+                    value={form.track}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        track: e.target.value as BadgeForm["track"],
+                      })
+                    }
+                  >
+                    <option value="beginner">Beginner</option>
+                    <option value="intermediate">Intermediate</option>
+                    <option value="expertise">Expertise</option>
+                    <option value="elite">Elite</option>
+                  </select>
+                </label>
+                <label className="block text-sm">
+                  <span className="text-xs text-muted-foreground">XP reward</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={2000}
+                    className="field mt-1"
+                    value={form.xp_reward}
+                    onChange={(e) => setForm({ ...form, xp_reward: Number(e.target.value) })}
+                  />
+                </label>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-sm sm:col-span-2">
+                  <span className="text-xs text-muted-foreground">Condition</span>
+                  <select
+                    className="field mt-1"
+                    value={form.condition_type}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        condition_type: e.target.value as BadgeForm["condition_type"],
+                      })
+                    }
+                  >
+                    {CONDITIONS.map((value) => (
+                      <option key={value} value={value}>
+                        {value.replace(/_/g, " ")}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-sm">
+                  <span className="text-xs text-muted-foreground">Value</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={1000}
+                    className="field mt-1"
+                    value={form.condition_value}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        condition_value: Number(e.target.value),
+                      })
+                    }
+                  />
+                </label>
+                <label className="block text-sm">
+                  <span className="text-xs text-muted-foreground">Topic (optional)</span>
+                  <input
+                    className="field mt-1"
+                    value={form.condition_topic}
+                    onChange={(e) => setForm({ ...form, condition_topic: e.target.value })}
+                  />
+                </label>
+              </div>
+
+              <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
-                  checked={rule.active}
-                  onChange={(event) =>
-                    ruleMutation.mutate({
-                      code: rule.code,
-                      points: rule.points,
-                      active: event.target.checked,
-                    })
-                  }
+                  checked={form.active}
+                  onChange={(e) => setForm({ ...form, active: e.target.checked })}
                 />
                 Active
               </label>
-            </div>
-          ))}
-        </div>
-      </section>
 
-      <section className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
-        <div>
-          <p className="text-hairline mb-3 text-muted-foreground">Create or edit a badge</p>
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              badgeMutation.mutate(form);
-            }}
-            className="surface-paper space-y-3 p-5"
-          >
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="block text-sm">
-                <span className="text-xs text-muted-foreground">Code</span>
-                <input
-                  className="field mt-1"
-                  value={form.code}
-                  onChange={(e) => setForm({ ...form, code: e.target.value })}
-                  placeholder="topic_master"
-                  required
-                />
-              </label>
-              <label className="block text-sm">
-                <span className="text-xs text-muted-foreground">Name</span>
-                <input
-                  className="field mt-1"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="Topic Master"
-                  required
-                />
-              </label>
-            </div>
-            <label className="block text-sm">
-              <span className="text-xs text-muted-foreground">Description</span>
-              <input
-                className="field mt-1"
-                value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
-                placeholder="Reach 90% mastery in a topic"
-              />
-            </label>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <label className="block text-sm">
-                <span className="text-xs text-muted-foreground">Icon</span>
-                <input
-                  className="field mt-1"
-                  value={form.icon}
-                  onChange={(e) => setForm({ ...form, icon: e.target.value })}
-                  maxLength={8}
-                />
-              </label>
-              <label className="block text-sm">
-                <span className="text-xs text-muted-foreground">Category</span>
-                <input
-                  className="field mt-1"
-                  value={form.category}
-                  onChange={(e) => setForm({ ...form, category: e.target.value })}
-                />
-              </label>
-              <label className="block text-sm">
-                <span className="text-xs text-muted-foreground">XP reward</span>
-                <input
-                  type="number"
-                  min={0}
-                  max={2000}
-                  className="field mt-1"
-                  value={form.xp_reward}
-                  onChange={(e) => setForm({ ...form, xp_reward: Number(e.target.value) })}
-                />
-              </label>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <label className="block text-sm">
-                <span className="text-xs text-muted-foreground">Condition</span>
-                <select
-                  className="field mt-1"
-                  value={form.condition_type}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      condition_type: e.target.value as BadgeForm["condition_type"],
-                    })
-                  }
-                >
-                  {CONDITIONS.map((value) => (
-                    <option key={value} value={value}>
-                      {value.replace(/_/g, " ")}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block text-sm">
-                <span className="text-xs text-muted-foreground">Value</span>
-                <input
-                  type="number"
-                  min={0}
-                  max={1000}
-                  className="field mt-1"
-                  value={form.condition_value}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      condition_value: Number(e.target.value),
-                    })
-                  }
-                />
-              </label>
-              <label className="block text-sm">
-                <span className="text-xs text-muted-foreground">Topic (optional)</span>
-                <input
-                  className="field mt-1"
-                  value={form.condition_topic}
-                  onChange={(e) => setForm({ ...form, condition_topic: e.target.value })}
-                />
-              </label>
-            </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={form.active}
-                onChange={(e) => setForm({ ...form, active: e.target.checked })}
-              />
-              Active
-            </label>
-            <button
-              type="submit"
-              disabled={badgeMutation.isPending}
-              className="w-full rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
-            >
-              {badgeMutation.isPending ? "Saving…" : "Save badge"}
-            </button>
-          </form>
-        </div>
-
-        <div>
-          <p className="text-hairline mb-3 text-muted-foreground">Badge library</p>
-          <div className="surface-paper divide-y divide-border">
-            {data.badges.map((badge) => (
-              <div key={badge.id} className="flex items-center gap-3 p-4">
-                <span className="text-xl">{badge.icon}</span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{badge.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {badge.condition_type.replace(/_/g, " ")} · {Number(badge.condition_value)}
-                    {badge.condition_topic ? ` · ${badge.condition_topic}` : ""} · +
-                    {badge.xp_reward} XP
-                  </p>
-                </div>
-                <button
-                  onClick={() =>
-                    setForm({
-                      code: badge.code,
-                      name: badge.name,
-                      description: badge.description,
-                      icon: badge.icon,
-                      category: badge.category,
-                      condition_type: badge.condition_type as BadgeForm["condition_type"],
-                      condition_value: Number(badge.condition_value),
-                      condition_topic: badge.condition_topic ?? "",
-                      xp_reward: badge.xp_reward,
-                      active: badge.active,
-                    })
-                  }
-                  className="rounded-md border border-input px-2.5 py-1 text-xs hover:bg-secondary"
-                >
-                  Edit
-                </button>
-                {!badge.active ? (
-                  <span className="text-[11px] text-muted-foreground">off</span>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+              <button
+                type="submit"
+                disabled={badgeMutation.isPending}
+                className="w-full rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+              >
+                {badgeMutation.isPending
+                  ? "Saving…"
+                  : editingCode
+                    ? "Update badge"
+                    : "Create badge"}
+              </button>
+            </form>
+          </aside>
+        </section>
+      )}
     </div>
   );
 }

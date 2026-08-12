@@ -104,13 +104,23 @@ export const startGuestAttempt = createServerFn({ method: "POST" })
       if (updated.error) throw new Error(updated.error.message);
     }
 
+    const { allocateParticipantIdForSave } = await import("@/lib/platform.server");
+    const { data: existingProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("participant_id")
+      .eq("id", userId)
+      .maybeSingle();
+    const participantId =
+      existingProfile?.participant_id?.trim() ||
+      (await allocateParticipantIdForSave(data.participantId || null));
+
     await supabaseAdmin.from("profiles").upsert(
       {
         id: userId,
         email,
         full_name: data.fullName,
         organization: data.organization || null,
-        participant_id: data.participantId || null,
+        participant_id: participantId,
         mobile: data.mobile || null,
       },
       { onConflict: "id" },

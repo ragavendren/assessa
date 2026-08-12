@@ -12,15 +12,45 @@ export const getMe = createServerFn({ method: "POST" })
       context.userId,
       context.claims as unknown as Record<string, unknown>,
     );
-    const xp = await getXpTotal(context.userId);
-    return { profile, isAdmin, level: resolveLevel(xp, await getLevels()) };
+    const [xp, levels] = await Promise.all([getXpTotal(context.userId), getLevels()]);
+    const needsOrg = !profile.organization?.trim() || !profile.department?.trim() ? true : false;
+    return {
+      profile,
+      isAdmin,
+      level: resolveLevel(xp, levels),
+      needsOrg,
+    };
   });
+
+/** Active organisations + departments for signup / profile (no auth required). */
+export const listOrgCatalog = createServerFn({ method: "POST" }).handler(async () => {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const [{ data: organizations, error: orgError }, { data: departments, error: deptError }] =
+    await Promise.all([
+      supabaseAdmin
+        .from("organizations")
+        .select("id, name")
+        .eq("active", true)
+        .order("name", { ascending: true }),
+      supabaseAdmin
+        .from("departments")
+        .select("id, organization_id, name")
+        .eq("active", true)
+        .order("name", { ascending: true }),
+    ]);
+  if (orgError) throw orgError;
+  if (deptError) throw deptError;
+  return {
+    organizations: organizations ?? [],
+    departments: departments ?? [],
+  };
+});
 
 export const getDashboard = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { ensureProfile, getXpTotal, getLevels, participantStats } =
+    const { ensureProfile, getXpTotal, getLevels, filterAccessibleExams } =
       await import("@/lib/platform.server");
     const { resolveLevel } = await import("@/lib/gamification");
     const userId = context.userId;
@@ -29,79 +59,138 @@ export const getDashboard = createServerFn({ method: "POST" })
       userId,
       context.claims as unknown as Record<string, unknown>,
     );
-    const stats = await participantStats(userId);
-    const xp = await getXpTotal(userId);
-    const level = resolveLevel(xp, await getLevels());
 
     const [
+      xp,
+      levels,
       { data: streaks },
       { data: badges },
+      { data: badgeCatalog },
       { data: exams },
-      { data: recent },
+      { data: allAttempts },
       { data: mastery },
     ] = await Promise.all([
+      getXpTotal(userId),
+      getLevels(),
       supabaseAdmin.from("user_streaks").select("*").eq("user_id", userId),
       supabaseAdmin
         .from("user_badges")
         .select("earned_at, badges(code, name, icon, description)")
         .eq("user_id", userId)
         .order("earned_at", { ascending: false }),
-      supabaseAdmin.from("exams").select("*").eq("active", true).order("starts_at"),
+      supabaseAdmin.from("badges").select("id").eq("active", true),
+      supabaseAdmin
+        .from("exams")
+        .select("id, title, topic, starts_at, duration_minutes, question_count, mode, access")
+        .eq("active", true)
+        .order("starts_at"),
       supabaseAdmin
         .from("exam_attempts")
-        .select("id, score, passed, submitted_at, exams(title, topic, pass_mark)")
+        .select("id, score, passed, submitted_at, duration_seconds, exams(title, topic, pass_mark)")
         .eq("user_id", userId)
         .eq("status", "submitted")
-        .order("submitted_at", { ascending: false })
-        .limit(5),
-      supabaseAdmin.from("topic_mastery").select("topic, subtopic, mastery").eq("user_id", userId),
+        .order("submitted_at", { ascending: true }),
+      supabaseAdmin
+        .from("topic_mastery")
+        .select("topic, subtopic, mastery, total_count, correct_count")
+        .eq("user_id", userId),
     ]);
 
-    const { data: accessible } = await supabaseAdmin.rpc("can_access_exam", {
-      _user_id: userId,
-      _exam_id: (exams ?? [])[0]?.id ?? "00000000-0000-0000-0000-000000000000",
-    });
-    void accessible;
-
-    const visible = [];
-    for (const exam of exams ?? []) {
-      if (exam.access === "public") visible.push(exam);
-      else {
-        const { data: ok } = await supabaseAdmin.rpc("can_access_exam", {
-          _user_id: userId,
-          _exam_id: exam.id,
-        });
-        if (ok) visible.push(exam);
-      }
-    }
+    const level = resolveLevel(xp, levels);
+    const visible = await filterAccessibleExams(userId, exams ?? []);
 
     const upcoming = visible
       .filter((e) => !e.starts_at || new Date(e.starts_at) > new Date())
       .slice(0, 3);
     const available = visible.filter((e) => !e.starts_at || new Date(e.starts_at) <= new Date());
 
+    const attempts = allAttempts ?? [];
+    const scores = attempts.map((a) => Number(a.score ?? 0));
+    const completed = attempts.length;
+    const passes = attempts.filter((a) => a.passed).length;
+    const average = completed ? Math.round(scores.reduce((s, v) => s + v, 0) / completed) : 0;
+    const best = completed ? Math.max(...scores) : 0;
+    const passRate = completed ? Math.round((passes / completed) * 100) : 0;
+    const recent = [...attempts].reverse().slice(0, 6);
+
+    const last4 = scores.slice(-4);
+    const improvement =
+      last4.length >= 2 ? Math.round((last4[last4.length - 1] ?? 0) - (last4[0] ?? 0)) : 0;
+
+    const durations = attempts.map((a) => Number(a.duration_seconds ?? 0)).filter((d) => d > 0);
+    const avgDuration = durations.length
+      ? Math.round(durations.reduce((s, v) => s + v, 0) / durations.length)
+      : 0;
+    const totalDuration = durations.reduce((s, v) => s + v, 0);
+
+    const topicPerformance = new Map<string, { scores: number[]; passes: number; total: number }>();
+    for (const attempt of attempts) {
+      const exam = attempt.exams as unknown as { topic: string } | null;
+      const topic = exam?.topic;
+      if (!topic) continue;
+      const bucket = topicPerformance.get(topic) ?? { scores: [], passes: 0, total: 0 };
+      bucket.scores.push(Number(attempt.score ?? 0));
+      bucket.total += 1;
+      if (attempt.passed) bucket.passes += 1;
+      topicPerformance.set(topic, bucket);
+    }
+
+    const masteryRows = (mastery ?? []).map((m) => ({
+      topic: m.topic,
+      subtopic: m.subtopic,
+      mastery: Number(m.mastery),
+      answered: m.total_count ?? 0,
+      correct: m.correct_count ?? 0,
+    }));
+
     return {
       profile,
       isAdmin,
       level,
       stats: {
-        average: stats.average,
-        completed: stats.completed,
-        passRate: stats.passRate,
-        best: stats.best,
+        average,
+        completed,
+        passes,
+        passRate,
+        best,
+        avgDuration,
+        totalDuration,
+        badgesTotal: (badgeCatalog ?? []).length,
       },
+      improvement,
       streaks: (streaks ?? []).map((s) => ({
         type: s.streak_type,
         current: s.current_count,
         longest: s.longest_count,
       })),
       badgeCount: (badges ?? []).length,
-      latestBadges: (badges ?? []).slice(0, 4).map((b) => {
+      latestBadges: (badges ?? []).slice(0, 8).map((b) => {
         const badge = b.badges as unknown as {
           name: string;
           icon: string;
+          description?: string;
         } | null;
-        return { name: badge?.name ?? "Badge", icon: badge?.icon ?? "🏅" };
+        return {
+          name: badge?.name ?? "Badge",
+          icon: badge?.icon ?? "🏅",
+          description: badge?.description ?? "",
+          earnedAt: b.earned_at,
+        };
+      }),
+      earnedBadges: (badges ?? []).map((b) => {
+        const badge = b.badges as unknown as {
+          name: string;
+          icon: string;
+          description?: string;
+          code?: string;
+        } | null;
+        return {
+          code: badge?.code ?? badge?.name ?? "badge",
+          name: badge?.name ?? "Badge",
+          icon: badge?.icon ?? "🏅",
+          description: badge?.description ?? "",
+          earnedAt: b.earned_at,
+        };
       }),
       upcoming: upcoming.map((e) => ({
         id: e.id,
@@ -111,8 +200,17 @@ export const getDashboard = createServerFn({ method: "POST" })
         duration: e.duration_minutes,
         questionCount: e.question_count,
       })),
+      available: available.slice(0, 12).map((e) => ({
+        id: e.id,
+        title: e.title,
+        topic: e.topic,
+        startsAt: e.starts_at,
+        duration: e.duration_minutes,
+        questionCount: e.question_count,
+        mode: e.mode,
+      })),
       availableCount: available.length,
-      recent: (recent ?? []).map((r) => {
+      recent: recent.map((r) => {
         const exam = r.exams as unknown as {
           title: string;
           topic: string;
@@ -124,9 +222,10 @@ export const getDashboard = createServerFn({ method: "POST" })
           score: Number(r.score ?? 0),
           passed: !!r.passed,
           submittedAt: r.submitted_at,
+          durationSeconds: Number(r.duration_seconds ?? 0),
         };
       }),
-      trend: stats.attempts.slice(-8).map((a) => ({
+      trend: attempts.slice(-8).map((a) => ({
         label: a.submitted_at
           ? new Date(a.submitted_at).toLocaleDateString(undefined, {
               month: "short",
@@ -134,12 +233,20 @@ export const getDashboard = createServerFn({ method: "POST" })
             })
           : "",
         score: Number(a.score ?? 0),
+        passed: !!a.passed,
       })),
-      mastery: (mastery ?? []).map((m) => ({
-        topic: m.topic,
-        subtopic: m.subtopic,
-        mastery: Number(m.mastery),
-      })),
+      topicPerformance: [...topicPerformance.entries()]
+        .map(([topic, bucket]) => ({
+          topic,
+          attempts: bucket.total,
+          passes: bucket.passes,
+          average: Math.round(bucket.scores.reduce((s, v) => s + v, 0) / bucket.scores.length),
+          best: Math.max(...bucket.scores),
+          passRate: Math.round((bucket.passes / bucket.total) * 100),
+        }))
+        .sort((a, b) => b.attempts - a.attempts)
+        .slice(0, 6),
+      mastery: masteryRows,
     };
   });
 
@@ -147,28 +254,32 @@ export const listMyExams = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { filterAccessibleExams } = await import("@/lib/platform.server");
     const userId = context.userId;
-    const { data: exams } = await supabaseAdmin
-      .from("exams")
-      .select("*")
-      .eq("active", true)
-      .order("created_at", { ascending: false });
-    const { data: attempts } = await supabaseAdmin
-      .from("exam_attempts")
-      .select("id, exam_id, status, score, passed, submitted_at")
-      .eq("user_id", userId)
-      .order("submitted_at", { ascending: false });
+    const [{ data: exams }, { data: attempts }] = await Promise.all([
+      supabaseAdmin
+        .from("exams")
+        .select("*")
+        .eq("active", true)
+        .order("created_at", { ascending: false }),
+      supabaseAdmin
+        .from("exam_attempts")
+        .select("id, exam_id, status, score, passed, submitted_at")
+        .eq("user_id", userId)
+        .order("submitted_at", { ascending: false }),
+    ]);
+
+    const visible = await filterAccessibleExams(userId, exams ?? []);
+    const attemptsByExam = new Map<string, NonNullable<typeof attempts>>();
+    for (const attempt of attempts ?? []) {
+      const list = attemptsByExam.get(attempt.exam_id) ?? [];
+      list.push(attempt);
+      attemptsByExam.set(attempt.exam_id, list);
+    }
 
     const out = [];
-    for (const exam of exams ?? []) {
-      if (exam.access !== "public") {
-        const { data: ok } = await supabaseAdmin.rpc("can_access_exam", {
-          _user_id: userId,
-          _exam_id: exam.id,
-        });
-        if (!ok) continue;
-      }
-      const mine = (attempts ?? []).filter((a) => a.exam_id === exam.id);
+    for (const exam of visible) {
+      const mine = attemptsByExam.get(exam.id) ?? [];
       const inProgress = mine.find((a) => a.status === "in_progress") ?? null;
       const submitted = mine.filter((a) => a.status === "submitted");
       const best = submitted.reduce<(typeof submitted)[number] | null>(
@@ -220,19 +331,22 @@ export const getExamBriefing = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const exam = await getExam(data.examId);
     if (!exam) throw new Error("Assessment not found.");
-    await assertExamAccess(context.userId, exam);
-    const { profile } = await ensureProfile(
-      context.userId,
-      context.claims as unknown as Record<string, unknown>,
-    );
-    const used = await countAttempts(context.userId, data.examId);
-    const { data: open } = await supabaseAdmin
-      .from("exam_attempts")
-      .select("id")
-      .eq("user_id", context.userId)
-      .eq("exam_id", data.examId)
-      .eq("status", "in_progress")
-      .maybeSingle();
+
+    const [{ profile }, used, openResult] = await Promise.all([
+      ensureProfile(context.userId, context.claims as unknown as Record<string, unknown>),
+      (async () => {
+        await assertExamAccess(context.userId, exam);
+        return countAttempts(context.userId, data.examId);
+      })(),
+      supabaseAdmin
+        .from("exam_attempts")
+        .select("id")
+        .eq("user_id", context.userId)
+        .eq("exam_id", data.examId)
+        .eq("status", "in_progress")
+        .maybeSingle(),
+    ]);
+    const open = openResult.data;
 
     return {
       profile,
@@ -333,6 +447,13 @@ export const getResult = createServerFn({ method: "POST" })
     return summariseResult(context.userId, data.attemptId);
   });
 
+export const listLeaderboardExams = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { listLeaderboardExams: list } = await import("@/lib/platform.server");
+    return list(context.userId);
+  });
+
 export const getLeaderboard = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) =>
@@ -340,12 +461,13 @@ export const getLeaderboard = createServerFn({ method: "POST" })
       .object({
         scope: z.enum(["global", "organization", "department", "exam", "topic"]),
         target: z.string().optional(),
+        examId: z.string().uuid().nullable().optional(),
       })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
     const { leaderboard } = await import("@/lib/platform.server");
-    return leaderboard(context.userId, data.scope, data.target);
+    return leaderboard(context.userId, data.scope, data.target, data.examId);
   });
 
 export const getAchievements = createServerFn({ method: "POST" })
@@ -390,72 +512,13 @@ export const getAchievements = createServerFn({ method: "POST" })
       description: b.description,
       icon: b.icon,
       category: b.category,
+      track: (b.track as string | null) ?? "intermediate",
       xp: b.xp_reward,
       earnedAt: ownedMap.get(b.id) ?? null,
       progress: ownedMap.has(b.id)
         ? null
         : progressFor(b.condition_type, Number(b.condition_value)),
     }));
-  });
-
-export const getProgress = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { participantStats } = await import("@/lib/platform.server");
-    const userId = context.userId;
-    const stats = await participantStats(userId);
-    const { data: journey } = await supabaseAdmin
-      .from("exam_attempts")
-      .select(
-        "id, score, passed, submitted_at, duration_seconds, exams(title, topic, duration_minutes)",
-      )
-      .eq("user_id", userId)
-      .eq("status", "submitted")
-      .order("submitted_at", { ascending: true });
-    const { data: mastery } = await supabaseAdmin
-      .from("topic_mastery")
-      .select("topic, subtopic, mastery, total_count")
-      .eq("user_id", userId)
-      .order("topic");
-
-    const scores = (journey ?? []).map((j) => Number(j.score ?? 0));
-    const last4 = scores.slice(-4);
-    const improvement =
-      last4.length >= 2 ? Math.round((last4[last4.length - 1] ?? 0) - (last4[0] ?? 0)) : 0;
-
-    return {
-      stats: {
-        average: stats.average,
-        completed: stats.completed,
-        passRate: stats.passRate,
-        best: stats.best,
-      },
-      improvement,
-      journey: (journey ?? []).map((j) => {
-        const exam = j.exams as unknown as {
-          title: string;
-          topic: string;
-          duration_minutes: number;
-        } | null;
-        return {
-          id: j.id,
-          title: exam?.title ?? "Assessment",
-          topic: exam?.topic ?? "",
-          score: Number(j.score ?? 0),
-          passed: !!j.passed,
-          submittedAt: j.submitted_at,
-          durationSeconds: j.duration_seconds,
-          allowedSeconds: (exam?.duration_minutes ?? 0) * 60,
-        };
-      }),
-      mastery: (mastery ?? []).map((m) => ({
-        topic: m.topic,
-        subtopic: m.subtopic,
-        mastery: Number(m.mastery),
-        answered: m.total_count,
-      })),
-    };
   });
 
 export const saveProfile = createServerFn({ method: "POST" })
@@ -466,27 +529,50 @@ export const saveProfile = createServerFn({ method: "POST" })
         full_name: z.string().trim().min(2).max(120),
         mobile: z.string().trim().max(30).optional().or(z.literal("")),
         participant_id: z.string().trim().max(60).optional().or(z.literal("")),
-        organization: z.string().trim().max(120).optional().or(z.literal("")),
-        department: z.string().trim().max(120).optional().or(z.literal("")),
+        organization: z.string().trim().min(2).max(120),
+        department: z.string().trim().min(2).max(120),
         display_name: z.string().trim().max(60).optional().or(z.literal("")),
         team_group: z.string().trim().max(120).optional().or(z.literal("")),
         leaderboard_opt_out: z.boolean(),
+        avatar_id: z.string().trim().max(40).nullable().optional(),
       })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { allocateParticipantIdForSave, ensureProfile } = await import("@/lib/platform.server");
+    const { isAvatarId } = await import("@/lib/avatars");
+
+    const avatarId =
+      data.avatar_id === null || data.avatar_id === undefined || data.avatar_id === ""
+        ? null
+        : isAvatarId(data.avatar_id)
+          ? data.avatar_id
+          : null;
+
+    const { profile, isAdmin } = await ensureProfile(
+      context.userId,
+      context.claims as unknown as Record<string, unknown>,
+    );
+    const participantId =
+      profile.participant_id?.trim() ||
+      (await allocateParticipantIdForSave(data.participant_id || null));
+
+    // Leaderboard privacy is admin-managed; participants keep their existing value.
+    const leaderboardOptOut = isAdmin ? data.leaderboard_opt_out : !!profile.leaderboard_opt_out;
+
     const { error } = await supabaseAdmin
       .from("profiles")
       .update({
         full_name: data.full_name,
         mobile: data.mobile || null,
-        participant_id: data.participant_id || null,
-        organization: data.organization || null,
-        department: data.department || null,
+        participant_id: participantId,
+        organization: data.organization,
+        department: data.department,
         display_name: data.display_name || null,
-        team_group: data.team_group || null,
-        leaderboard_opt_out: data.leaderboard_opt_out,
+        team_group: data.department,
+        leaderboard_opt_out: leaderboardOptOut,
+        avatar_id: avatarId,
         updated_at: new Date().toISOString(),
       })
       .eq("id", context.userId);

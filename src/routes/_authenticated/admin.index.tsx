@@ -1,5 +1,7 @@
 import { AdminNav } from "@/components/AdminNav";
+import { ListToolbar, listViewClass, useListViewMode } from "@/components/ListToolbar";
 import { PageLoader, SectionHeading, StatTile } from "@/components/platform";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { getTeamInsight } from "@/lib/ai.functions";
 import {
   deleteExam,
@@ -75,7 +77,11 @@ function AdminPage() {
   const removeExam = useServerFn(deleteExam);
   const publishExam = useServerFn(setExamPublished);
   const queryClient = useQueryClient();
+  const confirm = useConfirm();
   const [wipeConfirm, setWipeConfirm] = useState("");
+  const [examSearch, setExamSearch] = useState("");
+  const [examFilter, setExamFilter] = useState<"all" | "published" | "draft">("all");
+  const [examView, setExamView] = useListViewMode("admin-exams", "stack");
 
   const { data, isPending, error } = useQuery({
     queryKey: ["admin-overview"],
@@ -159,6 +165,19 @@ function AdminPage() {
     );
   }
 
+  const exams = data.exams.filter((exam) => {
+    if (examFilter === "published" && !exam.active) return false;
+    if (examFilter === "draft" && exam.active) return false;
+    const q = examSearch.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      exam.title.toLowerCase().includes(q) ||
+      exam.topic.toLowerCase().includes(q) ||
+      exam.mode.toLowerCase().includes(q) ||
+      exam.access.toLowerCase().includes(q)
+    );
+  });
+
   return (
     <div className="space-y-10">
       <AdminNav />
@@ -205,168 +224,289 @@ function AdminPage() {
         <div className="mb-4">
           <SectionHeading eyebrow="Content" title="Assessments" />
         </div>
+        <ListToolbar
+          search={examSearch}
+          onSearchChange={setExamSearch}
+          searchPlaceholder="Search assessments…"
+          filters={
+            [
+              { value: "all" as const, label: "All", count: data.exams.length },
+              {
+                value: "published" as const,
+                label: "Published",
+                count: data.exams.filter((e) => e.active).length,
+              },
+              {
+                value: "draft" as const,
+                label: "Unpublished",
+                count: data.exams.filter((e) => !e.active).length,
+              },
+            ] as const
+          }
+          filter={examFilter}
+          onFilterChange={setExamFilter}
+          view={examView}
+          onViewChange={setExamView}
+        />
         <div className="space-y-4">
-          {data.exams.length === 0 ? (
+          {exams.length === 0 ? (
             <div className="surface-paper p-6 text-sm text-muted-foreground">
-              No assessments yet. Create one to get a shareable `/take/...` link.
+              {data.exams.length === 0
+                ? "No assessments yet. Create one to get a shareable `/take/...` link."
+                : "No assessments match your filters."}
             </div>
           ) : null}
-          {data.exams.map((exam) => (
-            <article key={exam.id} className="surface-paper p-4">
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{exam.title}</p>
-                  <p className="text-xs text-muted-foreground">
-                    Category: {exam.topic} · {MODE_LABELS[exam.mode as ExamMode] ?? exam.mode} ·{" "}
-                    {exam.questionCount} questions · {exam.duration} min · pass {exam.passMark}% ·{" "}
-                    {exam.maxAttempts} attempt(s) allowed
+          {examView === "table" ? (
+            <div className="surface-paper overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-left text-xs text-muted-foreground">
+                  <tr>
+                    <th className="p-3 font-medium">Title</th>
+                    <th className="p-3 font-medium">Mode</th>
+                    <th className="p-3 font-medium">Access</th>
+                    <th className="p-3 font-medium">Status</th>
+                    <th className="p-3 font-medium">Attempts</th>
+                    <th className="p-3 font-medium">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {exams.map((exam) => (
+                    <tr key={exam.id}>
+                      <td className="p-3">
+                        <p className="font-medium">{exam.title}</p>
+                        <p className="text-xs text-muted-foreground">{exam.topic}</p>
+                      </td>
+                      <td className="p-3">{MODE_LABELS[exam.mode as ExamMode] ?? exam.mode}</td>
+                      <td className="p-3">{exam.access}</td>
+                      <td className="p-3">{exam.active ? "Published" : "Draft"}</td>
+                      <td className="p-3 tabular-nums">{exam.attempts}</td>
+                      <td className="p-3">
+                        <div className="flex flex-wrap gap-1.5">
+                          <Link
+                            to="/admin/exams/$examId"
+                            params={{ examId: exam.id }}
+                            className="rounded-md border border-input px-2 py-1 text-xs hover:bg-secondary"
+                          >
+                            Edit
+                          </Link>
+                          <button
+                            type="button"
+                            className="rounded-md border border-input px-2 py-1 text-xs hover:bg-secondary"
+                            onClick={() => void copyLink(exam.id)}
+                          >
+                            Link
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : examView === "grid" ? (
+            <div className={listViewClass("grid")}>
+              {exams.map((exam) => (
+                <article key={exam.id} className="surface-paper p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-medium">{exam.title}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {exam.topic} · {MODE_LABELS[exam.mode as ExamMode] ?? exam.mode}
+                      </p>
+                    </div>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                        exam.active
+                          ? "bg-success/15 text-success"
+                          : "bg-secondary text-muted-foreground"
+                      }`}
+                    >
+                      {exam.active ? "Live" : "Draft"}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    {exam.questionCount} Q · {exam.duration} min · {exam.attempts} attempts
                   </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Link
+                      to="/admin/exams/$examId"
+                      params={{ examId: exam.id }}
+                      className="rounded-md border border-input px-2.5 py-1.5 text-xs font-medium hover:bg-secondary"
+                    >
+                      Edit
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => void copyLink(exam.id)}
+                      className="rounded-md border border-input px-2.5 py-1.5 text-xs font-medium hover:bg-secondary"
+                    >
+                      Copy link
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            exams.map((exam) => (
+              <article key={exam.id} className="surface-paper p-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium">{exam.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Category: {exam.topic} · {MODE_LABELS[exam.mode as ExamMode] ?? exam.mode} ·{" "}
+                      {exam.questionCount} questions · {exam.duration} min · pass {exam.passMark}% ·{" "}
+                      {exam.maxAttempts} attempt(s) allowed
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-secondary px-2.5 py-1 text-[11px] font-semibold">
+                    {exam.access}
+                  </span>
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                      exam.active
+                        ? "bg-success/15 text-success"
+                        : "bg-secondary text-muted-foreground"
+                    }`}
+                  >
+                    {exam.active ? "Published" : "Unpublished"}
+                  </span>
+                  <span className="text-xs text-muted-foreground">{exam.attempts} attempts</span>
+                  <button
+                    onClick={() => void copyLink(exam.id)}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-input bg-card px-2.5 py-1.5 text-xs font-medium hover:bg-secondary"
+                  >
+                    <Link2 className="h-3.5 w-3.5" />
+                    Copy share link
+                  </button>
+                  <Link
+                    to="/admin/exams/$examId"
+                    params={{ examId: exam.id }}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-input bg-card px-2.5 py-1.5 text-xs font-medium hover:bg-secondary"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit
+                  </Link>
+                  <button
+                    type="button"
+                    disabled={publishMutation.isPending}
+                    onClick={() =>
+                      publishMutation.mutate({
+                        examId: exam.id,
+                        active: !exam.active,
+                      })
+                    }
+                    className="rounded-md border border-input bg-card px-2.5 py-1.5 text-xs font-medium hover:bg-secondary disabled:opacity-60"
+                  >
+                    {exam.active ? "Unpublish" : "Publish"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={deleteMutation.isPending}
+                    onClick={() => {
+                      void (async () => {
+                        const ok = await confirm({
+                          title: "Delete assessment?",
+                          description: `Delete “${exam.title}”? This removes questions and attempt history for this assessment.`,
+                          confirmLabel: "Delete",
+                          tone: "destructive",
+                        });
+                        if (!ok) return;
+                        deleteMutation.mutate(exam.id);
+                      })();
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-destructive/40 px-2.5 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/10 disabled:opacity-60"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete
+                  </button>
                 </div>
-                <span className="rounded-full bg-secondary px-2.5 py-1 text-[11px] font-semibold">
-                  {exam.access}
-                </span>
-                <span
-                  className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                    exam.active
-                      ? "bg-success/15 text-success"
-                      : "bg-secondary text-muted-foreground"
-                  }`}
-                >
-                  {exam.active ? "Published" : "Unpublished"}
-                </span>
-                <span className="text-xs text-muted-foreground">{exam.attempts} attempts</span>
-                <button
-                  onClick={() => void copyLink(exam.id)}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-input bg-card px-2.5 py-1.5 text-xs font-medium hover:bg-secondary"
-                >
-                  <Link2 className="h-3.5 w-3.5" />
-                  Copy share link
-                </button>
-                <Link
-                  to="/admin/exams/$examId"
-                  params={{ examId: exam.id }}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-input bg-card px-2.5 py-1.5 text-xs font-medium hover:bg-secondary"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                  Edit
-                </Link>
-                <button
-                  type="button"
-                  disabled={publishMutation.isPending}
-                  onClick={() =>
-                    publishMutation.mutate({
-                      examId: exam.id,
-                      active: !exam.active,
-                    })
-                  }
-                  className="rounded-md border border-input bg-card px-2.5 py-1.5 text-xs font-medium hover:bg-secondary disabled:opacity-60"
-                >
-                  {exam.active ? "Unpublish" : "Publish"}
-                </button>
-                <button
-                  type="button"
-                  disabled={deleteMutation.isPending}
-                  onClick={() => {
-                    if (
-                      window.confirm(
-                        `Delete “${exam.title}”? This removes questions and attempt history for this assessment.`,
-                      )
-                    ) {
-                      deleteMutation.mutate(exam.id);
-                    }
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-destructive/40 px-2.5 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/10 disabled:opacity-60"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Delete
-                </button>
-              </div>
 
-              <div className="mt-4 grid gap-3 border-t border-border pt-4 text-xs sm:grid-cols-2">
-                <label className="block">
-                  <span className="text-muted-foreground">Opens at</span>
-                  <input
-                    type="datetime-local"
-                    className="field mt-1"
-                    value={toLocalInput(exam.startsAt)}
-                    disabled={settingsMutation.isPending}
-                    onChange={(event) =>
-                      settingsMutation.mutate({
-                        ...(exam as ExamRow),
-                        startsAt: event.target.value
-                          ? new Date(event.target.value).toISOString()
-                          : null,
-                      })
-                    }
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-muted-foreground">Closes at</span>
-                  <input
-                    type="datetime-local"
-                    className="field mt-1"
-                    value={toLocalInput(exam.endsAt)}
-                    disabled={settingsMutation.isPending}
-                    onChange={(event) =>
-                      settingsMutation.mutate({
-                        ...(exam as ExamRow),
-                        endsAt: event.target.value
-                          ? new Date(event.target.value).toISOString()
-                          : null,
-                      })
-                    }
-                  />
-                </label>
-              </div>
-
-              <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3 border-t border-border pt-4 text-xs">
-                {(
-                  [
-                    ["active", "Published"],
-                    ["enableXp", "XP"],
-                    ["enableBadges", "Badges"],
-                    ["enableLeaderboard", "Leaderboard"],
-                    ["showRank", "Show rank"],
-                    ["showOthers", "Show others"],
-                  ] as const
-                ).map(([key, label]) => (
-                  <label key={key} className="inline-flex items-center gap-1.5">
+                <div className="mt-4 grid gap-3 border-t border-border pt-4 text-xs sm:grid-cols-2">
+                  <label className="block">
+                    <span className="text-muted-foreground">Opens at</span>
                     <input
-                      type="checkbox"
-                      checked={Boolean(exam[key])}
+                      type="datetime-local"
+                      className="field mt-1"
+                      value={toLocalInput(exam.startsAt)}
                       disabled={settingsMutation.isPending}
                       onChange={(event) =>
                         settingsMutation.mutate({
                           ...(exam as ExamRow),
-                          [key]: event.target.checked,
+                          startsAt: event.target.value
+                            ? new Date(event.target.value).toISOString()
+                            : null,
                         })
                       }
                     />
-                    {label}
                   </label>
-                ))}
-                <label className="inline-flex items-center gap-1.5">
-                  Names
-                  <select
-                    value={exam.nameDisplay}
-                    disabled={settingsMutation.isPending}
-                    onChange={(event) =>
-                      settingsMutation.mutate({
-                        ...(exam as ExamRow),
-                        nameDisplay: event.target.value,
-                      })
-                    }
-                    className="rounded-md border border-input bg-card px-2 py-1"
-                  >
-                    <option value="full_name">Full name</option>
-                    <option value="first_initial">First + initial</option>
-                    <option value="display_name">Display name</option>
-                    <option value="anonymous">Anonymous</option>
-                  </select>
-                </label>
-              </div>
-            </article>
-          ))}
+                  <label className="block">
+                    <span className="text-muted-foreground">Closes at</span>
+                    <input
+                      type="datetime-local"
+                      className="field mt-1"
+                      value={toLocalInput(exam.endsAt)}
+                      disabled={settingsMutation.isPending}
+                      onChange={(event) =>
+                        settingsMutation.mutate({
+                          ...(exam as ExamRow),
+                          endsAt: event.target.value
+                            ? new Date(event.target.value).toISOString()
+                            : null,
+                        })
+                      }
+                    />
+                  </label>
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3 border-t border-border pt-4 text-xs">
+                  {(
+                    [
+                      ["active", "Published"],
+                      ["enableXp", "XP"],
+                      ["enableBadges", "Badges"],
+                      ["enableLeaderboard", "Leaderboard"],
+                      ["showRank", "Show rank"],
+                      ["showOthers", "Show others"],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <label key={key} className="inline-flex items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(exam[key])}
+                        disabled={settingsMutation.isPending}
+                        onChange={(event) =>
+                          settingsMutation.mutate({
+                            ...(exam as ExamRow),
+                            [key]: event.target.checked,
+                          })
+                        }
+                      />
+                      {label}
+                    </label>
+                  ))}
+                  <label className="inline-flex items-center gap-1.5">
+                    Names
+                    <select
+                      value={exam.nameDisplay}
+                      disabled={settingsMutation.isPending}
+                      onChange={(event) =>
+                        settingsMutation.mutate({
+                          ...(exam as ExamRow),
+                          nameDisplay: event.target.value,
+                        })
+                      }
+                      className="rounded-md border border-input bg-card px-2 py-1"
+                    >
+                      <option value="full_name">Full name</option>
+                      <option value="first_initial">First + initial</option>
+                      <option value="display_name">Display name</option>
+                      <option value="anonymous">Anonymous</option>
+                    </select>
+                  </label>
+                </div>
+              </article>
+            ))
+          )}
         </div>
       </section>
 
@@ -452,13 +592,17 @@ function AdminPage() {
             type="button"
             disabled={wipeConfirm !== "WIPE DATA" || wipeMutation.isPending}
             onClick={() => {
-              if (
-                window.confirm(
-                  "This cannot be undone. Wipe all assessments and non-admin users now?",
-                )
-              ) {
+              void (async () => {
+                const ok = await confirm({
+                  title: "Wipe all platform data?",
+                  description:
+                    "This cannot be undone. Wipe all assessments and non-admin users now?",
+                  confirmLabel: "Wipe all data",
+                  tone: "destructive",
+                });
+                if (!ok) return;
                 wipeMutation.mutate();
-              }
+              })();
             }}
             className="inline-flex items-center justify-center gap-1.5 rounded-md bg-destructive px-4 py-2.5 text-sm font-medium text-destructive-foreground transition-colors hover:bg-destructive/90 disabled:opacity-50"
           >

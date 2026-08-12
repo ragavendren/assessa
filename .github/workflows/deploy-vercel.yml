@@ -116,5 +116,5 @@ jobs:
             echo "- **Production (Vercel):** https://assessa-ragavendrenv-5507s-projects.vercel.app"
             echo "- **Development:** https://assessa-git-develop-ragavendrenv-5507s-projects.vercel.app"
             echo ""
-            echo "Deploy runs only after **CI** succeeds (format, lint, typecheck, build)."
+            echo "Deploy runs only after **CI** succeeds (lint, build)."
           } >> "$GITHUB_STEP_SUMMARY"
