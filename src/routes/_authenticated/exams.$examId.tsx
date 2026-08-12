@@ -161,7 +161,13 @@ function Briefing() {
         <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
           <li>· The timer starts the moment you begin and cannot be paused.</li>
           <li>· Scoring happens on the server — answers are locked once submitted.</li>
-          <li>· Leaving the page keeps the attempt running; return to resume.</li>
+          <li>
+            · Leaving or exiting the attempt ends the session, uses one attempt, and scores
+            unanswered questions as unanswered.
+          </li>
+          <li>
+            · Closing the browser tab may still let you resume if the attempt was not terminated.
+          </li>
           {exam.enableXp ? <li>· XP is awarded for completing and passing.</li> : null}
           {exam.enableBadges ? <li>· Badges may unlock based on your performance.</li> : null}
           {exam.enableLeaderboard ? <li>· Your score may appear on leaderboards.</li> : null}

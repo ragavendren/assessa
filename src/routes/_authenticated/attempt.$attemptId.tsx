@@ -4,9 +4,9 @@ import { useConfirm } from "@/components/ui/confirm-dialog";
 import { getAttemptPaper, finishAttempt } from "@/lib/platform.functions";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useBlocker, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { ChevronLeft, ChevronRight, Clock3, Send } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock3, LogOut, Send } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -47,13 +47,28 @@ function AttemptRunner() {
   const [remaining, setRemaining] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submittedRef = useRef(false);
+  const allowLeaveRef = useRef(false);
+  const answersRef = useRef(answers);
+  answersRef.current = answers;
+
+  const questions = useMemo(() => (data && !data.submitted ? data.questions : []), [data]);
+  const isLiveAttempt = Boolean(data && data.submitted === false);
 
   const mutation = useMutation({
     mutationFn: (payload: Record<string, number | number[]>) =>
       submit({ data: { attemptId, answers: payload } }),
-    onSuccess: () => navigate({ to: "/results/$attemptId", params: { attemptId } }),
+    onSuccess: () => {
+      allowLeaveRef.current = true;
+      void navigate({
+        to: "/results/$attemptId",
+        params: { attemptId },
+        ignoreBlocker: true,
+        replace: true,
+      });
+    },
     onError: (err) => {
       submittedRef.current = false;
+      allowLeaveRef.current = false;
       setIsSubmitting(false);
       toast.error(err instanceof Error ? err.message : "Submission failed");
     },
@@ -63,11 +78,66 @@ function AttemptRunner() {
     (payload: Record<string, number | number[]>) => {
       if (submittedRef.current) return;
       submittedRef.current = true;
+      allowLeaveRef.current = true;
       setIsSubmitting(true);
       mutation.mutate(payload);
     },
     [mutation],
   );
+
+  const requestTerminate = useCallback(async () => {
+    if (submittedRef.current || isSubmitting) return false;
+
+    const currentAnswers = answersRef.current;
+    const answered = Object.values(currentAnswers).filter(isAnswered).length;
+    const unanswered = Math.max(0, questions.length - answered);
+
+    const ok = await confirm({
+      title: "Terminate this attempt?",
+      description:
+        unanswered > 0
+          ? `Leaving ends this session and uses one attempt. ${unanswered} unanswered question(s) will stay unanswered and count against your score.`
+          : "Leaving ends this session and uses one attempt. Your answers will be locked and scored.",
+      confirmLabel: "Terminate attempt",
+      cancelLabel: "Stay in attempt",
+      tone: "destructive",
+    });
+    if (!ok) return false;
+
+    submittedRef.current = true;
+    allowLeaveRef.current = true;
+    setIsSubmitting(true);
+    try {
+      await submit({ data: { attemptId, answers: currentAnswers } });
+      await navigate({
+        to: "/results/$attemptId",
+        params: { attemptId },
+        ignoreBlocker: true,
+        replace: true,
+      });
+      return true;
+    } catch (err) {
+      submittedRef.current = false;
+      allowLeaveRef.current = false;
+      setIsSubmitting(false);
+      toast.error(err instanceof Error ? err.message : "Could not terminate attempt");
+      return false;
+    }
+  }, [attemptId, confirm, isSubmitting, navigate, questions.length, submit]);
+
+  useBlocker({
+    disabled: !isLiveAttempt || isSubmitting || submittedRef.current,
+    enableBeforeUnload: () =>
+      isLiveAttempt && !allowLeaveRef.current && !submittedRef.current && !isSubmitting,
+    shouldBlockFn: async () => {
+      if (allowLeaveRef.current || submittedRef.current || isSubmitting || !isLiveAttempt) {
+        return false;
+      }
+      // Terminate (submit) then cancel the original destination — we go to results.
+      await requestTerminate();
+      return true;
+    },
+  });
 
   const deadline = data && !data.submitted ? data.deadline : null;
 
@@ -76,22 +146,28 @@ function AttemptRunner() {
     const tick = () => {
       const left = Math.max(0, Math.round((new Date(deadline).getTime() - Date.now()) / 1000));
       setRemaining(left);
-      if (left === 0) doSubmit(answers);
+      if (left === 0) doSubmit(answersRef.current);
     };
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [deadline, answers, doSubmit]);
+  }, [deadline, doSubmit]);
 
   useEffect(() => {
-    if (data && data.submitted) navigate({ to: "/results/$attemptId", params: { attemptId } });
+    if (data && data.submitted) {
+      allowLeaveRef.current = true;
+      void navigate({
+        to: "/results/$attemptId",
+        params: { attemptId },
+        ignoreBlocker: true,
+        replace: true,
+      });
+    }
   }, [data, attemptId, navigate]);
 
   useEffect(() => {
     questionHeadingRef.current?.focus({ preventScroll: true });
   }, [index]);
-
-  const questions = useMemo(() => (data && !data.submitted ? data.questions : []), [data]);
 
   if (isPending) return <PageLoader />;
   if (error || !data) {
@@ -137,6 +213,10 @@ function AttemptRunner() {
     })();
   };
 
+  const handleExit = () => {
+    void requestTerminate();
+  };
+
   return (
     <div className="mx-auto max-w-6xl space-y-6 font-sans">
       <SubmitScoringOverlay active={isSubmitting || mutation.isPending} />
@@ -176,12 +256,21 @@ function AttemptRunner() {
           </div>
           <button
             type="button"
+            onClick={handleExit}
+            disabled={mutation.isPending || isSubmitting}
+            className="inline-flex min-h-11 items-center gap-2 rounded-lg border-2 border-destructive/40 bg-destructive/10 px-4 py-2.5 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <LogOut className="h-4 w-4" aria-hidden />
+            Exit attempt
+          </button>
+          <button
+            type="button"
             onClick={handleSubmit}
-            disabled={mutation.isPending}
+            disabled={mutation.isPending || isSubmitting}
             className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Send className="h-4 w-4" aria-hidden />
-            {mutation.isPending ? "Submitting…" : "Submit assessment"}
+            {mutation.isPending || isSubmitting ? "Submitting…" : "Submit assessment"}
           </button>
         </div>
       </header>
