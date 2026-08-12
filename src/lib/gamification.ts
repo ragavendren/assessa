@@ -118,6 +118,17 @@ export function formatDate(value: string | null | undefined) {
   });
 }
 
+export function formatDateTime(value: string | null | undefined) {
+  if (!value) return "—";
+  return new Date(value).toLocaleString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export function formatDuration(seconds: number | null | undefined) {
   if (seconds == null) return "—";
   const m = Math.floor(seconds / 60);

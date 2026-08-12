@@ -10,7 +10,7 @@ import {
   setUserRole,
   updateAdminUser,
 } from "@/lib/admin.functions";
-import { formatDate } from "@/lib/gamification";
+import { formatDate, formatDateTime } from "@/lib/gamification";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
@@ -249,8 +249,8 @@ function AdminUsersPage() {
                       </td>
                       <td className="p-3 tabular-nums">{user.passRate}%</td>
                       <td className="p-3 tabular-nums">{user.averageScore}%</td>
-                      <td className="p-3 text-xs text-muted-foreground">
-                        {user.lastActivity ? formatDate(user.lastActivity) : "—"}
+                      <td className="p-3 text-xs tabular-nums text-muted-foreground">
+                        {user.lastActivity ? formatDateTime(user.lastActivity) : "—"}
                       </td>
                     </tr>
                   ))}
