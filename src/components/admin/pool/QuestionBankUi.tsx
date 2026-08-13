@@ -91,19 +91,21 @@ export function QuestionBankPageHeader({
   action,
 }: {
   title: string;
-  summary: string;
+  summary?: string;
   help?: { label: string; body: ReactNode };
   action?: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex w-full min-w-0 flex-wrap items-start justify-between gap-4">
+    <div className="mb-4 flex w-full min-w-0 flex-wrap items-start justify-between gap-3">
       <div className="min-w-0 max-w-2xl">
         <p className="text-hairline text-muted-foreground">Question bank</p>
         <div className="mt-0.5 flex items-center gap-2">
-          <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
+          <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
           {help ? <HelpTip label={help.label}>{help.body}</HelpTip> : null}
         </div>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{summary}</p>
+        {summary ? (
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{summary}</p>
+        ) : null}
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}
     </div>
@@ -118,7 +120,7 @@ export function QuestionBankWorkflow({
   current: number;
 }) {
   return (
-    <ol className="mb-6 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+    <ol className="mb-4 flex flex-wrap gap-1.5">
       {steps.map((step, index) => {
         const active = index === current;
         const done = index < current;
@@ -126,26 +128,19 @@ export function QuestionBankWorkflow({
           <li
             key={step.label}
             className={cn(
-              "rounded-md border px-3 py-2.5",
+              "rounded-md border px-2.5 py-1 text-xs",
               active
-                ? "border-primary/40 bg-primary/5"
+                ? "border-primary/40 bg-primary/5 font-semibold"
                 : done
-                  ? "border-border bg-secondary/40"
-                  : "border-border bg-card",
+                  ? "border-border bg-secondary/40 text-muted-foreground"
+                  : "border-border bg-card text-muted-foreground",
             )}
+            title={step.hint}
           >
-            <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-              Step {index + 1}
-            </p>
-            <p
-              className={cn(
-                "text-sm font-medium",
-                active ? "text-foreground" : "text-foreground/90",
-              )}
-            >
-              {step.label}
-            </p>
-            <p className="mt-0.5 text-xs text-muted-foreground">{step.hint}</p>
+            <span className="tabular-nums text-[10px] uppercase tracking-wide opacity-70">
+              {index + 1}.
+            </span>{" "}
+            {step.label}
           </li>
         );
       })}
@@ -169,15 +164,15 @@ export function Panel({
   action?: ReactNode;
 }) {
   return (
-    <section className={cn("surface-paper flex flex-col p-5", className)}>
-      <div className="mb-4 flex items-start justify-between gap-3">
+    <section className={cn("surface-paper flex flex-col p-4", className)}>
+      <div className="mb-3 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
             <h3 className="text-sm font-semibold text-foreground">{title}</h3>
             {help ? <HelpTip label={help.label}>{help.body}</HelpTip> : null}
           </div>
           {description ? (
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p>
+            <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{description}</p>
           ) : null}
         </div>
         {action}

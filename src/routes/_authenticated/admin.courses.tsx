@@ -3,9 +3,7 @@ import { QuestionBankNav } from "@/components/admin/QuestionBankNav";
 import {
   FieldLabel,
   Panel,
-  QUESTION_BANK_STEPS,
   QuestionBankPageHeader,
-  QuestionBankWorkflow,
 } from "@/components/admin/pool/QuestionBankUi";
 import { AdminEmpty, StatusPill } from "@/components/admin/AdminPageUi";
 import { PageLoader } from "@/components/platform";
@@ -69,12 +67,10 @@ function AdminCoursesPage() {
           ),
         }}
       />
-      <QuestionBankWorkflow steps={[...QUESTION_BANK_STEPS]} current={0} />
-
       {isPending || !data ? (
         <PageLoader />
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.15fr)]">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.15fr)]">
           <Panel
             title="Add course"
             description="Name should be unique and recognisable to authors."

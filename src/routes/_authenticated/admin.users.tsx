@@ -229,7 +229,7 @@ function AdminUsersPage() {
         />
       </div>
 
-      <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] lg:items-start">
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] lg:items-start">
         <section className="min-w-0 max-w-full space-y-5">
           <ListToolbar
             search={query}

@@ -180,7 +180,7 @@ function GamificationAdmin() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <AdminNav />
       <AdminPageHeader
         eyebrow="Configure"

@@ -3,9 +3,7 @@ import { QuestionBankNav } from "@/components/admin/QuestionBankNav";
 import {
   FieldLabel,
   Panel,
-  QUESTION_BANK_STEPS,
   QuestionBankPageHeader,
-  QuestionBankWorkflow,
 } from "@/components/admin/pool/QuestionBankUi";
 import { AdminEmpty } from "@/components/admin/AdminPageUi";
 import { PageLoader } from "@/components/platform";
@@ -142,8 +140,6 @@ function AdminSeriesPage() {
           </Link>
         }
       />
-      <QuestionBankWorkflow steps={[...QUESTION_BANK_STEPS]} current={3} />
-
       {isPending || !data ? (
         <PageLoader />
       ) : !ready ? (
@@ -177,7 +173,7 @@ function AdminSeriesPage() {
           </div>
         </Panel>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.15fr)]">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.15fr)]">
           <Panel
             title="Add series"
             description="Defaults can be overridden per assessment when generating."

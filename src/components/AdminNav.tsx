@@ -66,7 +66,7 @@ export function AdminNav() {
   });
 
   return (
-    <nav className="mb-8 flex max-w-full flex-wrap items-center gap-x-2 gap-y-3" aria-label="Admin">
+    <nav className="mb-4 flex max-w-full flex-wrap items-center gap-x-2 gap-y-2" aria-label="Admin">
       {ADMIN_NAV_GROUPS.map((group, groupIndex) => (
         <div
           key={group.label ?? `group-${groupIndex}`}

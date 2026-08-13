@@ -918,7 +918,9 @@ export const getAdminAssessmentPerformance = createServerFn({ method: "POST" })
         supabaseAdmin.from("exams").select("*").order("created_at", { ascending: false }),
         supabaseAdmin
           .from("exam_attempts")
-          .select("id, user_id, exam_id, score, passed, status, started_at, submitted_at"),
+          .select(
+            "id, user_id, exam_id, score, passed, status, started_at, submitted_at, duration_seconds",
+          ),
         supabaseAdmin
           .from("profiles")
           .select("id, full_name, email, display_name, organization, leaderboard_opt_out"),
@@ -937,10 +939,18 @@ export const getAdminAssessmentPerformance = createServerFn({ method: "POST" })
 
       const bestByUser = new Map<
         string,
-        { score: number; passed: boolean; submittedAt: string | null; attempts: number }
+        {
+          score: number;
+          passed: boolean;
+          submittedAt: string | null;
+          attempts: number;
+          durationSeconds: number | null;
+        }
       >();
       for (const attempt of submitted) {
         const score = Number(attempt.score ?? 0);
+        const durationSeconds =
+          typeof attempt.duration_seconds === "number" ? attempt.duration_seconds : null;
         const current = bestByUser.get(attempt.user_id);
         if (!current) {
           bestByUser.set(attempt.user_id, {
@@ -948,14 +958,19 @@ export const getAdminAssessmentPerformance = createServerFn({ method: "POST" })
             passed: !!attempt.passed,
             submittedAt: attempt.submitted_at,
             attempts: 1,
+            durationSeconds,
           });
           continue;
         }
         current.attempts += 1;
-        if (score > current.score) {
+        const faster =
+          durationSeconds != null &&
+          (current.durationSeconds == null || durationSeconds < current.durationSeconds);
+        if (score > current.score || (score === current.score && faster)) {
           current.score = score;
           current.passed = !!attempt.passed;
           current.submittedAt = attempt.submitted_at;
+          current.durationSeconds = durationSeconds;
         }
       }
 
@@ -972,6 +987,7 @@ export const getAdminAssessmentPerformance = createServerFn({ method: "POST" })
             passed: row.passed,
             submittedAt: row.submittedAt,
             attempts: row.attempts,
+            durationSeconds: row.durationSeconds,
             optedOut: !!profile?.leaderboard_opt_out,
           };
         })
@@ -981,6 +997,9 @@ export const getAdminAssessmentPerformance = createServerFn({ method: "POST" })
         .map((row, index) => ({ ...row, rank: index + 1 }));
 
       const scores = [...bestByUser.values()].map((row) => row.score);
+      const durations = [...bestByUser.values()]
+        .map((row) => row.durationSeconds)
+        .filter((value): value is number => typeof value === "number" && value > 0);
       const opted = optedUsers.size;
       const completed = completedUsers.size;
 
@@ -991,13 +1010,19 @@ export const getAdminAssessmentPerformance = createServerFn({ method: "POST" })
         mode: exam.mode,
         active: exam.active,
         passMark: exam.pass_mark,
+        durationMinutes: exam.duration_minutes,
+        maxAttempts: exam.max_attempts,
         opted,
         completed,
+        submittedAttempts: submitted.length,
         completionRate: opted ? Math.round((completed / opted) * 100) : 0,
         passRate: completed ? Math.round((passedUsers.size / completed) * 100) : 0,
         averageBestScore: scores.length
           ? Math.round(scores.reduce((sum, value) => sum + value, 0) / scores.length)
           : 0,
+        averageDurationSeconds: durations.length
+          ? Math.round(durations.reduce((sum, value) => sum + value, 0) / durations.length)
+          : null,
         inProgress: examAttempts.filter((a) => a.status === "in_progress").length,
         leaderboard: leaderboard.slice(0, 20),
       };

@@ -11,19 +11,21 @@ export function AdminPageHeader({
 }: {
   eyebrow: string;
   title: string;
-  summary: string;
+  summary?: string;
   help?: { label: string; body: ReactNode };
   action?: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex w-full min-w-0 flex-wrap items-start justify-between gap-4">
+    <div className="mb-4 flex w-full min-w-0 flex-wrap items-start justify-between gap-3">
       <div className="min-w-0 max-w-2xl">
         <p className="text-hairline text-muted-foreground">{eyebrow}</p>
         <div className="mt-0.5 flex items-center gap-2">
-          <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
+          <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
           {help ? <HelpTip label={help.label}>{help.body}</HelpTip> : null}
         </div>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{summary}</p>
+        {summary ? (
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{summary}</p>
+        ) : null}
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}
     </div>
@@ -46,15 +48,15 @@ export function AdminPanel({
   className?: string;
 }) {
   return (
-    <section className={cn("surface-paper flex min-w-0 flex-col p-5", className)}>
-      <div className="mb-4 flex items-start justify-between gap-3">
+    <section className={cn("surface-paper flex min-w-0 flex-col p-4", className)}>
+      <div className="mb-3 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
             <h3 className="text-sm font-semibold text-foreground">{title}</h3>
             {help ? <HelpTip label={help.label}>{help.body}</HelpTip> : null}
           </div>
           {description ? (
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p>
+            <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{description}</p>
           ) : null}
         </div>
         {action}
@@ -118,9 +120,9 @@ export function AdminAccessDenied() {
 
 export function AdminEmpty({ title, body }: { title: string; body?: string }) {
   return (
-    <div className="rounded-md border border-dashed border-border bg-secondary/20 px-3 py-8 text-center">
+    <div className="rounded-md border border-dashed border-border bg-secondary/20 px-3 py-6 text-center">
       <p className="text-sm font-medium">{title}</p>
-      {body ? <p className="mt-1 text-sm text-muted-foreground">{body}</p> : null}
+      {body ? <p className="mt-1 text-xs text-muted-foreground">{body}</p> : null}
     </div>
   );
 }

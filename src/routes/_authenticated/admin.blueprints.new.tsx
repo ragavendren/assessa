@@ -1,11 +1,7 @@
 import { AdminNav } from "@/components/AdminNav";
 import { QuestionBankNav } from "@/components/admin/QuestionBankNav";
 import { BlueprintEditor } from "@/components/admin/pool/BlueprintEditor";
-import {
-  QUESTION_BANK_STEPS,
-  QuestionBankPageHeader,
-  QuestionBankWorkflow,
-} from "@/components/admin/pool/QuestionBankUi";
+import { QuestionBankPageHeader } from "@/components/admin/pool/QuestionBankUi";
 import { Link, createFileRoute } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_authenticated/admin/blueprints/new")({
@@ -36,7 +32,6 @@ function AdminBlueprintNewPage() {
           body: "Have a course ready and preferably pool questions tagged with the same topic names you will use in rules.",
         }}
       />
-      <QuestionBankWorkflow steps={[...QUESTION_BANK_STEPS]} current={2} />
       <BlueprintEditor mode="create" />
     </div>
   );

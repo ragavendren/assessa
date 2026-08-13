@@ -202,7 +202,7 @@ function AdminPage() {
   });
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <AdminNav />
       <AdminPageHeader
         eyebrow="Control panel"

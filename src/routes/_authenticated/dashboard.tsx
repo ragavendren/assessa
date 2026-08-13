@@ -70,20 +70,20 @@ function Dashboard() {
   return (
     <div className="space-y-8">
       {/* Hero — Assessa Yourself with badge drift */}
-      <header className="animate-dash-rise relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-card via-card to-secondary/50 p-6 md:p-7">
+      <header className="animate-dash-rise relative overflow-hidden surface-metal p-6 md:p-7">
         <BadgeDriftWall badges={earnedBadges} limit={10} />
         <div
-          className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-accent/15 blur-3xl animate-dash-float"
+          className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-amber-400/20 blur-3xl animate-dash-float"
           aria-hidden
         />
         <div
-          className="pointer-events-none absolute -bottom-24 left-[30%] h-44 w-44 rounded-full bg-primary/10 blur-3xl animate-dash-float-alt"
+          className="pointer-events-none absolute -bottom-24 left-[30%] h-44 w-44 rounded-full bg-sky-300/15 blur-3xl animate-dash-float-alt"
           aria-hidden
         />
 
         <div className="relative z-10 flex flex-wrap items-end justify-between gap-5">
           <div className="min-w-0 max-w-xl">
-            <p className="animate-dash-chip inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-accent">
+            <p className="animate-dash-chip inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-amber-700">
               <Zap className="h-3.5 w-3.5 animate-dash-flame" />
               Assessa Yourself
             </p>
@@ -121,7 +121,7 @@ function Dashboard() {
           </div>
           <Link
             to="/exams"
-            className="animate-dash-pop group inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-all duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:bg-primary/90 hover:shadow-md active:scale-[0.98]"
+            className="animate-dash-pop group inline-flex items-center gap-2 rounded-md border border-amber-200/30 bg-gradient-to-b from-amber-200 to-amber-600 px-4 py-2.5 text-sm font-semibold text-amber-950 shadow-[0_8px_24px_-12px_rgba(251,191,36,0.55)] transition-all duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:from-amber-100 hover:to-amber-500 active:scale-[0.98]"
             style={delay(160)}
           >
             Start assessment
@@ -132,9 +132,15 @@ function Dashboard() {
 
       {/* Level + key stats only */}
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1.8fr)]">
-        <LevelMeter {...data.level} className="animate-dash-rise" style={delay(40)} />
+        <LevelMeter
+          {...data.level}
+          surface="metal"
+          className="animate-dash-rise"
+          style={delay(40)}
+        />
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatTile
+            surface="metal"
             label="Average"
             value={data.stats.average}
             suffix="%"
@@ -142,6 +148,7 @@ function Dashboard() {
             style={delay(80)}
           />
           <StatTile
+            surface="metal"
             label="Best"
             value={data.stats.best}
             suffix="%"
@@ -149,12 +156,14 @@ function Dashboard() {
             style={delay(130)}
           />
           <StatTile
+            surface="metal"
             label="Completed"
             value={data.stats.completed}
             className="animate-dash-pop"
             style={delay(180)}
           />
           <StatTile
+            surface="metal"
             label="Pass rate"
             value={data.stats.passRate}
             suffix="%"
@@ -192,7 +201,7 @@ function Dashboard() {
                 key={exam.id}
                 to="/exams/$examId"
                 params={{ examId: exam.id }}
-                className="group surface-paper dash-lift dash-lift-hover flex h-full min-h-[9.5rem] flex-col justify-between p-4"
+                className="group surface-metal dash-lift dash-lift-metal flex h-full min-h-[9.5rem] flex-col justify-between p-4"
               >
                 <div>
                   <p className="truncate text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
@@ -215,7 +224,7 @@ function Dashboard() {
                 key={`up-${exam.id}`}
                 to="/exams/$examId"
                 params={{ examId: exam.id }}
-                className="surface-paper dash-lift dash-lift-hover flex h-full min-h-[9.5rem] flex-col justify-between border-dashed p-4"
+                className="surface-metal dash-lift dash-lift-metal flex h-full min-h-[9.5rem] flex-col justify-between border-dashed p-4"
               >
                 <div>
                   <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-accent">
@@ -250,7 +259,7 @@ function Dashboard() {
                 key={result.id}
                 to="/results/$attemptId"
                 params={{ attemptId: result.id }}
-                className="surface-paper dash-lift dash-lift-hover flex h-full min-h-[8.75rem] flex-col justify-between p-4"
+                className="surface-metal dash-lift dash-lift-metal flex h-full min-h-[8.75rem] flex-col justify-between p-4"
               >
                 <div className="min-w-0">
                   <p className="truncate font-medium">{result.title}</p>
@@ -292,7 +301,7 @@ function Dashboard() {
             {earnedBadges.map((badge, index) => (
               <div
                 key={`${"code" in badge && badge.code ? badge.code : badge.name}-${index}`}
-                className="surface-paper dash-lift dash-lift-hover flex h-full min-h-[7.5rem] flex-col items-center justify-center gap-2 px-3 py-4 text-center"
+                className="surface-metal dash-lift dash-lift-metal flex h-full min-h-[7.5rem] flex-col items-center justify-center gap-2 px-3 py-4 text-center"
                 title={badge.description || badge.name}
               >
                 <BadgeMark
@@ -313,7 +322,7 @@ function Dashboard() {
 
       {/* Trend + focus — one compact row */}
       <MotionSection delayMs={50} className="grid gap-4 lg:grid-cols-2">
-        <div className="surface-paper dash-lift p-5">
+        <div className="surface-metal dash-lift p-5">
           <SectionHeading eyebrow="Trend" title="Score trend" />
           <div className="mt-3">
             {data.trend.length === 0 ? (
@@ -326,7 +335,7 @@ function Dashboard() {
           </div>
         </div>
 
-        <div className="surface-paper dash-lift space-y-4 p-5">
+        <div className="surface-metal dash-lift space-y-4 p-5">
           <SectionHeading
             eyebrow="Focus"
             title="Practice next"
@@ -404,10 +413,10 @@ function QuestChip({
 }) {
   return (
     <span
-      className="animate-dash-chip inline-flex items-center gap-1.5 rounded-md border border-border bg-card/80 px-2.5 py-1 font-medium text-foreground backdrop-blur-sm transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:border-accent/40"
+      className="animate-dash-chip inline-flex items-center gap-1.5 rounded-md border border-amber-700/15 bg-white/70 px-2.5 py-1 font-medium text-foreground backdrop-blur-sm transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:border-amber-600/35"
       style={style}
     >
-      <span className="text-accent">{icon}</span>
+      <span className="text-amber-700">{icon}</span>
       {label}
     </span>
   );

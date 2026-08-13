@@ -321,6 +321,37 @@ export const deletePoolQuestion = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const deletePoolQuestions = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) =>
+    z
+      .object({
+        poolId: z.string().uuid(),
+        ids: z.array(z.string().uuid()).min(1).max(500),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const supabase = await adminClient(context.userId);
+    const { data: pool, error: poolError } = await supabase
+      .from("question_pools")
+      .select("id")
+      .eq("id", data.poolId)
+      .maybeSingle();
+    if (poolError) throw new Error(poolError.message);
+    if (!pool) throw new Error("Question pool not found.");
+
+    const uniqueIds = [...new Set(data.ids)];
+    const { data: deleted, error } = await supabase
+      .from("pool_questions")
+      .delete()
+      .eq("pool_id", data.poolId)
+      .in("id", uniqueIds)
+      .select("id");
+    if (error) throw new Error(error.message);
+    return { ok: true as const, deleted: deleted?.length ?? 0 };
+  });
+
 export const clearPoolQuestions = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) => z.object({ poolId: z.string().uuid() }).parse(input))

@@ -29,6 +29,7 @@ export function StatTile({
   hint,
   className,
   style,
+  surface = "paper",
 }: {
   label: string;
   value: string | number;
@@ -36,11 +37,14 @@ export function StatTile({
   hint?: string;
   className?: string;
   style?: CSSProperties;
+  surface?: "paper" | "metal";
 }) {
+  const metal = surface === "metal";
   return (
     <div
       className={cn(
-        "surface-paper dash-lift dash-lift-hover flex min-h-[7.5rem] flex-col justify-between gap-2 overflow-hidden p-4",
+        "dash-lift dash-lift-hover flex min-h-[7.5rem] flex-col justify-between gap-2 overflow-hidden p-4",
+        metal ? "surface-metal dash-lift-metal" : "surface-paper",
         className,
       )}
       style={style}
@@ -113,6 +117,7 @@ export function LevelMeter({
   progress,
   className,
   style,
+  surface = "paper",
 }: {
   level: number;
   name: string;
@@ -122,11 +127,14 @@ export function LevelMeter({
   progress: number;
   className?: string;
   style?: CSSProperties;
+  surface?: "paper" | "metal";
 }) {
+  const metal = surface === "metal";
   return (
     <div
       className={cn(
-        "surface-paper dash-lift dash-lift-hover flex h-full min-h-[7.5rem] flex-col justify-between gap-3 p-5",
+        "dash-lift dash-lift-hover flex h-full min-h-[7.5rem] flex-col justify-between gap-3 p-5",
+        metal ? "surface-metal dash-lift-metal" : "surface-paper",
         className,
       )}
       style={style}

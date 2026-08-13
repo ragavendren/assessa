@@ -1,11 +1,6 @@
 import { AdminNav } from "@/components/AdminNav";
 import { QuestionBankNav } from "@/components/admin/QuestionBankNav";
-import {
-  Panel,
-  QUESTION_BANK_STEPS,
-  QuestionBankPageHeader,
-  QuestionBankWorkflow,
-} from "@/components/admin/pool/QuestionBankUi";
+import { Panel, QuestionBankPageHeader } from "@/components/admin/pool/QuestionBankUi";
 import { AdminEmpty, StatusPill } from "@/components/admin/AdminPageUi";
 import { PageLoader } from "@/components/platform";
 import { useConfirm } from "@/components/ui/confirm-dialog";
@@ -78,12 +73,10 @@ function AdminBlueprintsPage() {
           </Link>
         }
       />
-      <QuestionBankWorkflow steps={[...QUESTION_BANK_STEPS]} current={2} />
-
       {isPending || !data ? (
         <PageLoader />
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.25fr)]">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.25fr)]">
           <Panel
             title="Checklist before you build"
             description="Blueprints need a course and work best once pools have tagged topics."

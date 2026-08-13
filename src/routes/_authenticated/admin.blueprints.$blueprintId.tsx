@@ -1,11 +1,7 @@
 import { AdminNav } from "@/components/AdminNav";
 import { QuestionBankNav } from "@/components/admin/QuestionBankNav";
 import { BlueprintEditor } from "@/components/admin/pool/BlueprintEditor";
-import {
-  QUESTION_BANK_STEPS,
-  QuestionBankPageHeader,
-  QuestionBankWorkflow,
-} from "@/components/admin/pool/QuestionBankUi";
+import { QuestionBankPageHeader } from "@/components/admin/pool/QuestionBankUi";
 import { Link, createFileRoute, redirect } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_authenticated/admin/blueprints/$blueprintId")({
@@ -42,7 +38,6 @@ function AdminBlueprintEditPage() {
           body: "Bump the version if this is a new mix you want to keep distinct from earlier generated exams.",
         }}
       />
-      <QuestionBankWorkflow steps={[...QUESTION_BANK_STEPS]} current={2} />
       <BlueprintEditor mode="edit" blueprintId={blueprintId} />
     </div>
   );

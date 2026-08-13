@@ -3,9 +3,7 @@ import { QuestionBankNav } from "@/components/admin/QuestionBankNav";
 import {
   FieldLabel,
   Panel,
-  QUESTION_BANK_STEPS,
   QuestionBankPageHeader,
-  QuestionBankWorkflow,
 } from "@/components/admin/pool/QuestionBankUi";
 import { AdminEmpty, StatusPill } from "@/components/admin/AdminPageUi";
 import { PageLoader } from "@/components/platform";
@@ -84,8 +82,6 @@ function AdminPoolsPage() {
           ),
         }}
       />
-      <QuestionBankWorkflow steps={[...QUESTION_BANK_STEPS]} current={1} />
-
       {isPending || !data ? (
         <PageLoader />
       ) : courses.length === 0 ? (
@@ -102,7 +98,7 @@ function AdminPoolsPage() {
           </Link>
         </Panel>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.15fr)]">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.15fr)]">
           <Panel
             title="Create pool"
             description="After create, you land on the import page automatically."
