@@ -167,154 +167,6 @@ export const updateExamSettings = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-export const createExam = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .validator((input: unknown) =>
-    z
-      .object({
-        title: z.string().trim().min(3).max(140),
-        description: z.string().trim().max(600).default(""),
-        topic: z.string().trim().min(2).max(60),
-        mode: z.enum(["practice", "assessment", "competitive", "certification"]),
-        duration_minutes: z.number().int().min(1).max(300),
-        pass_mark: z.number().int().min(1).max(100),
-        max_attempts: z.number().int().min(1).max(99),
-        access: z.enum(["public", "private", "organization", "group"]),
-        organization: z.string().trim().max(120).optional().or(z.literal("")),
-        team_group: z.string().trim().max(120).optional().or(z.literal("")),
-        invitations: z.string().max(4000).optional().or(z.literal("")),
-        active: z.boolean().default(true),
-        starts_at: z.string().datetime().nullable().optional(),
-        ends_at: z.string().datetime().nullable().optional(),
-        questions: z
-          .array(
-            z.object({
-              prompt: z.string().trim().min(4).max(4000),
-              options: z.array(z.string().trim().min(1).max(1000)).min(2).max(6),
-              correct_index: z.number().int().min(0).max(5),
-              correct_indexes: z.array(z.number().int().min(0).max(5)).min(1).max(6).optional(),
-              multi_select: z.boolean().default(false),
-              subtopic: z.string().trim().max(60).default("general"),
-              explanation: z.string().trim().max(4000).default(""),
-            }),
-          )
-          .min(1)
-          .max(200),
-      })
-      .superRefine((value, ctx) => {
-        if (
-          value.starts_at &&
-          value.ends_at &&
-          new Date(value.ends_at) <= new Date(value.starts_at)
-        ) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: "End date must be after the start date.",
-          });
-        }
-        for (const [index, question] of value.questions.entries()) {
-          const indexes = [...new Set(question.correct_indexes ?? [question.correct_index])].filter(
-            (item) => item < question.options.length,
-          );
-          if (indexes.length === 0) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              message: `Question ${index + 1} needs a valid correct answer.`,
-            });
-          }
-          if (!question.multi_select && indexes.length > 1) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              message: `Question ${index + 1}: enable multi-select for multiple answers.`,
-            });
-          }
-        }
-      })
-      .parse(input),
-  )
-  .handler(async ({ data, context }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { requireAdmin } = await import("@/lib/platform.server");
-    await requireAdmin(context.userId);
-
-    const { data: exam, error } = await supabaseAdmin
-      .from("exams")
-      .insert({
-        title: data.title,
-        description: data.description,
-        topic: data.topic,
-        mode: data.mode,
-        question_count: data.questions.length,
-        duration_minutes: data.duration_minutes,
-        pass_mark: data.pass_mark,
-        max_attempts: data.max_attempts,
-        access: data.access,
-        organization: data.organization || null,
-        team_group: data.team_group || null,
-        created_by: context.userId,
-        active: data.active,
-        starts_at: data.starts_at ?? null,
-        ends_at: data.ends_at ?? null,
-        enable_leaderboard: data.mode !== "practice",
-        enable_xp: true,
-        enable_badges: data.mode !== "certification",
-      })
-      .select("id")
-      .single();
-    if (error) throw error;
-
-    const { error: qError } = await supabaseAdmin.from("questions").insert(
-      data.questions.map((q) => {
-        const correctIndexes = [...new Set(q.correct_indexes ?? [q.correct_index])]
-          .filter((index) => index < q.options.length)
-          .sort((a, b) => a - b);
-        return {
-          exam_id: exam.id,
-          prompt: q.prompt,
-          options: q.options,
-          correct_index: correctIndexes[0] ?? 0,
-          correct_indexes: q.multi_select ? correctIndexes : [correctIndexes[0] ?? 0],
-          subtopic: q.subtopic || "general",
-          explanation: q.explanation,
-        };
-      }),
-    );
-    if (qError) throw qError;
-
-    const { parseEmailList, sendExamInvitationEmails } = await import("@/lib/email.server");
-    const emails = parseEmailList(data.invitations);
-    if (emails.length > 0) {
-      await supabaseAdmin.from("exam_invitations").upsert(
-        emails.map((email) => ({ exam_id: exam.id, email })),
-        { onConflict: "exam_id,email" },
-      );
-      const { data: invited } = await supabaseAdmin
-        .from("profiles")
-        .select("id, email")
-        .in("email", emails);
-      const { notify } = await import("@/lib/platform.server");
-      for (const profile of invited ?? []) {
-        await notify(profile.id, {
-          kind: "invitation",
-          icon: "✉️",
-          title: `You have been invited to ${data.title}`,
-          body: "Open My Exams to start when you are ready.",
-          href: `/exams/${exam.id}`,
-          ctaLabel: "Open assessment",
-          // Bulk Resend below covers all invitees (registered + guest).
-          email: false,
-        });
-      }
-      await sendExamInvitationEmails({
-        emails,
-        examId: exam.id,
-        title: data.title,
-        description: data.description,
-      });
-    }
-    return { examId: exam.id as string };
-  });
-
 const examQuestionSchema = z.object({
   prompt: z.string().trim().min(4).max(4000),
   options: z.array(z.string().trim().min(1).max(1000)).min(2).max(6),
@@ -323,7 +175,27 @@ const examQuestionSchema = z.object({
   multi_select: z.boolean().default(false),
   subtopic: z.string().trim().max(60).default("general"),
   explanation: z.string().trim().max(4000).default(""),
+  source_pool_question_id: z.string().uuid().nullable().optional(),
 });
+
+const poolMetaSchema = {
+  question_selection_method: z.enum(["upload", "question_pool"]).optional(),
+  course_id: z.string().uuid().nullable().optional(),
+  question_pool_id: z.string().uuid().nullable().optional(),
+  blueprint_id: z.string().uuid().nullable().optional(),
+  series_id: z.string().uuid().nullable().optional(),
+  reuse_policy: z
+    .enum([
+      "allow_reuse",
+      "no_reuse_course",
+      "no_reuse_series",
+      "until_pool_exhausted",
+      "no_reuse_last_n",
+    ])
+    .nullable()
+    .optional(),
+  reuse_last_n: z.number().int().min(1).max(50).nullable().optional(),
+};
 
 const examWriteObjectSchema = z.object({
   title: z.string().trim().min(3).max(140),
@@ -341,6 +213,7 @@ const examWriteObjectSchema = z.object({
   starts_at: z.string().datetime().nullable().optional(),
   ends_at: z.string().datetime().nullable().optional(),
   questions: z.array(examQuestionSchema).min(1).max(200),
+  ...poolMetaSchema,
 });
 
 function refineExamWrite(value: z.infer<typeof examWriteObjectSchema>, ctx: z.RefinementCtx) {
@@ -387,9 +260,92 @@ function mapQuestionsForInsert(examId: string, questions: z.infer<typeof examQue
       correct_indexes: q.multi_select ? correctIndexes : [correctIndexes[0] ?? 0],
       subtopic: q.subtopic || "general",
       explanation: q.explanation,
+      source_pool_question_id: q.source_pool_question_id ?? null,
     };
   });
 }
+
+export const createExam = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) => examWriteSchema.parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { requireAdmin } = await import("@/lib/platform.server");
+    await requireAdmin(context.userId);
+
+    const selectionMethod = data.question_selection_method ?? "upload";
+    const { data: exam, error } = await supabaseAdmin
+      .from("exams")
+      .insert({
+        title: data.title,
+        description: data.description,
+        topic: data.topic,
+        mode: data.mode,
+        question_count: data.questions.length,
+        duration_minutes: data.duration_minutes,
+        pass_mark: data.pass_mark,
+        max_attempts: data.max_attempts,
+        access: data.access,
+        organization: data.organization || null,
+        team_group: data.team_group || null,
+        created_by: context.userId,
+        active: data.active,
+        starts_at: data.starts_at ?? null,
+        ends_at: data.ends_at ?? null,
+        enable_leaderboard: data.mode !== "practice",
+        enable_xp: true,
+        enable_badges: data.mode !== "certification",
+        question_selection_method: selectionMethod,
+        course_id: data.course_id ?? null,
+        question_pool_id: data.question_pool_id ?? null,
+        blueprint_id: data.blueprint_id ?? null,
+        series_id: data.series_id ?? null,
+        reuse_policy: data.reuse_policy ?? null,
+        reuse_last_n: data.reuse_last_n ?? null,
+        generation_locked_at: selectionMethod === "question_pool" ? new Date().toISOString() : null,
+      })
+      .select("id")
+      .single();
+    if (error) throw error;
+
+    const { error: qError } = await supabaseAdmin
+      .from("questions")
+      .insert(mapQuestionsForInsert(exam.id, data.questions));
+    if (qError) throw qError;
+
+    const { parseEmailList, sendExamInvitationEmails } = await import("@/lib/email.server");
+    const emails = parseEmailList(data.invitations);
+    if (emails.length > 0) {
+      await supabaseAdmin.from("exam_invitations").upsert(
+        emails.map((email) => ({ exam_id: exam.id, email })),
+        { onConflict: "exam_id,email" },
+      );
+      const { data: invited } = await supabaseAdmin
+        .from("profiles")
+        .select("id, email")
+        .in("email", emails);
+      const { notify } = await import("@/lib/platform.server");
+      for (const profile of invited ?? []) {
+        await notify(profile.id, {
+          kind: "invitation",
+          icon: "✉️",
+          title: `You have been invited to ${data.title}`,
+          body: "Open My Exams to start when you are ready.",
+          href: `/exams/${exam.id}`,
+          ctaLabel: "Open assessment",
+          // Bulk Resend below covers all invitees (registered + guest).
+          email: false,
+        });
+      }
+      await sendExamInvitationEmails({
+        emails,
+        examId: exam.id,
+        title: data.title,
+        description: data.description,
+      });
+    }
+    return { examId: exam.id as string };
+  });
 
 /** Admin: load one assessment with questions for editing. */
 export const getExamForEdit = createServerFn({ method: "POST" })
@@ -423,6 +379,11 @@ export const getExamForEdit = createServerFn({ method: "POST" })
       ...new Set((categoryRows ?? []).map((row) => row.topic).filter(Boolean)),
     ].sort((a, b) => a.localeCompare(b));
 
+    const { count: attemptCount } = await supabaseAdmin
+      .from("exam_attempts")
+      .select("id", { count: "exact", head: true })
+      .eq("exam_id", data.examId);
+
     return {
       categories,
       exam: {
@@ -441,6 +402,15 @@ export const getExamForEdit = createServerFn({ method: "POST" })
         starts_at: exam.starts_at,
         ends_at: (exam as { ends_at?: string | null }).ends_at ?? null,
         invitations: (invitations ?? []).map((row) => row.email).join(", "),
+        question_selection_method: exam.question_selection_method ?? "upload",
+        course_id: exam.course_id ?? null,
+        question_pool_id: exam.question_pool_id ?? null,
+        blueprint_id: exam.blueprint_id ?? null,
+        series_id: exam.series_id ?? null,
+        reuse_policy: exam.reuse_policy ?? null,
+        reuse_last_n: exam.reuse_last_n ?? null,
+        attempt_count: attemptCount ?? 0,
+        can_regenerate: !exam.active && (attemptCount ?? 0) === 0,
         questions: (questions ?? []).map((q) => {
           const indexes =
             Array.isArray((q as { correct_indexes?: number[] }).correct_indexes) &&
@@ -455,6 +425,7 @@ export const getExamForEdit = createServerFn({ method: "POST" })
             multi_select: indexes.length > 1,
             subtopic: q.subtopic || "general",
             explanation: q.explanation ?? "",
+            source_pool_question_id: q.source_pool_question_id ?? null,
           };
         }),
       },
@@ -471,6 +442,7 @@ export const updateExam = createServerFn({ method: "POST" })
     await requireAdmin(context.userId);
 
     const { examId, invitations, questions, ...examFields } = data;
+    const selectionMethod = examFields.question_selection_method ?? "upload";
     const { error } = await supabaseAdmin
       .from("exams")
       .update({
@@ -488,6 +460,13 @@ export const updateExam = createServerFn({ method: "POST" })
         active: examFields.active,
         starts_at: examFields.starts_at ?? null,
         ends_at: examFields.ends_at ?? null,
+        question_selection_method: selectionMethod,
+        course_id: examFields.course_id ?? null,
+        question_pool_id: examFields.question_pool_id ?? null,
+        blueprint_id: examFields.blueprint_id ?? null,
+        series_id: examFields.series_id ?? null,
+        reuse_policy: examFields.reuse_policy ?? null,
+        reuse_last_n: examFields.reuse_last_n ?? null,
       })
       .eq("id", examId);
     if (error) throw error;
@@ -858,17 +837,20 @@ export const getAdminAssessmentPerformance = createServerFn({ method: "POST" })
     const { requireAdmin } = await import("@/lib/platform.server");
     await requireAdmin(context.userId);
 
-    const [{ data: exams }, { data: attempts }, { data: profiles }] = await Promise.all([
-      supabaseAdmin.from("exams").select("*").order("created_at", { ascending: false }),
-      supabaseAdmin
-        .from("exam_attempts")
-        .select("id, user_id, exam_id, score, passed, status, started_at, submitted_at"),
-      supabaseAdmin
-        .from("profiles")
-        .select("id, full_name, email, display_name, organization, leaderboard_opt_out"),
-    ]);
+    const [{ data: exams }, { data: attempts }, { data: profiles }, { data: adminRoles }] =
+      await Promise.all([
+        supabaseAdmin.from("exams").select("*").order("created_at", { ascending: false }),
+        supabaseAdmin
+          .from("exam_attempts")
+          .select("id, user_id, exam_id, score, passed, status, started_at, submitted_at"),
+        supabaseAdmin
+          .from("profiles")
+          .select("id, full_name, email, display_name, organization, leaderboard_opt_out"),
+        supabaseAdmin.from("user_roles").select("user_id").eq("role", "admin"),
+      ]);
 
     const profileById = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
+    const adminIds = new Set((adminRoles ?? []).map((row) => row.user_id));
 
     const assessments = (exams ?? []).map((exam) => {
       const examAttempts = (attempts ?? []).filter((a) => a.exam_id === exam.id);
@@ -894,6 +876,7 @@ export const getAdminAssessmentPerformance = createServerFn({ method: "POST" })
       }
 
       const leaderboard = [...bestByUser.entries()]
+        .filter(([userId]) => !adminIds.has(userId))
         .map(([userId, row]) => {
           const profile = profileById.get(userId);
           return {

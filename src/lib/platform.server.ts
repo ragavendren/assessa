@@ -192,6 +192,12 @@ export async function requireAdmin(userId: string) {
   if (!data) throw new Error("Administrator access required");
 }
 
+/** Admin accounts are never listed on public leaderboards. */
+async function loadAdminUserIds(): Promise<Set<string>> {
+  const { data } = await db.from("user_roles").select("user_id").eq("role", "admin");
+  return new Set((data ?? []).map((row) => row.user_id));
+}
+
 /* ------------------------------------------------------------------ */
 /* xp + levels                                                         */
 /* ------------------------------------------------------------------ */
@@ -749,13 +755,17 @@ export async function participantStats(userId: string) {
 }
 
 async function examRank(examId: string, userId: string) {
-  const { data } = await db
-    .from("exam_attempts")
-    .select("user_id, score")
-    .eq("exam_id", examId)
-    .eq("status", "submitted");
+  const [{ data }, adminIds] = await Promise.all([
+    db
+      .from("exam_attempts")
+      .select("user_id, score")
+      .eq("exam_id", examId)
+      .eq("status", "submitted"),
+    loadAdminUserIds(),
+  ]);
   const bestByUser = new Map<string, number>();
   for (const row of data ?? []) {
+    if (adminIds.has(row.user_id)) continue;
     const score = Number(row.score ?? 0);
     if (score > (bestByUser.get(row.user_id) ?? -1)) bestByUser.set(row.user_id, score);
   }
@@ -1079,10 +1089,13 @@ export async function leaderboard(
   }
 
   const userIds = [...new Set(records.map((r) => r.user_id))];
-  const { data: profiles } = await db
-    .from("profiles")
-    .select("id, full_name, display_name, organization, department, leaderboard_opt_out")
-    .in("id", userIds.length ? userIds : ["00000000-0000-0000-0000-000000000000"]);
+  const [{ data: profiles }, adminIds] = await Promise.all([
+    db
+      .from("profiles")
+      .select("id, full_name, display_name, organization, department, leaderboard_opt_out")
+      .in("id", userIds.length ? userIds : ["00000000-0000-0000-0000-000000000000"]),
+    loadAdminUserIds(),
+  ]);
   const profileMap = new Map((profiles ?? []).map((p) => [p.id, p]));
 
   const audienceScope = scope === "organization" || scope === "department" ? scope : "global";
@@ -1092,6 +1105,7 @@ export async function leaderboard(
   for (const row of records) {
     const profile = profileMap.get(row.user_id);
     if (!profile) continue;
+    if (adminIds.has(row.user_id)) continue;
     if (audienceScope === "organization") {
       if (!viewer?.organization || profile.organization !== viewer.organization) continue;
     }

@@ -40,7 +40,7 @@ export function OrgDepartmentFields({
   const emptyCatalog = !isPending && orgs.length === 0;
 
   return (
-    <div className={className ?? "grid gap-4 sm:grid-cols-2"}>
+    <div className={className ?? "grid gap-4"}>
       <label className="block text-sm">
         <span className="text-xs text-muted-foreground">Organisation{required ? " *" : ""}</span>
         <select

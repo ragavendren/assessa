@@ -2,7 +2,6 @@ import { AvatarPicker } from "@/components/AvatarPicker";
 import { OrgDepartmentFields } from "@/components/OrgDepartmentFields";
 import { PageLoader, SectionHeading } from "@/components/platform";
 import { getMe, saveProfile } from "@/lib/platform.functions";
-import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -201,27 +200,10 @@ function ProfilePage() {
             style={{ animationDelay: "180ms" }}
           >
             <SectionHeading eyebrow="Privacy" title="Leaderboard visibility" />
-            <label
-              className={cn(
-                "flex cursor-pointer items-start gap-3 rounded-xl border p-4 text-sm transition-colors",
-                form.leaderboard_opt_out
-                  ? "border-accent/40 bg-accent/5"
-                  : "border-border bg-secondary/30 hover:bg-secondary/50",
-              )}
-            >
-              <input
-                type="checkbox"
-                checked={form.leaderboard_opt_out}
-                onChange={(event) => set("leaderboard_opt_out", event.target.checked)}
-                className="mt-0.5"
-              />
-              <span>
-                Hide me from public leaderboards
-                <span className="mt-1 block text-xs text-muted-foreground">
-                  You will still see your own rank and results.
-                </span>
-              </span>
-            </label>
+            <p className="rounded-xl border border-border bg-secondary/30 p-4 text-sm text-muted-foreground">
+              Administrator accounts are never listed on public leaderboards, including ranks
+              shown after an attempt.
+            </p>
           </section>
         ) : null}
 

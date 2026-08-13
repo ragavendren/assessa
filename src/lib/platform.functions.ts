@@ -81,7 +81,7 @@ export const getDashboard = createServerFn({ method: "POST" })
       supabaseAdmin.from("badges").select("id").eq("active", true),
       supabaseAdmin
         .from("exams")
-        .select("id, title, topic, starts_at, duration_minutes, question_count, mode, access")
+        .select("id, title, topic, starts_at, ends_at, duration_minutes, question_count, mode, access")
         .eq("active", true)
         .order("starts_at"),
       supabaseAdmin
@@ -99,10 +99,24 @@ export const getDashboard = createServerFn({ method: "POST" })
     const level = resolveLevel(xp, levels);
     const visible = await filterAccessibleExams(userId, exams ?? []);
 
+    const { examAvailability } = await import("@/lib/exam-availability");
     const upcoming = visible
-      .filter((e) => !e.starts_at || new Date(e.starts_at) > new Date())
+      .filter(
+        (e) =>
+          examAvailability({
+            active: true,
+            starts_at: e.starts_at,
+            ends_at: e.ends_at ?? null,
+          }).notOpenYet === true,
+      )
       .slice(0, 3);
-    const available = visible.filter((e) => !e.starts_at || new Date(e.starts_at) <= new Date());
+    const available = visible.filter((e) =>
+      examAvailability({
+        active: true,
+        starts_at: e.starts_at,
+        ends_at: e.ends_at ?? null,
+      }).ok,
+    );
 
     const attempts = allAttempts ?? [];
     const scores = attempts.map((a) => Number(a.score ?? 0));
@@ -287,11 +301,13 @@ export const listMyExams = createServerFn({ method: "POST" })
         null,
       );
       const notOpen = !!exam.starts_at && new Date(exam.starts_at) > new Date();
+      const closed = !!exam.ends_at && new Date(exam.ends_at) < new Date();
       const attemptsLeft = exam.max_attempts - submitted.length;
 
-      let status: "available" | "upcoming" | "in_progress" | "completed";
+      let status: "available" | "upcoming" | "in_progress" | "completed" | "closed";
       if (inProgress) status = "in_progress";
       else if (notOpen) status = "upcoming";
+      else if (closed) status = "closed";
       else if (submitted.length > 0 && attemptsLeft <= 0) status = "completed";
       else if (submitted.length > 0) status = "available";
       else status = "available";
@@ -310,6 +326,7 @@ export const listMyExams = createServerFn({ method: "POST" })
         attemptsUsed: submitted.length,
         attemptsLeft,
         startsAt: exam.starts_at,
+        endsAt: exam.ends_at ?? null,
         status,
         inProgressId: inProgress?.id ?? null,
         completed: submitted.length > 0,

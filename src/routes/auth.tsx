@@ -3,6 +3,7 @@ import { OrgDepartmentFields } from "@/components/OrgDepartmentFields";
 import { supabase } from "@/integrations/supabase/client";
 import { stashPendingOrgSignup } from "@/lib/pending-org-signup";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { Eye, EyeOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -51,6 +52,7 @@ function AuthPage() {
   const [department, setDepartment] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [checkEmail, setCheckEmail] = useState(false);
 
@@ -216,21 +218,25 @@ function AuthPage() {
             </Field>
           ) : null}
 
-          <div className="space-y-2 rounded-lg border border-border bg-secondary/40 p-3.5">
-            <div>
-              <p className="text-sm font-medium text-foreground">Organisation & team</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Required for email signup and Google sign-in. Used for access and leaderboards.
-              </p>
+          {mode === "signup" ? (
+            <div className="space-y-2 rounded-lg border border-border bg-secondary/40 p-3.5">
+              <div>
+                <p className="text-sm font-medium text-foreground">Organisation & team</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Choose your organisation first, then the team / group. Used for access and
+                  leaderboards.
+                </p>
+              </div>
+              <OrgDepartmentFields
+                organization={organization}
+                department={department}
+                onOrganizationChange={setOrganization}
+                onDepartmentChange={setDepartment}
+                required
+                className="grid gap-4"
+              />
             </div>
-            <OrgDepartmentFields
-              organization={organization}
-              department={department}
-              onOrganizationChange={setOrganization}
-              onDepartmentChange={setDepartment}
-              required={mode === "signup"}
-            />
-          </div>
+          ) : null}
 
           <Field label="Email *">
             <input
@@ -245,17 +251,32 @@ function AuthPage() {
             />
           </Field>
           <Field label="Password *">
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              maxLength={72}
-              autoComplete={mode === "signup" ? "new-password" : "current-password"}
-              className="field"
-              placeholder="At least 8 characters"
-              required
-              minLength={8}
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                maxLength={72}
+                autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                className="field pr-11"
+                placeholder="At least 8 characters"
+                required
+                minLength={8}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((value) => !value)}
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground transition-colors hover:text-foreground"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-pressed={showPassword}
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" aria-hidden />
+                ) : (
+                  <Eye className="h-4 w-4" aria-hidden />
+                )}
+              </button>
+            </div>
           </Field>
 
           <button
@@ -283,8 +304,9 @@ function AuthPage() {
           {busy ? "Redirecting…" : "Continue with Google"}
         </button>
         <p className="mt-2 text-center text-xs text-muted-foreground">
-          New Google accounts: select organisation and team / group above first. Existing accounts
-          can continue and will be asked only if those details are missing.
+          {mode === "signup"
+            ? "Select organisation, then team / group above before continuing with Google."
+            : "Existing Google accounts can continue here. New accounts should use Create account first."}
         </p>
 
         {mode === "signin" ? (

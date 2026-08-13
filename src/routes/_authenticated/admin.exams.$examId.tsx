@@ -53,6 +53,8 @@ function EditExamPage() {
       ) : (
         <ExamEditor
           mode="edit"
+          examId={examId}
+          canRegenerate={data.exam.can_regenerate}
           initial={examToEditorValues(data.exam)}
           categories={data.categories}
           onSubmit={async (payload) =>

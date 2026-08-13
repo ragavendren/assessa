@@ -1,3 +1,9 @@
+import { QuestionGenerationConfiguration } from "@/components/admin/pool/QuestionGenerationConfiguration";
+import type { PoolConfigState } from "@/components/admin/pool/QuestionGenerationConfiguration";
+import { QuestionSelectionMethod } from "@/components/admin/pool/QuestionSelectionMethod";
+import { OrgDepartmentFields } from "@/components/OrgDepartmentFields";
+import { DateTimeField, scheduleWindowStatus } from "@/components/ui/date-time-field";
+import { EmailChipInput } from "@/components/ui/email-chip-input";
 import { EXAM_MODES, MODE_LABELS } from "@/lib/gamification";
 import { listOrgCatalog } from "@/lib/platform.functions";
 import { downloadQuestionCsvTemplate, parseQuestionsCsv } from "@/lib/questions-csv";
@@ -12,6 +18,7 @@ import {
   Download,
   Eye,
   FileQuestion,
+  Lightbulb,
   Plus,
   Send,
   Trash2,
@@ -28,6 +35,7 @@ export type QuestionForm = {
   multiSelect: boolean;
   subtopic: string;
   explanation: string;
+  sourcePoolQuestionId?: string | null;
 };
 
 export type ExamEditorValues = {
@@ -45,6 +53,14 @@ export type ExamEditorValues = {
   active: boolean;
   startsAt: string;
   endsAt: string;
+  questionSelectionMethod: "upload" | "question_pool";
+  courseId: string | null;
+  questionPoolId: string | null;
+  blueprintId: string | null;
+  seriesId: string | null;
+  reusePolicy: PoolConfigState["reusePolicy"];
+  reuseLastN: number;
+  poolQuestionCount: number;
   questions: QuestionForm[];
 };
 
@@ -63,6 +79,13 @@ export type ExamSubmitPayload = {
   active: boolean;
   starts_at: string | null;
   ends_at: string | null;
+  question_selection_method?: "upload" | "question_pool";
+  course_id?: string | null;
+  question_pool_id?: string | null;
+  blueprint_id?: string | null;
+  series_id?: string | null;
+  reuse_policy?: PoolConfigState["reusePolicy"] | null;
+  reuse_last_n?: number | null;
   questions: Array<{
     prompt: string;
     options: string[];
@@ -71,6 +94,7 @@ export type ExamSubmitPayload = {
     multi_select: boolean;
     subtopic: string;
     explanation: string;
+    source_pool_question_id?: string | null;
   }>;
 };
 
@@ -93,6 +117,7 @@ export function blankQuestion(): QuestionForm {
     multiSelect: false,
     subtopic: "",
     explanation: "",
+    sourcePoolQuestionId: null,
   };
 }
 
@@ -112,6 +137,14 @@ export function defaultExamValues(): ExamEditorValues {
     active: true,
     startsAt: "",
     endsAt: "",
+    questionSelectionMethod: "upload",
+    courseId: null,
+    questionPoolId: null,
+    blueprintId: null,
+    seriesId: null,
+    reusePolicy: "until_pool_exhausted",
+    reuseLastN: 5,
+    poolQuestionCount: 30,
     questions: [blankQuestion()],
   };
 }
@@ -139,6 +172,13 @@ export function examToEditorValues(exam: {
   active: boolean;
   starts_at: string | null;
   ends_at: string | null;
+  question_selection_method?: "upload" | "question_pool" | null;
+  course_id?: string | null;
+  question_pool_id?: string | null;
+  blueprint_id?: string | null;
+  series_id?: string | null;
+  reuse_policy?: PoolConfigState["reusePolicy"] | null;
+  reuse_last_n?: number | null;
   questions: Array<{
     prompt: string;
     options: string[];
@@ -146,6 +186,7 @@ export function examToEditorValues(exam: {
     multi_select: boolean;
     subtopic: string;
     explanation: string;
+    source_pool_question_id?: string | null;
   }>;
 }): ExamEditorValues {
   return {
@@ -163,6 +204,14 @@ export function examToEditorValues(exam: {
     active: exam.active,
     startsAt: toLocalInput(exam.starts_at),
     endsAt: toLocalInput(exam.ends_at),
+    questionSelectionMethod: exam.question_selection_method ?? "upload",
+    courseId: exam.course_id ?? null,
+    questionPoolId: exam.question_pool_id ?? null,
+    blueprintId: exam.blueprint_id ?? null,
+    seriesId: exam.series_id ?? null,
+    reusePolicy: exam.reuse_policy ?? "until_pool_exhausted",
+    reuseLastN: exam.reuse_last_n ?? 5,
+    poolQuestionCount: Math.max(1, exam.questions.length || 30),
     questions:
       exam.questions.length > 0
         ? exam.questions.map((q) => ({
@@ -172,6 +221,7 @@ export function examToEditorValues(exam: {
             multiSelect: q.multi_select,
             subtopic: q.subtopic,
             explanation: q.explanation,
+            sourcePoolQuestionId: q.source_pool_question_id ?? null,
           }))
         : [blankQuestion()],
   };
@@ -193,6 +243,14 @@ function buildPayload(values: ExamEditorValues): ExamSubmitPayload {
     active: values.active,
     starts_at: values.startsAt ? new Date(values.startsAt).toISOString() : null,
     ends_at: values.endsAt ? new Date(values.endsAt).toISOString() : null,
+    question_selection_method: values.questionSelectionMethod,
+    course_id: values.questionSelectionMethod === "question_pool" ? values.courseId : null,
+    question_pool_id:
+      values.questionSelectionMethod === "question_pool" ? values.questionPoolId : null,
+    blueprint_id: values.questionSelectionMethod === "question_pool" ? values.blueprintId : null,
+    series_id: values.questionSelectionMethod === "question_pool" ? values.seriesId : null,
+    reuse_policy: values.questionSelectionMethod === "question_pool" ? values.reusePolicy : null,
+    reuse_last_n: values.questionSelectionMethod === "question_pool" ? values.reuseLastN : null,
     questions: values.questions.map((q) => {
       const options = q.options.filter((o) => o.trim().length > 0);
       const correctIndexes = q.correctIndexes
@@ -206,6 +264,7 @@ function buildPayload(values: ExamEditorValues): ExamSubmitPayload {
         multi_select: q.multiSelect,
         subtopic: q.subtopic.trim() || "general",
         explanation: q.explanation,
+        source_pool_question_id: q.sourcePoolQuestionId ?? null,
       };
     }),
   };
@@ -213,6 +272,8 @@ function buildPayload(values: ExamEditorValues): ExamSubmitPayload {
 
 type ExamEditorProps = {
   mode: "create" | "edit";
+  examId?: string | null;
+  canRegenerate?: boolean;
   initial?: ExamEditorValues;
   categories?: string[];
   submitLabel?: string;
@@ -222,6 +283,8 @@ type ExamEditorProps = {
 
 export function ExamEditor({
   mode,
+  examId = null,
+  canRegenerate = true,
   initial,
   categories = [],
   submitLabel,
@@ -234,7 +297,12 @@ export function ExamEditor({
   const [tagDraftByIndex, setTagDraftByIndex] = useState<Record<number, string>>({});
   const [previewPage, setPreviewPage] = useState(0);
   const [previewTag, setPreviewTag] = useState("all");
+  const [previewPageSize, setPreviewPageSize] = useState(PREVIEW_PAGE_SIZE);
   const [previewSeen, setPreviewSeen] = useState(mode === "edit");
+  const [poolDistribution, setPoolDistribution] = useState<Record<string, number> | null>(null);
+  const [showInviteField, setShowInviteField] = useState(
+    () => Boolean(initial?.invitations?.trim()) || initial?.access === "private",
+  );
 
   const fetchCatalog = useServerFn(listOrgCatalog);
   const { data: orgCatalog } = useQuery({
@@ -262,11 +330,13 @@ export function ExamEditor({
     return values.questions.filter((q) => (q.subtopic.trim() || "general") === previewTag);
   }, [previewTag, values.questions]);
 
-  const previewPages = Math.max(1, Math.ceil(filteredPreview.length / PREVIEW_PAGE_SIZE));
+  const previewPages = Math.max(1, Math.ceil(filteredPreview.length / previewPageSize));
   const pageQuestions = filteredPreview.slice(
-    previewPage * PREVIEW_PAGE_SIZE,
-    previewPage * PREVIEW_PAGE_SIZE + PREVIEW_PAGE_SIZE,
+    previewPage * previewPageSize,
+    previewPage * previewPageSize + previewPageSize,
   );
+  const previewRangeStart = filteredPreview.length === 0 ? 0 : previewPage * previewPageSize + 1;
+  const previewRangeEnd = Math.min((previewPage + 1) * previewPageSize, filteredPreview.length);
 
   const mutation = useMutation({
     mutationFn: () => onSubmit(buildPayload(values)),
@@ -316,6 +386,26 @@ export function ExamEditor({
     if (values.startsAt && values.endsAt && new Date(values.endsAt) <= new Date(values.startsAt)) {
       toast.error("End date must be after the start date");
       return false;
+    }
+    if (values.access === "organization" && !values.organization.trim()) {
+      toast.error("Select an organisation");
+      return false;
+    }
+    if (values.access === "group") {
+      if (!values.organization.trim() || !values.teamGroup.trim()) {
+        toast.error("Select organisation and team / group");
+        return false;
+      }
+    }
+    if (values.access === "private") {
+      const invites = values.invitations
+        .split(/[,;\s\n]+/)
+        .map((part) => part.trim())
+        .filter(Boolean);
+      if (invites.length === 0) {
+        toast.error("Add at least one invite email for private access");
+        return false;
+      }
     }
     return true;
   }
@@ -398,9 +488,14 @@ export function ExamEditor({
   );
 
   const inviteCount = values.invitations
-    .split(/[,;\n]+/)
+    .split(/[,;\s\n]+/)
     .map((part) => part.trim())
     .filter(Boolean).length;
+
+  const availability = useMemo(
+    () => scheduleWindowStatus(values.active, values.startsAt, values.endsAt),
+    [values.active, values.startsAt, values.endsAt],
+  );
 
   function onCsvUpload(file: File) {
     const reader = new FileReader();
@@ -576,6 +671,15 @@ export function ExamEditor({
                     onChange={(e) => patch({ description: e.target.value })}
                   />
                 </label>
+
+                <QuestionSelectionMethod
+                  value={values.questionSelectionMethod}
+                  onChange={(method) => {
+                    patch({ questionSelectionMethod: method });
+                    if (method === "upload") setPoolDistribution(null);
+                  }}
+                />
+
                 <div className="grid gap-3 sm:grid-cols-4">
                   <label className="block text-sm">
                     <span className="text-xs text-muted-foreground">Mode *</span>
@@ -627,63 +731,145 @@ export function ExamEditor({
                 </div>
               </section>
 
-              <section className="surface-paper space-y-4 p-5">
-                <p className="text-hairline text-muted-foreground">Availability & sharing</p>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <label className="inline-flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={values.active}
-                      onChange={(e) => patch({ active: e.target.checked })}
-                    />
-                    Publish on save
-                  </label>
-                  <label className="block text-sm">
-                    <span className="text-xs text-muted-foreground">Opens at</span>
-                    <input
-                      type="datetime-local"
-                      className="field mt-1"
-                      value={values.startsAt}
-                      onChange={(e) => patch({ startsAt: e.target.value })}
-                    />
-                  </label>
-                  <label className="block text-sm">
-                    <span className="text-xs text-muted-foreground">Closes at</span>
-                    <input
-                      type="datetime-local"
-                      className="field mt-1"
-                      value={values.endsAt}
-                      onChange={(e) => patch({ endsAt: e.target.value })}
-                    />
-                  </label>
+              <section className="surface-paper space-y-5 p-5">
+                <div>
+                  <p className="text-hairline text-muted-foreground">Availability & sharing</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Control when the assessment is open and who can start it.
+                  </p>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-3">
+
+                <div className="rounded-lg border border-border bg-secondary/25 p-4">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-medium">Schedule</p>
+                    <label className="inline-flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={values.active}
+                        onChange={(e) => patch({ active: e.target.checked })}
+                      />
+                      Publish on save
+                    </label>
+                  </div>
+
+                  <div
+                    className={cn(
+                      "mb-3 rounded-md border px-3 py-2 text-sm",
+                      availability.tone === "draft" &&
+                        "border-border bg-card text-muted-foreground",
+                      availability.tone === "scheduled" &&
+                        "border-amber-500/35 bg-amber-500/10 text-amber-900 dark:text-amber-200",
+                      availability.tone === "open" &&
+                        "border-emerald-500/35 bg-emerald-500/10 text-emerald-900 dark:text-emerald-200",
+                      availability.tone === "closed" &&
+                        "border-destructive/35 bg-destructive/10 text-destructive",
+                    )}
+                  >
+                    <p className="font-medium">{availability.label}</p>
+                    <p className="mt-0.5 text-xs opacity-90">{availability.hint}</p>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <DateTimeField
+                      label="Opens at"
+                      value={values.startsAt}
+                      onChange={(startsAt) => patch({ startsAt })}
+                      hint="Optional — leave empty to open as soon as published"
+                    />
+                    <DateTimeField
+                      label="Closes at"
+                      value={values.endsAt}
+                      onChange={(endsAt) => patch({ endsAt })}
+                      min={values.startsAt || undefined}
+                      hint="Optional — leave empty to stay open while published"
+                    />
+                  </div>
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Published assessments are only takeable between the open and close times.
+                    Outside that window participants see “not open yet” or “no longer available”.
+                  </p>
+                </div>
+
+                <div>
+                  <p className="mb-2 text-sm font-medium">Who can take it *</p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {(
+                      [
+                        {
+                          value: "public" as const,
+                          title: "Anyone with link",
+                          hint: "No login required",
+                        },
+                        {
+                          value: "private" as const,
+                          title: "Invited emails",
+                          hint: "Only listed addresses",
+                        },
+                        {
+                          value: "organization" as const,
+                          title: "One organization",
+                          hint: "Members of a selected org",
+                        },
+                        {
+                          value: "group" as const,
+                          title: "One team / group",
+                          hint: "Pick from organisation catalog",
+                        },
+                      ] as const
+                    ).map((option) => {
+                      const selected = values.access === option.value;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => {
+                            patch({
+                              access: option.value,
+                              organization:
+                                option.value === "organization" || option.value === "group"
+                                  ? values.organization
+                                  : "",
+                              teamGroup: option.value === "group" ? values.teamGroup : "",
+                            });
+                            if (option.value === "private") setShowInviteField(true);
+                          }}
+                          className={cn(
+                            "rounded-lg border px-3 py-3 text-left transition-colors",
+                            selected
+                              ? "border-primary/40 bg-primary/5"
+                              : "border-border bg-card hover:bg-secondary/40",
+                          )}
+                        >
+                          <span className="flex items-center gap-2 text-sm font-medium">
+                            <span
+                              className={cn(
+                                "flex h-4 w-4 items-center justify-center rounded-full border",
+                                selected
+                                  ? "border-primary bg-primary text-primary-foreground"
+                                  : "border-border",
+                              )}
+                            >
+                              {selected ? <Check className="h-2.5 w-2.5" /> : null}
+                            </span>
+                            {option.title}
+                          </span>
+                          <span className="mt-1 block pl-6 text-xs text-muted-foreground">
+                            {option.hint}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {values.access === "organization" ? (
                   <label className="block text-sm">
-                    <span className="text-xs text-muted-foreground">Who can take it *</span>
-                    <select
-                      className="field mt-1"
-                      value={values.access}
-                      onChange={(e) =>
-                        patch({
-                          access: e.target.value as ExamEditorValues["access"],
-                        })
-                      }
-                    >
-                      <option value="public">Anyone with the share link (no login)</option>
-                      <option value="private">Invited emails only</option>
-                      <option value="organization">One organization</option>
-                      <option value="group">One team / group</option>
-                    </select>
-                  </label>
-                  <label className="block text-sm">
-                    <span className="text-xs text-muted-foreground">
-                      Organization{values.access === "organization" ? " *" : ""}
-                    </span>
+                    <span className="text-xs text-muted-foreground">Organization *</span>
                     <select
                       className="field mt-1"
                       value={values.organization}
                       onChange={(e) => patch({ organization: e.target.value })}
-                      disabled={values.access !== "organization"}
+                      required
                     >
                       <option value="">Select organisation</option>
                       {(orgCatalog?.organizations ?? []).map((org) => (
@@ -693,27 +879,41 @@ export function ExamEditor({
                       ))}
                     </select>
                   </label>
-                  <label className="block text-sm">
-                    <span className="text-xs text-muted-foreground">
-                      Team / Group{values.access === "group" ? " *" : ""}
-                    </span>
-                    <input
-                      className="field mt-1"
-                      value={values.teamGroup}
-                      onChange={(e) => patch({ teamGroup: e.target.value })}
-                      disabled={values.access !== "group"}
-                    />
-                  </label>
-                </div>
-                <label className="block text-sm">
-                  <span className="text-xs text-muted-foreground">Invite by email (optional)</span>
-                  <textarea
-                    className="field mt-1 min-h-20"
-                    value={values.invitations}
-                    onChange={(e) => patch({ invitations: e.target.value })}
-                    placeholder="ada@example.com, grace@example.com"
+                ) : null}
+
+                {values.access === "group" ? (
+                  <OrgDepartmentFields
+                    organization={values.organization}
+                    department={values.teamGroup}
+                    onOrganizationChange={(organization) => patch({ organization })}
+                    onDepartmentChange={(teamGroup) => patch({ teamGroup })}
+                    required
                   />
-                </label>
+                ) : null}
+
+                {values.access === "private" || showInviteField ? (
+                  <div className="block text-sm">
+                    <span className="mb-1 block text-xs text-muted-foreground">
+                      Invite by email{values.access === "private" ? " *" : " (optional)"}
+                    </span>
+                    <EmailChipInput
+                      value={values.invitations}
+                      onChange={(invitations) => patch({ invitations })}
+                      placeholder="name@company.com — Enter or Space"
+                    />
+                    <span className="mt-1.5 block text-xs text-muted-foreground">
+                      Press Enter, Space, or comma to add. Paste a list to import several at once.
+                    </span>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="text-sm text-primary hover:underline"
+                    onClick={() => setShowInviteField(true)}
+                  >
+                    + Add optional email invites
+                  </button>
+                )}
               </section>
 
               <button
@@ -728,220 +928,288 @@ export function ExamEditor({
 
           {tab === "questions" ? (
             <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-hairline text-muted-foreground">
-                  Questions ({values.questions.length}) · tags are subtopics
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => downloadQuestionCsvTemplate()}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-secondary"
-                  >
-                    <Download className="h-3.5 w-3.5" /> CSV template
-                  </button>
-                  <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-secondary">
-                    <Upload className="h-3.5 w-3.5" /> Upload CSV
-                    <input
-                      type="file"
-                      accept=".csv,text/csv"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) onCsvUpload(file);
-                        e.currentTarget.value = "";
-                      }}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => patch({ questions: [...values.questions, blankQuestion()] })}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-secondary"
-                  >
-                    <Plus className="h-3.5 w-3.5" /> Add question
-                  </button>
-                </div>
-              </div>
-
-              {values.questions.map((question, index) => (
-                <div key={index} className="surface-paper space-y-3 p-5">
-                  <div className="flex items-start gap-3">
-                    <span className="mt-2 text-xs text-muted-foreground">{index + 1}</span>
-                    <label className="block flex-1 text-sm">
-                      <span className="text-xs text-muted-foreground">Question</span>
-                      <textarea
-                        className="field mt-1 min-h-24"
-                        value={question.prompt}
-                        onChange={(e) => patchQuestion(index, { prompt: e.target.value })}
-                        required
-                        minLength={4}
-                        maxLength={4000}
-                      />
-                      <span className="mt-1 block text-[11px] tabular-nums text-muted-foreground">
-                        {question.prompt.trim().length}/4000
-                      </span>
-                    </label>
-                    {values.questions.length > 1 ? (
+              {values.questionSelectionMethod === "question_pool" ? (
+                <section className="surface-paper space-y-4 p-5">
+                  <p className="text-hairline text-muted-foreground">
+                    Question pool · generate clones into this assessment
+                  </p>
+                  <QuestionGenerationConfiguration
+                    examId={examId}
+                    canRegenerate={canRegenerate && !values.active}
+                    value={{
+                      courseId: values.courseId,
+                      poolId: values.questionPoolId,
+                      blueprintId: values.blueprintId,
+                      seriesId: values.seriesId,
+                      questionCount: values.poolQuestionCount,
+                      reusePolicy: values.reusePolicy,
+                      reuseLastN: values.reuseLastN,
+                    }}
+                    onChange={(next) =>
+                      patch({
+                        courseId: next.courseId,
+                        questionPoolId: next.poolId,
+                        blueprintId: next.blueprintId,
+                        seriesId: next.seriesId,
+                        reusePolicy: next.reusePolicy,
+                        reuseLastN: next.reuseLastN,
+                        poolQuestionCount: next.questionCount,
+                      })
+                    }
+                    distributionSummary={poolDistribution}
+                    generatedCount={
+                      values.questions.some((q) => q.sourcePoolQuestionId)
+                        ? values.questions.length
+                        : 0
+                    }
+                    onGenerated={(questions, distribution) => {
+                      setPoolDistribution(distribution);
+                      patch({
+                        questions: questions.map((q) => ({
+                          prompt: q.prompt,
+                          options:
+                            q.options.length >= 4
+                              ? q.options
+                              : [...q.options, "", "", "", ""].slice(0, 4),
+                          correctIndexes: q.correct_indexes,
+                          multiSelect: q.multi_select,
+                          subtopic: q.subtopic,
+                          explanation: q.explanation,
+                          sourcePoolQuestionId: q.source_pool_question_id,
+                        })),
+                      });
+                    }}
+                  />
+                  {values.questions.some((q) => q.prompt.trim().length >= 4) ? (
+                    <button
+                      type="button"
+                      onClick={() => goToTab("preview")}
+                      className="w-full rounded-md bg-primary px-4 py-3 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                    >
+                      Continue to preview ({values.questions.length} questions)
+                    </button>
+                  ) : null}
+                </section>
+              ) : (
+                <>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-hairline text-muted-foreground">
+                      Questions ({values.questions.length}) · tags are subtopics
+                    </p>
+                    <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
-                        onClick={() =>
-                          patch({
-                            questions: values.questions.filter((_, i) => i !== index),
-                          })
-                        }
-                        className="mt-6 rounded-md p-2 text-muted-foreground hover:bg-secondary"
-                        aria-label="Remove question"
+                        onClick={() => downloadQuestionCsvTemplate()}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-secondary"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Download className="h-3.5 w-3.5" /> CSV template
                       </button>
-                    ) : null}
-                  </div>
-
-                  <label className="inline-flex items-center gap-2 text-xs">
-                    <input
-                      type="checkbox"
-                      checked={question.multiSelect}
-                      onChange={(e) =>
-                        patchQuestion(index, {
-                          multiSelect: e.target.checked,
-                          correctIndexes: e.target.checked
-                            ? question.correctIndexes
-                            : [question.correctIndexes[0] ?? 0],
-                        })
-                      }
-                    />
-                    Multi-select answers
-                  </label>
-
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {question.options.map((option, optionIndex) => (
-                      <label key={optionIndex} className="flex items-center gap-2 text-sm">
+                      <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-secondary">
+                        <Upload className="h-3.5 w-3.5" /> Upload CSV
                         <input
-                          type={question.multiSelect ? "checkbox" : "radio"}
-                          name={`correct-${index}`}
-                          checked={question.correctIndexes.includes(optionIndex)}
-                          onChange={() => toggleCorrect(index, optionIndex)}
-                          aria-label={`Mark option ${optionIndex + 1} correct`}
-                        />
-                        <input
-                          className="field"
-                          value={option}
-                          onChange={(e) =>
-                            patchQuestion(index, {
-                              options: question.options.map((value, i) =>
-                                i === optionIndex ? e.target.value : value,
-                              ),
-                            })
-                          }
-                          placeholder={`Option ${String.fromCharCode(65 + optionIndex)}`}
-                          required={optionIndex < 2}
-                          maxLength={1000}
+                          type="file"
+                          accept=".csv,text/csv"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) onCsvUpload(file);
+                            e.currentTarget.value = "";
+                          }}
                         />
                       </label>
-                    ))}
+                      <button
+                        type="button"
+                        onClick={() => patch({ questions: [...values.questions, blankQuestion()] })}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-secondary"
+                      >
+                        <Plus className="h-3.5 w-3.5" /> Add question
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground">Subtopic tag</p>
-                    <div className="flex flex-wrap gap-2">
-                      {knownTags.map((tag) => (
-                        <button
-                          key={tag}
-                          type="button"
-                          onClick={() => setQuestionTag(index, tag)}
-                          className={cn(
-                            "rounded-full border px-2.5 py-1 text-[11px] font-medium",
-                            question.subtopic === tag
-                              ? "border-accent bg-accent/10 text-foreground"
-                              : "border-input text-muted-foreground hover:bg-secondary",
-                          )}
-                        >
-                          {tag}
-                        </button>
-                      ))}
-                      {question.subtopic ? (
-                        <button
-                          type="button"
-                          onClick={() => patchQuestion(index, { subtopic: "" })}
-                          className="inline-flex items-center gap-1 rounded-full border border-input px-2.5 py-1 text-[11px] text-muted-foreground hover:bg-secondary"
-                        >
-                          Clear <X className="h-3 w-3" />
-                        </button>
-                      ) : null}
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <input
-                        className="field min-w-[10rem] flex-1"
-                        placeholder="Type a tag and press Enter…"
-                        value={tagDraftByIndex[index] ?? ""}
-                        onChange={(e) =>
-                          setTagDraftByIndex((current) => ({
-                            ...current,
-                            [index]: e.target.value,
-                          }))
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            const draft = (tagDraftByIndex[index] ?? "").trim();
-                            if (draft) setQuestionTag(index, draft);
+                  {values.questions.map((question, index) => (
+                    <div key={index} className="surface-paper space-y-3 p-5">
+                      <div className="flex items-start gap-3">
+                        <span className="mt-2 text-xs text-muted-foreground">{index + 1}</span>
+                        <label className="block flex-1 text-sm">
+                          <span className="text-xs text-muted-foreground">Question</span>
+                          <textarea
+                            className="field mt-1 min-h-24"
+                            value={question.prompt}
+                            onChange={(e) => patchQuestion(index, { prompt: e.target.value })}
+                            required
+                            minLength={4}
+                            maxLength={4000}
+                          />
+                          <span className="mt-1 block text-[11px] tabular-nums text-muted-foreground">
+                            {question.prompt.trim().length}/4000
+                          </span>
+                        </label>
+                        {values.questions.length > 1 ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              patch({
+                                questions: values.questions.filter((_, i) => i !== index),
+                              })
+                            }
+                            className="mt-6 rounded-md p-2 text-muted-foreground hover:bg-secondary"
+                            aria-label="Remove question"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        ) : null}
+                      </div>
+
+                      <label className="inline-flex items-center gap-2 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={question.multiSelect}
+                          onChange={(e) =>
+                            patchQuestion(index, {
+                              multiSelect: e.target.checked,
+                              correctIndexes: e.target.checked
+                                ? question.correctIndexes
+                                : [question.correctIndexes[0] ?? 0],
+                            })
                           }
-                        }}
-                      />
+                        />
+                        Multi-select answers
+                      </label>
+
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {question.options.map((option, optionIndex) => (
+                          <label key={optionIndex} className="flex items-center gap-2 text-sm">
+                            <input
+                              type={question.multiSelect ? "checkbox" : "radio"}
+                              name={`correct-${index}`}
+                              checked={question.correctIndexes.includes(optionIndex)}
+                              onChange={() => toggleCorrect(index, optionIndex)}
+                              aria-label={`Mark option ${optionIndex + 1} correct`}
+                            />
+                            <input
+                              className="field"
+                              value={option}
+                              onChange={(e) =>
+                                patchQuestion(index, {
+                                  options: question.options.map((value, i) =>
+                                    i === optionIndex ? e.target.value : value,
+                                  ),
+                                })
+                              }
+                              placeholder={`Option ${String.fromCharCode(65 + optionIndex)}`}
+                              required={optionIndex < 2}
+                              maxLength={1000}
+                            />
+                          </label>
+                        ))}
+                      </div>
+
+                      <div className="space-y-2">
+                        <p className="text-xs text-muted-foreground">Subtopic tag</p>
+                        <div className="flex flex-wrap gap-2">
+                          {knownTags.map((tag) => (
+                            <button
+                              key={tag}
+                              type="button"
+                              onClick={() => setQuestionTag(index, tag)}
+                              className={cn(
+                                "rounded-full border px-2.5 py-1 text-[11px] font-medium",
+                                question.subtopic === tag
+                                  ? "border-accent bg-accent/10 text-foreground"
+                                  : "border-input text-muted-foreground hover:bg-secondary",
+                              )}
+                            >
+                              {tag}
+                            </button>
+                          ))}
+                          {question.subtopic ? (
+                            <button
+                              type="button"
+                              onClick={() => patchQuestion(index, { subtopic: "" })}
+                              className="inline-flex items-center gap-1 rounded-full border border-input px-2.5 py-1 text-[11px] text-muted-foreground hover:bg-secondary"
+                            >
+                              Clear <X className="h-3 w-3" />
+                            </button>
+                          ) : null}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <input
+                            className="field min-w-[10rem] flex-1"
+                            placeholder="Type a tag and press Enter…"
+                            value={tagDraftByIndex[index] ?? ""}
+                            onChange={(e) =>
+                              setTagDraftByIndex((current) => ({
+                                ...current,
+                                [index]: e.target.value,
+                              }))
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                const draft = (tagDraftByIndex[index] ?? "").trim();
+                                if (draft) setQuestionTag(index, draft);
+                              }
+                            }}
+                          />
+                        </div>
+                        {question.subtopic ? (
+                          <p className="text-xs text-muted-foreground">
+                            Tag:{" "}
+                            <span className="font-medium text-foreground">{question.subtopic}</span>
+                          </p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">
+                            No tag yet (defaults to “general”).
+                          </p>
+                        )}
+                      </div>
+
+                      <label className="block text-sm">
+                        <span className="text-xs text-muted-foreground">Explanation</span>
+                        <textarea
+                          className="field mt-1 min-h-20"
+                          value={question.explanation}
+                          onChange={(e) => patchQuestion(index, { explanation: e.target.value })}
+                          maxLength={4000}
+                        />
+                        <span className="mt-1 block text-[11px] tabular-nums text-muted-foreground">
+                          {question.explanation.trim().length}/4000
+                        </span>
+                      </label>
                     </div>
-                    {question.subtopic ? (
-                      <p className="text-xs text-muted-foreground">
-                        Tag:{" "}
-                        <span className="font-medium text-foreground">{question.subtopic}</span>
-                      </p>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">
-                        No tag yet (defaults to “general”).
-                      </p>
-                    )}
+                  ))}
+
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => goToTab("details")}
+                      className="rounded-md border border-input px-4 py-3 text-sm font-medium hover:bg-secondary"
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => goToTab("preview")}
+                      className="inline-flex flex-1 items-center justify-center gap-2 rounded-md bg-primary px-4 py-3 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                    >
+                      <Eye className="h-4 w-4" /> Preview
+                    </button>
                   </div>
-
-                  <label className="block text-sm">
-                    <span className="text-xs text-muted-foreground">Explanation</span>
-                    <textarea
-                      className="field mt-1 min-h-20"
-                      value={question.explanation}
-                      onChange={(e) => patchQuestion(index, { explanation: e.target.value })}
-                      maxLength={4000}
-                    />
-                    <span className="mt-1 block text-[11px] tabular-nums text-muted-foreground">
-                      {question.explanation.trim().length}/4000
-                    </span>
-                  </label>
-                </div>
-              ))}
-
-              <div className="flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={() => goToTab("details")}
-                  className="rounded-md border border-input px-4 py-3 text-sm font-medium hover:bg-secondary"
-                >
-                  Back
-                </button>
-                <button
-                  type="button"
-                  onClick={() => goToTab("preview")}
-                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-md bg-primary px-4 py-3 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-                >
-                  <Eye className="h-4 w-4" /> Preview
-                </button>
-              </div>
+                </>
+              )}
             </div>
           ) : null}
 
           {tab === "preview" ? (
             <div className="space-y-6">
-              <section className="surface-paper space-y-2 p-5">
+              <section className="surface-paper space-y-2 p-5 sm:px-6 sm:py-6">
                 <p className="text-hairline text-muted-foreground">
                   Category · {values.topic || "—"}
                 </p>
-                <h2 className="font-display text-2xl">{values.title || "Untitled assessment"}</h2>
+                <h2 className="font-display text-2xl tracking-tight">
+                  {values.title || "Untitled assessment"}
+                </h2>
                 <p className="text-sm text-muted-foreground">
                   {MODE_LABELS[values.mode]} · {values.questions.length} questions ·{" "}
                   {values.duration} min · pass {values.passMark}% ·{" "}
@@ -952,92 +1220,235 @@ export function ExamEditor({
                 {values.description ? (
                   <p className="pt-2 text-sm text-muted-foreground">{values.description}</p>
                 ) : null}
+                <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+                  <div className="rounded-lg bg-secondary/50 px-3.5 py-3">
+                    <dt className="text-xs text-muted-foreground">Questions</dt>
+                    <dd className="mt-1 font-display text-xl tabular-nums">
+                      {values.questions.length}
+                    </dd>
+                  </div>
+                  <div className="rounded-lg bg-secondary/50 px-3.5 py-3">
+                    <dt className="text-xs text-muted-foreground">Multi-select</dt>
+                    <dd className="mt-1 font-display text-xl tabular-nums">
+                      {values.questions.filter((q) => q.multiSelect).length}
+                    </dd>
+                  </div>
+                  <div className="rounded-lg bg-secondary/50 px-3.5 py-3">
+                    <dt className="text-xs text-muted-foreground">With explanation</dt>
+                    <dd className="mt-1 font-display text-xl tabular-nums">
+                      {values.questions.filter((q) => q.explanation.trim()).length}
+                    </dd>
+                  </div>
+                </dl>
               </section>
 
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap gap-2">
-                  {previewTags.map((value) => (
+              <section id="exam-preview-review" className="space-y-6">
+                <div className="flex flex-wrap items-end justify-between gap-4">
+                  <div>
+                    <p className="text-hairline text-muted-foreground">Answer key preview</p>
+                    <h2 className="mt-1 font-display text-2xl tracking-tight">How it will look</h2>
+                    <p className="mt-1.5 max-w-xl text-sm text-muted-foreground">
+                      Same card layout as the participant result review — correct answers and
+                      explanations are highlighted for authors.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex flex-wrap gap-2">
+                      {previewTags.map((value) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => {
+                            setPreviewTag(value);
+                            setPreviewPage(0);
+                          }}
+                          className={cn(
+                            "rounded-full border px-2.5 py-1 text-xs font-medium",
+                            previewTag === value
+                              ? "border-accent bg-accent/10 text-foreground"
+                              : "border-input text-muted-foreground hover:bg-secondary",
+                          )}
+                        >
+                          {value === "all" ? "All tags" : value}
+                        </button>
+                      ))}
+                    </div>
+                    <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span className="whitespace-nowrap">Per page</span>
+                      <select
+                        value={previewPageSize}
+                        onChange={(event) => {
+                          setPreviewPageSize(Number(event.target.value));
+                          setPreviewPage(0);
+                        }}
+                        className="rounded-md border border-input bg-card px-2.5 py-1.5 text-sm font-medium text-foreground"
+                      >
+                        {[5, 10, 15, 20].map((size) => (
+                          <option key={size} value={size}>
+                            {size}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="space-y-5">
+                  {pageQuestions.map((question, index) => {
+                    const absoluteIndex = previewPage * previewPageSize + index;
+                    const correctSet = new Set(question.correctIndexes);
+                    const options = question.options
+                      .map((option, optionIndex) => ({ option, optionIndex }))
+                      .filter(({ option }) => option.trim());
+
+                    return (
+                      <article
+                        key={`${question.prompt}-${absoluteIndex}`}
+                        className="overflow-hidden rounded-xl border border-success/35 bg-card"
+                      >
+                        <header className="flex flex-wrap items-start justify-between gap-3 border-b border-success/20 bg-success/8 px-5 py-4 sm:px-6 sm:py-5">
+                          <div className="min-w-0 flex-1 pr-2">
+                            <p className="text-xs text-muted-foreground">
+                              Question {absoluteIndex + 1}
+                              {question.subtopic ? ` · ${question.subtopic}` : ""}
+                              {question.multiSelect ? " · select all that apply" : ""}
+                            </p>
+                            <h3 className="mt-2 text-base font-medium leading-snug sm:text-lg">
+                              {question.prompt}
+                            </h3>
+                          </div>
+                          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-success/35 bg-success/15 px-2.5 py-1 text-xs font-semibold text-success">
+                            <Check className="h-3.5 w-3.5" aria-hidden />
+                            Key
+                          </span>
+                        </header>
+
+                        <div className="grid gap-0 lg:grid-cols-[minmax(0,1.35fr)_minmax(16rem,0.9fr)]">
+                          <div className="space-y-2.5 border-border px-5 py-5 sm:px-6 sm:py-6 lg:border-r">
+                            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                              Options
+                            </p>
+                            {options.map(({ option, optionIndex }) => {
+                              const isCorrect = correctSet.has(optionIndex);
+                              return (
+                                <div
+                                  key={optionIndex}
+                                  className={cn(
+                                    "flex items-start gap-3 rounded-lg border px-3.5 py-3 text-sm leading-relaxed",
+                                    isCorrect
+                                      ? "border-success/45 bg-success/12 text-foreground"
+                                      : "border-border/80 bg-background text-muted-foreground",
+                                  )}
+                                >
+                                  <span
+                                    className={cn(
+                                      "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center border text-[11px] font-semibold",
+                                      question.multiSelect ? "rounded-md" : "rounded-full",
+                                      isCorrect
+                                        ? "border-success bg-success text-success-foreground"
+                                        : "border-border bg-card",
+                                    )}
+                                  >
+                                    {String.fromCharCode(65 + optionIndex)}
+                                  </span>
+                                  <div className="min-w-0 flex-1">
+                                    <p className={cn(isCorrect && "font-medium")}>{option}</p>
+                                    {isCorrect ? (
+                                      <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-[11px] font-semibold text-success">
+                                        <Check className="h-3 w-3" aria-hidden />
+                                        Correct answer
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          <aside
+                            className={cn(
+                              "flex flex-col border-t border-border px-5 py-5 sm:px-6 sm:py-6 lg:border-t-0",
+                              question.explanation.trim() ? "bg-accent/[0.06]" : "bg-secondary/25",
+                            )}
+                          >
+                            <p
+                              className={cn(
+                                "flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide",
+                                question.explanation.trim()
+                                  ? "text-accent"
+                                  : "text-muted-foreground",
+                              )}
+                            >
+                              <Lightbulb className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                              Explanation
+                            </p>
+                            {question.explanation.trim() ? (
+                              <p className="mt-3 flex-1 text-sm leading-relaxed text-foreground/90">
+                                {question.explanation}
+                              </p>
+                            ) : (
+                              <p className="mt-3 flex-1 text-sm leading-relaxed text-muted-foreground">
+                                No explanation yet. Add one on the Questions step so participants
+                                see it after scoring.
+                              </p>
+                            )}
+                            <div className="mt-5 space-y-2 border-t border-border/70 pt-4 text-xs text-muted-foreground">
+                              <p>
+                                <span className="font-medium text-foreground">Correct: </span>
+                                {[...correctSet]
+                                  .sort((a, b) => a - b)
+                                  .map((i) => String.fromCharCode(65 + i))
+                                  .join(", ") || "—"}
+                              </p>
+                            </div>
+                          </aside>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3.5 sm:px-5">
+                  <p className="text-sm text-muted-foreground">
+                    Showing{" "}
+                    <span className="font-medium text-foreground">
+                      {previewRangeStart}–{previewRangeEnd}
+                    </span>{" "}
+                    of <span className="font-medium text-foreground">{filteredPreview.length}</span>
+                  </p>
+                  <div className="flex items-center gap-2">
                     <button
-                      key={value}
                       type="button"
                       onClick={() => {
-                        setPreviewTag(value);
-                        setPreviewPage(0);
+                        setPreviewPage((page) => Math.max(0, page - 1));
+                        document
+                          .getElementById("exam-preview-review")
+                          ?.scrollIntoView({ behavior: "smooth", block: "start" });
                       }}
-                      className={cn(
-                        "rounded-full border px-3 py-1.5 text-xs font-medium",
-                        previewTag === value
-                          ? "border-accent bg-accent/10 text-foreground"
-                          : "border-input text-muted-foreground hover:bg-secondary",
-                      )}
+                      disabled={previewPage === 0}
+                      className="inline-flex items-center gap-1 rounded-md border border-input px-3.5 py-2 text-sm font-medium hover:bg-secondary disabled:opacity-50"
                     >
-                      {value === "all" ? "All tags" : value}
+                      <ChevronLeft className="h-4 w-4" /> Previous
                     </button>
-                  ))}
+                    <span className="min-w-[5.5rem] text-center text-sm tabular-nums text-muted-foreground">
+                      Page {previewPage + 1} / {previewPages}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPreviewPage((page) => Math.min(previewPages - 1, page + 1));
+                        document
+                          .getElementById("exam-preview-review")
+                          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                      }}
+                      disabled={previewPage >= previewPages - 1}
+                      className="inline-flex items-center gap-1 rounded-md border border-input px-3.5 py-2 text-sm font-medium hover:bg-secondary disabled:opacity-50"
+                    >
+                      Next <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Page {previewPage + 1} of {previewPages} · {filteredPreview.length} question(s)
-                </p>
-              </div>
-
-              <div className="space-y-4">
-                {pageQuestions.map((question, index) => {
-                  const absolute = previewPage * PREVIEW_PAGE_SIZE + index + 1;
-                  return (
-                    <article key={`${question.prompt}-${absolute}`} className="surface-paper p-5">
-                      <p className="text-hairline text-muted-foreground">
-                        Q{absolute}
-                        {question.subtopic ? ` · ${question.subtopic}` : ""}
-                        {question.multiSelect ? " · multi-select" : ""}
-                      </p>
-                      <h3 className="mt-2 font-display text-xl leading-snug">{question.prompt}</h3>
-                      <ul className="mt-4 space-y-2">
-                        {question.options
-                          .filter((o) => o.trim())
-                          .map((option, optionIndex) => {
-                            const correct = question.correctIndexes.includes(optionIndex);
-                            return (
-                              <li
-                                key={optionIndex}
-                                className={cn(
-                                  "rounded-md border px-3 py-2 text-sm",
-                                  correct ? "border-success/40 bg-success/10" : "border-border",
-                                )}
-                              >
-                                <span className="mr-2 font-semibold">
-                                  {String.fromCharCode(65 + optionIndex)}.
-                                </span>
-                                {option}
-                                {correct ? (
-                                  <span className="ml-2 text-xs text-success">Correct</span>
-                                ) : null}
-                              </li>
-                            );
-                          })}
-                      </ul>
-                    </article>
-                  );
-                })}
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <button
-                  type="button"
-                  disabled={previewPage === 0}
-                  onClick={() => setPreviewPage((page) => Math.max(0, page - 1))}
-                  className="inline-flex items-center gap-1 rounded-md border border-input px-3 py-2 text-sm disabled:opacity-50"
-                >
-                  <ChevronLeft className="h-4 w-4" /> Previous
-                </button>
-                <button
-                  type="button"
-                  disabled={previewPage >= previewPages - 1}
-                  onClick={() => setPreviewPage((page) => Math.min(previewPages - 1, page + 1))}
-                  className="inline-flex items-center gap-1 rounded-md border border-input px-3 py-2 text-sm disabled:opacity-50"
-                >
-                  Next <ChevronRight className="h-4 w-4" />
-                </button>
-              </div>
+              </section>
 
               <div className="flex flex-wrap gap-3">
                 <button

@@ -23,16 +23,25 @@ import { Route as AuthenticatedProgressRouteImport } from './routes/_authenticat
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as TakeExamIdRouteImport } from './routes/take.$examId'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin.index'
+import { Route as AuthenticatedAdminBlueprintsRouteImport } from './routes/_authenticated/admin.blueprints'
+import { Route as AuthenticatedAdminCoursesRouteImport } from './routes/_authenticated/admin.courses'
 import { Route as AuthenticatedAdminGamificationRouteImport } from './routes/_authenticated/admin.gamification'
 import { Route as AuthenticatedAdminOrganizationsRouteImport } from './routes/_authenticated/admin.organizations'
 import { Route as AuthenticatedAdminPerformanceRouteImport } from './routes/_authenticated/admin.performance'
+import { Route as AuthenticatedAdminPoolsRouteImport } from './routes/_authenticated/admin.pools'
+import { Route as AuthenticatedAdminSeriesRouteImport } from './routes/_authenticated/admin.series'
 import { Route as AuthenticatedAdminUsersRouteImport } from './routes/_authenticated/admin.users'
 import { Route as AuthenticatedAttemptAttemptIdRouteImport } from './routes/_authenticated/attempt.$attemptId'
 import { Route as AuthenticatedExamsIndexRouteImport } from './routes/_authenticated/exams.index'
 import { Route as AuthenticatedExamsExamIdRouteImport } from './routes/_authenticated/exams.$examId'
 import { Route as AuthenticatedResultsAttemptIdRouteImport } from './routes/_authenticated/results.$attemptId'
+import { Route as AuthenticatedAdminBlueprintsIndexRouteImport } from './routes/_authenticated/admin.blueprints.index'
+import { Route as AuthenticatedAdminBlueprintsBlueprintIdRouteImport } from './routes/_authenticated/admin.blueprints.$blueprintId'
+import { Route as AuthenticatedAdminBlueprintsNewRouteImport } from './routes/_authenticated/admin.blueprints.new'
 import { Route as AuthenticatedAdminExamsExamIdRouteImport } from './routes/_authenticated/admin.exams.$examId'
 import { Route as AuthenticatedAdminExamsNewRouteImport } from './routes/_authenticated/admin.exams.new'
+import { Route as AuthenticatedAdminPoolsIndexRouteImport } from './routes/_authenticated/admin.pools.index'
+import { Route as AuthenticatedAdminPoolsPoolIdRouteImport } from './routes/_authenticated/admin.pools.$poolId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -106,6 +115,18 @@ const AuthenticatedAdminIndexRoute = AuthenticatedAdminIndexRouteImport.update({
   path: '/admin/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedAdminBlueprintsRoute =
+  AuthenticatedAdminBlueprintsRouteImport.update({
+    id: '/admin/blueprints',
+    path: '/admin/blueprints',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedAdminCoursesRoute =
+  AuthenticatedAdminCoursesRouteImport.update({
+    id: '/admin/courses',
+    path: '/admin/courses',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedAdminGamificationRoute =
   AuthenticatedAdminGamificationRouteImport.update({
     id: '/admin/gamification',
@@ -122,6 +143,17 @@ const AuthenticatedAdminPerformanceRoute =
   AuthenticatedAdminPerformanceRouteImport.update({
     id: '/admin/performance',
     path: '/admin/performance',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedAdminPoolsRoute = AuthenticatedAdminPoolsRouteImport.update({
+  id: '/admin/pools',
+  path: '/admin/pools',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedAdminSeriesRoute =
+  AuthenticatedAdminSeriesRouteImport.update({
+    id: '/admin/series',
+    path: '/admin/series',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedAdminUsersRoute = AuthenticatedAdminUsersRouteImport.update({
@@ -152,6 +184,24 @@ const AuthenticatedResultsAttemptIdRoute =
     path: '/results/$attemptId',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedAdminBlueprintsIndexRoute =
+  AuthenticatedAdminBlueprintsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedAdminBlueprintsRoute,
+  } as any)
+const AuthenticatedAdminBlueprintsBlueprintIdRoute =
+  AuthenticatedAdminBlueprintsBlueprintIdRouteImport.update({
+    id: '/$blueprintId',
+    path: '/$blueprintId',
+    getParentRoute: () => AuthenticatedAdminBlueprintsRoute,
+  } as any)
+const AuthenticatedAdminBlueprintsNewRoute =
+  AuthenticatedAdminBlueprintsNewRouteImport.update({
+    id: '/new',
+    path: '/new',
+    getParentRoute: () => AuthenticatedAdminBlueprintsRoute,
+  } as any)
 const AuthenticatedAdminExamsExamIdRoute =
   AuthenticatedAdminExamsExamIdRouteImport.update({
     id: '/admin/exams/$examId',
@@ -163,6 +213,18 @@ const AuthenticatedAdminExamsNewRoute =
     id: '/admin/exams/new',
     path: '/admin/exams/new',
     getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedAdminPoolsIndexRoute =
+  AuthenticatedAdminPoolsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedAdminPoolsRoute,
+  } as any)
+const AuthenticatedAdminPoolsPoolIdRoute =
+  AuthenticatedAdminPoolsPoolIdRouteImport.update({
+    id: '/$poolId',
+    path: '/$poolId',
+    getParentRoute: () => AuthenticatedAdminPoolsRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -178,17 +240,26 @@ export interface FileRoutesByFullPath {
   '/progress': typeof AuthenticatedProgressRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/take/$examId': typeof TakeExamIdRoute
+  '/admin/blueprints': typeof AuthenticatedAdminBlueprintsRouteWithChildren
+  '/admin/courses': typeof AuthenticatedAdminCoursesRoute
   '/admin/gamification': typeof AuthenticatedAdminGamificationRoute
   '/admin/organizations': typeof AuthenticatedAdminOrganizationsRoute
   '/admin/performance': typeof AuthenticatedAdminPerformanceRoute
+  '/admin/pools': typeof AuthenticatedAdminPoolsRouteWithChildren
+  '/admin/series': typeof AuthenticatedAdminSeriesRoute
   '/admin/users': typeof AuthenticatedAdminUsersRoute
   '/attempt/$attemptId': typeof AuthenticatedAttemptAttemptIdRoute
   '/exams/$examId': typeof AuthenticatedExamsExamIdRoute
   '/results/$attemptId': typeof AuthenticatedResultsAttemptIdRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/exams/': typeof AuthenticatedExamsIndexRoute
+  '/admin/blueprints/$blueprintId': typeof AuthenticatedAdminBlueprintsBlueprintIdRoute
+  '/admin/blueprints/new': typeof AuthenticatedAdminBlueprintsNewRoute
   '/admin/exams/$examId': typeof AuthenticatedAdminExamsExamIdRoute
   '/admin/exams/new': typeof AuthenticatedAdminExamsNewRoute
+  '/admin/pools/$poolId': typeof AuthenticatedAdminPoolsPoolIdRoute
+  '/admin/blueprints/': typeof AuthenticatedAdminBlueprintsIndexRoute
+  '/admin/pools/': typeof AuthenticatedAdminPoolsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -203,17 +274,24 @@ export interface FileRoutesByTo {
   '/progress': typeof AuthenticatedProgressRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/take/$examId': typeof TakeExamIdRoute
+  '/admin/courses': typeof AuthenticatedAdminCoursesRoute
   '/admin/gamification': typeof AuthenticatedAdminGamificationRoute
   '/admin/organizations': typeof AuthenticatedAdminOrganizationsRoute
   '/admin/performance': typeof AuthenticatedAdminPerformanceRoute
+  '/admin/series': typeof AuthenticatedAdminSeriesRoute
   '/admin/users': typeof AuthenticatedAdminUsersRoute
   '/attempt/$attemptId': typeof AuthenticatedAttemptAttemptIdRoute
   '/exams/$examId': typeof AuthenticatedExamsExamIdRoute
   '/results/$attemptId': typeof AuthenticatedResultsAttemptIdRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/exams': typeof AuthenticatedExamsIndexRoute
+  '/admin/blueprints/$blueprintId': typeof AuthenticatedAdminBlueprintsBlueprintIdRoute
+  '/admin/blueprints/new': typeof AuthenticatedAdminBlueprintsNewRoute
   '/admin/exams/$examId': typeof AuthenticatedAdminExamsExamIdRoute
   '/admin/exams/new': typeof AuthenticatedAdminExamsNewRoute
+  '/admin/pools/$poolId': typeof AuthenticatedAdminPoolsPoolIdRoute
+  '/admin/blueprints': typeof AuthenticatedAdminBlueprintsIndexRoute
+  '/admin/pools': typeof AuthenticatedAdminPoolsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -230,17 +308,26 @@ export interface FileRoutesById {
   '/_authenticated/progress': typeof AuthenticatedProgressRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/take/$examId': typeof TakeExamIdRoute
+  '/_authenticated/admin/blueprints': typeof AuthenticatedAdminBlueprintsRouteWithChildren
+  '/_authenticated/admin/courses': typeof AuthenticatedAdminCoursesRoute
   '/_authenticated/admin/gamification': typeof AuthenticatedAdminGamificationRoute
   '/_authenticated/admin/organizations': typeof AuthenticatedAdminOrganizationsRoute
   '/_authenticated/admin/performance': typeof AuthenticatedAdminPerformanceRoute
+  '/_authenticated/admin/pools': typeof AuthenticatedAdminPoolsRouteWithChildren
+  '/_authenticated/admin/series': typeof AuthenticatedAdminSeriesRoute
   '/_authenticated/admin/users': typeof AuthenticatedAdminUsersRoute
   '/_authenticated/attempt/$attemptId': typeof AuthenticatedAttemptAttemptIdRoute
   '/_authenticated/exams/$examId': typeof AuthenticatedExamsExamIdRoute
   '/_authenticated/results/$attemptId': typeof AuthenticatedResultsAttemptIdRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/exams/': typeof AuthenticatedExamsIndexRoute
+  '/_authenticated/admin/blueprints/$blueprintId': typeof AuthenticatedAdminBlueprintsBlueprintIdRoute
+  '/_authenticated/admin/blueprints/new': typeof AuthenticatedAdminBlueprintsNewRoute
   '/_authenticated/admin/exams/$examId': typeof AuthenticatedAdminExamsExamIdRoute
   '/_authenticated/admin/exams/new': typeof AuthenticatedAdminExamsNewRoute
+  '/_authenticated/admin/pools/$poolId': typeof AuthenticatedAdminPoolsPoolIdRoute
+  '/_authenticated/admin/blueprints/': typeof AuthenticatedAdminBlueprintsIndexRoute
+  '/_authenticated/admin/pools/': typeof AuthenticatedAdminPoolsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -257,17 +344,26 @@ export interface FileRouteTypes {
     | '/progress'
     | '/auth/callback'
     | '/take/$examId'
+    | '/admin/blueprints'
+    | '/admin/courses'
     | '/admin/gamification'
     | '/admin/organizations'
     | '/admin/performance'
+    | '/admin/pools'
+    | '/admin/series'
     | '/admin/users'
     | '/attempt/$attemptId'
     | '/exams/$examId'
     | '/results/$attemptId'
     | '/admin/'
     | '/exams/'
+    | '/admin/blueprints/$blueprintId'
+    | '/admin/blueprints/new'
     | '/admin/exams/$examId'
     | '/admin/exams/new'
+    | '/admin/pools/$poolId'
+    | '/admin/blueprints/'
+    | '/admin/pools/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -282,17 +378,24 @@ export interface FileRouteTypes {
     | '/progress'
     | '/auth/callback'
     | '/take/$examId'
+    | '/admin/courses'
     | '/admin/gamification'
     | '/admin/organizations'
     | '/admin/performance'
+    | '/admin/series'
     | '/admin/users'
     | '/attempt/$attemptId'
     | '/exams/$examId'
     | '/results/$attemptId'
     | '/admin'
     | '/exams'
+    | '/admin/blueprints/$blueprintId'
+    | '/admin/blueprints/new'
     | '/admin/exams/$examId'
     | '/admin/exams/new'
+    | '/admin/pools/$poolId'
+    | '/admin/blueprints'
+    | '/admin/pools'
   id:
     | '__root__'
     | '/'
@@ -308,17 +411,26 @@ export interface FileRouteTypes {
     | '/_authenticated/progress'
     | '/auth/callback'
     | '/take/$examId'
+    | '/_authenticated/admin/blueprints'
+    | '/_authenticated/admin/courses'
     | '/_authenticated/admin/gamification'
     | '/_authenticated/admin/organizations'
     | '/_authenticated/admin/performance'
+    | '/_authenticated/admin/pools'
+    | '/_authenticated/admin/series'
     | '/_authenticated/admin/users'
     | '/_authenticated/attempt/$attemptId'
     | '/_authenticated/exams/$examId'
     | '/_authenticated/results/$attemptId'
     | '/_authenticated/admin/'
     | '/_authenticated/exams/'
+    | '/_authenticated/admin/blueprints/$blueprintId'
+    | '/_authenticated/admin/blueprints/new'
     | '/_authenticated/admin/exams/$examId'
     | '/_authenticated/admin/exams/new'
+    | '/_authenticated/admin/pools/$poolId'
+    | '/_authenticated/admin/blueprints/'
+    | '/_authenticated/admin/pools/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -430,6 +542,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/admin/blueprints': {
+      id: '/_authenticated/admin/blueprints'
+      path: '/admin/blueprints'
+      fullPath: '/admin/blueprints'
+      preLoaderRoute: typeof AuthenticatedAdminBlueprintsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/admin/courses': {
+      id: '/_authenticated/admin/courses'
+      path: '/admin/courses'
+      fullPath: '/admin/courses'
+      preLoaderRoute: typeof AuthenticatedAdminCoursesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/admin/gamification': {
       id: '/_authenticated/admin/gamification'
       path: '/admin/gamification'
@@ -449,6 +575,20 @@ declare module '@tanstack/react-router' {
       path: '/admin/performance'
       fullPath: '/admin/performance'
       preLoaderRoute: typeof AuthenticatedAdminPerformanceRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/admin/pools': {
+      id: '/_authenticated/admin/pools'
+      path: '/admin/pools'
+      fullPath: '/admin/pools'
+      preLoaderRoute: typeof AuthenticatedAdminPoolsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/admin/series': {
+      id: '/_authenticated/admin/series'
+      path: '/admin/series'
+      fullPath: '/admin/series'
+      preLoaderRoute: typeof AuthenticatedAdminSeriesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/admin/users': {
@@ -486,6 +626,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedResultsAttemptIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/admin/blueprints/': {
+      id: '/_authenticated/admin/blueprints/'
+      path: '/'
+      fullPath: '/admin/blueprints/'
+      preLoaderRoute: typeof AuthenticatedAdminBlueprintsIndexRouteImport
+      parentRoute: typeof AuthenticatedAdminBlueprintsRoute
+    }
+    '/_authenticated/admin/blueprints/$blueprintId': {
+      id: '/_authenticated/admin/blueprints/$blueprintId'
+      path: '/$blueprintId'
+      fullPath: '/admin/blueprints/$blueprintId'
+      preLoaderRoute: typeof AuthenticatedAdminBlueprintsBlueprintIdRouteImport
+      parentRoute: typeof AuthenticatedAdminBlueprintsRoute
+    }
+    '/_authenticated/admin/blueprints/new': {
+      id: '/_authenticated/admin/blueprints/new'
+      path: '/new'
+      fullPath: '/admin/blueprints/new'
+      preLoaderRoute: typeof AuthenticatedAdminBlueprintsNewRouteImport
+      parentRoute: typeof AuthenticatedAdminBlueprintsRoute
+    }
     '/_authenticated/admin/exams/$examId': {
       id: '/_authenticated/admin/exams/$examId'
       path: '/admin/exams/$examId'
@@ -500,8 +661,58 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminExamsNewRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/admin/pools/': {
+      id: '/_authenticated/admin/pools/'
+      path: '/'
+      fullPath: '/admin/pools/'
+      preLoaderRoute: typeof AuthenticatedAdminPoolsIndexRouteImport
+      parentRoute: typeof AuthenticatedAdminPoolsRoute
+    }
+    '/_authenticated/admin/pools/$poolId': {
+      id: '/_authenticated/admin/pools/$poolId'
+      path: '/$poolId'
+      fullPath: '/admin/pools/$poolId'
+      preLoaderRoute: typeof AuthenticatedAdminPoolsPoolIdRouteImport
+      parentRoute: typeof AuthenticatedAdminPoolsRoute
+    }
   }
 }
+
+interface AuthenticatedAdminBlueprintsRouteChildren {
+  AuthenticatedAdminBlueprintsBlueprintIdRoute: typeof AuthenticatedAdminBlueprintsBlueprintIdRoute
+  AuthenticatedAdminBlueprintsNewRoute: typeof AuthenticatedAdminBlueprintsNewRoute
+  AuthenticatedAdminBlueprintsIndexRoute: typeof AuthenticatedAdminBlueprintsIndexRoute
+}
+
+const AuthenticatedAdminBlueprintsRouteChildren: AuthenticatedAdminBlueprintsRouteChildren =
+  {
+    AuthenticatedAdminBlueprintsBlueprintIdRoute:
+      AuthenticatedAdminBlueprintsBlueprintIdRoute,
+    AuthenticatedAdminBlueprintsNewRoute: AuthenticatedAdminBlueprintsNewRoute,
+    AuthenticatedAdminBlueprintsIndexRoute:
+      AuthenticatedAdminBlueprintsIndexRoute,
+  }
+
+const AuthenticatedAdminBlueprintsRouteWithChildren =
+  AuthenticatedAdminBlueprintsRoute._addFileChildren(
+    AuthenticatedAdminBlueprintsRouteChildren,
+  )
+
+interface AuthenticatedAdminPoolsRouteChildren {
+  AuthenticatedAdminPoolsPoolIdRoute: typeof AuthenticatedAdminPoolsPoolIdRoute
+  AuthenticatedAdminPoolsIndexRoute: typeof AuthenticatedAdminPoolsIndexRoute
+}
+
+const AuthenticatedAdminPoolsRouteChildren: AuthenticatedAdminPoolsRouteChildren =
+  {
+    AuthenticatedAdminPoolsPoolIdRoute: AuthenticatedAdminPoolsPoolIdRoute,
+    AuthenticatedAdminPoolsIndexRoute: AuthenticatedAdminPoolsIndexRoute,
+  }
+
+const AuthenticatedAdminPoolsRouteWithChildren =
+  AuthenticatedAdminPoolsRoute._addFileChildren(
+    AuthenticatedAdminPoolsRouteChildren,
+  )
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAchievementsRoute: typeof AuthenticatedAchievementsRoute
@@ -510,9 +721,13 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedNotificationsRoute: typeof AuthenticatedNotificationsRoute
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedProgressRoute: typeof AuthenticatedProgressRoute
+  AuthenticatedAdminBlueprintsRoute: typeof AuthenticatedAdminBlueprintsRouteWithChildren
+  AuthenticatedAdminCoursesRoute: typeof AuthenticatedAdminCoursesRoute
   AuthenticatedAdminGamificationRoute: typeof AuthenticatedAdminGamificationRoute
   AuthenticatedAdminOrganizationsRoute: typeof AuthenticatedAdminOrganizationsRoute
   AuthenticatedAdminPerformanceRoute: typeof AuthenticatedAdminPerformanceRoute
+  AuthenticatedAdminPoolsRoute: typeof AuthenticatedAdminPoolsRouteWithChildren
+  AuthenticatedAdminSeriesRoute: typeof AuthenticatedAdminSeriesRoute
   AuthenticatedAdminUsersRoute: typeof AuthenticatedAdminUsersRoute
   AuthenticatedAttemptAttemptIdRoute: typeof AuthenticatedAttemptAttemptIdRoute
   AuthenticatedExamsExamIdRoute: typeof AuthenticatedExamsExamIdRoute
@@ -530,9 +745,14 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedNotificationsRoute: AuthenticatedNotificationsRoute,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedProgressRoute: AuthenticatedProgressRoute,
+  AuthenticatedAdminBlueprintsRoute:
+    AuthenticatedAdminBlueprintsRouteWithChildren,
+  AuthenticatedAdminCoursesRoute: AuthenticatedAdminCoursesRoute,
   AuthenticatedAdminGamificationRoute: AuthenticatedAdminGamificationRoute,
   AuthenticatedAdminOrganizationsRoute: AuthenticatedAdminOrganizationsRoute,
   AuthenticatedAdminPerformanceRoute: AuthenticatedAdminPerformanceRoute,
+  AuthenticatedAdminPoolsRoute: AuthenticatedAdminPoolsRouteWithChildren,
+  AuthenticatedAdminSeriesRoute: AuthenticatedAdminSeriesRoute,
   AuthenticatedAdminUsersRoute: AuthenticatedAdminUsersRoute,
   AuthenticatedAttemptAttemptIdRoute: AuthenticatedAttemptAttemptIdRoute,
   AuthenticatedExamsExamIdRoute: AuthenticatedExamsExamIdRoute,

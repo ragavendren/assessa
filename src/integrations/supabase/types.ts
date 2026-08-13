@@ -195,6 +195,14 @@ export type Database = {
           organization: string | null;
           pass_mark: number;
           question_count: number;
+          question_selection_method: Database["public"]["Enums"]["question_selection_method"];
+          course_id: string | null;
+          question_pool_id: string | null;
+          blueprint_id: string | null;
+          series_id: string | null;
+          reuse_policy: Database["public"]["Enums"]["question_reuse_policy"] | null;
+          reuse_last_n: number | null;
+          generation_locked_at: string | null;
           show_others: boolean;
           show_rank: boolean;
           starts_at: string | null;
@@ -221,6 +229,14 @@ export type Database = {
           organization?: string | null;
           pass_mark?: number;
           question_count?: number;
+          question_selection_method?: Database["public"]["Enums"]["question_selection_method"];
+          course_id?: string | null;
+          question_pool_id?: string | null;
+          blueprint_id?: string | null;
+          series_id?: string | null;
+          reuse_policy?: Database["public"]["Enums"]["question_reuse_policy"] | null;
+          reuse_last_n?: number | null;
+          generation_locked_at?: string | null;
           show_others?: boolean;
           show_rank?: boolean;
           starts_at?: string | null;
@@ -247,6 +263,14 @@ export type Database = {
           organization?: string | null;
           pass_mark?: number;
           question_count?: number;
+          question_selection_method?: Database["public"]["Enums"]["question_selection_method"];
+          course_id?: string | null;
+          question_pool_id?: string | null;
+          blueprint_id?: string | null;
+          series_id?: string | null;
+          reuse_policy?: Database["public"]["Enums"]["question_reuse_policy"] | null;
+          reuse_last_n?: number | null;
+          generation_locked_at?: string | null;
           show_others?: boolean;
           show_rank?: boolean;
           starts_at?: string | null;
@@ -255,7 +279,368 @@ export type Database = {
           title?: string;
           topic?: string;
         };
+        Relationships: [
+          {
+            foreignKeyName: "exams_course_id_fkey";
+            columns: ["course_id"];
+            isOneToOne: false;
+            referencedRelation: "courses";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "exams_question_pool_id_fkey";
+            columns: ["question_pool_id"];
+            isOneToOne: false;
+            referencedRelation: "question_pools";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "exams_blueprint_id_fkey";
+            columns: ["blueprint_id"];
+            isOneToOne: false;
+            referencedRelation: "course_blueprints";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "exams_series_id_fkey";
+            columns: ["series_id"];
+            isOneToOne: false;
+            referencedRelation: "assessment_series";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      courses: {
+        Row: {
+          id: string;
+          name: string;
+          status: Database["public"]["Enums"]["catalog_status"];
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          status?: Database["public"]["Enums"]["catalog_status"];
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          status?: Database["public"]["Enums"]["catalog_status"];
+          created_at?: string;
+          updated_at?: string;
+        };
         Relationships: [];
+      };
+      question_pools: {
+        Row: {
+          id: string;
+          course_id: string;
+          name: string;
+          status: Database["public"]["Enums"]["catalog_status"];
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          course_id: string;
+          name: string;
+          status?: Database["public"]["Enums"]["catalog_status"];
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          course_id?: string;
+          name?: string;
+          status?: Database["public"]["Enums"]["catalog_status"];
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "question_pools_course_id_fkey";
+            columns: ["course_id"];
+            isOneToOne: false;
+            referencedRelation: "courses";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      pool_questions: {
+        Row: {
+          id: string;
+          pool_id: string;
+          prompt: string;
+          options: Json;
+          correct_index: number;
+          correct_indexes: number[];
+          explanation: string;
+          topic: string;
+          subtopic: string;
+          difficulty: Database["public"]["Enums"]["question_difficulty"];
+          skill: string;
+          tags: string[];
+          marks: number;
+          status: Database["public"]["Enums"]["catalog_status"];
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          pool_id: string;
+          prompt: string;
+          options?: Json;
+          correct_index?: number;
+          correct_indexes?: number[];
+          explanation?: string;
+          topic?: string;
+          subtopic?: string;
+          difficulty?: Database["public"]["Enums"]["question_difficulty"];
+          skill?: string;
+          tags?: string[];
+          marks?: number;
+          status?: Database["public"]["Enums"]["catalog_status"];
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          pool_id?: string;
+          prompt?: string;
+          options?: Json;
+          correct_index?: number;
+          correct_indexes?: number[];
+          explanation?: string;
+          topic?: string;
+          subtopic?: string;
+          difficulty?: Database["public"]["Enums"]["question_difficulty"];
+          skill?: string;
+          tags?: string[];
+          marks?: number;
+          status?: Database["public"]["Enums"]["catalog_status"];
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "pool_questions_pool_id_fkey";
+            columns: ["pool_id"];
+            isOneToOne: false;
+            referencedRelation: "question_pools";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      course_blueprints: {
+        Row: {
+          id: string;
+          course_id: string;
+          name: string;
+          version: number;
+          status: Database["public"]["Enums"]["catalog_status"];
+          default_total_questions: number;
+          is_default: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          course_id: string;
+          name: string;
+          version?: number;
+          status?: Database["public"]["Enums"]["catalog_status"];
+          default_total_questions?: number;
+          is_default?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          course_id?: string;
+          name?: string;
+          version?: number;
+          status?: Database["public"]["Enums"]["catalog_status"];
+          default_total_questions?: number;
+          is_default?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "course_blueprints_course_id_fkey";
+            columns: ["course_id"];
+            isOneToOne: false;
+            referencedRelation: "courses";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      blueprint_rules: {
+        Row: {
+          id: string;
+          blueprint_id: string;
+          topic: string;
+          subtopic: string | null;
+          weightage: number;
+          min_questions: number;
+          max_questions: number | null;
+          easy_percentage: number;
+          medium_percentage: number;
+          hard_percentage: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          blueprint_id: string;
+          topic: string;
+          subtopic?: string | null;
+          weightage: number;
+          min_questions?: number;
+          max_questions?: number | null;
+          easy_percentage?: number;
+          medium_percentage?: number;
+          hard_percentage?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          blueprint_id?: string;
+          topic?: string;
+          subtopic?: string | null;
+          weightage?: number;
+          min_questions?: number;
+          max_questions?: number | null;
+          easy_percentage?: number;
+          medium_percentage?: number;
+          hard_percentage?: number;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "blueprint_rules_blueprint_id_fkey";
+            columns: ["blueprint_id"];
+            isOneToOne: false;
+            referencedRelation: "course_blueprints";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      assessment_series: {
+        Row: {
+          id: string;
+          course_id: string;
+          blueprint_id: string;
+          question_pool_id: string;
+          name: string;
+          reuse_policy: Database["public"]["Enums"]["question_reuse_policy"];
+          reuse_last_n: number;
+          status: Database["public"]["Enums"]["catalog_status"];
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          course_id: string;
+          blueprint_id: string;
+          question_pool_id: string;
+          name: string;
+          reuse_policy?: Database["public"]["Enums"]["question_reuse_policy"];
+          reuse_last_n?: number;
+          status?: Database["public"]["Enums"]["catalog_status"];
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          course_id?: string;
+          blueprint_id?: string;
+          question_pool_id?: string;
+          name?: string;
+          reuse_policy?: Database["public"]["Enums"]["question_reuse_policy"];
+          reuse_last_n?: number;
+          status?: Database["public"]["Enums"]["catalog_status"];
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "assessment_series_course_id_fkey";
+            columns: ["course_id"];
+            isOneToOne: false;
+            referencedRelation: "courses";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "assessment_series_blueprint_id_fkey";
+            columns: ["blueprint_id"];
+            isOneToOne: false;
+            referencedRelation: "course_blueprints";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "assessment_series_question_pool_id_fkey";
+            columns: ["question_pool_id"];
+            isOneToOne: false;
+            referencedRelation: "question_pools";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      exam_generation_audit: {
+        Row: {
+          id: string;
+          exam_id: string;
+          method: Database["public"]["Enums"]["question_selection_method"];
+          pool_id: string | null;
+          blueprint_id: string | null;
+          blueprint_version: number | null;
+          series_id: string | null;
+          reuse_policy: Database["public"]["Enums"]["question_reuse_policy"] | null;
+          question_count: number;
+          selected_pool_question_ids: string[];
+          distribution: Json;
+          generated_at: string;
+        };
+        Insert: {
+          id?: string;
+          exam_id: string;
+          method?: Database["public"]["Enums"]["question_selection_method"];
+          pool_id?: string | null;
+          blueprint_id?: string | null;
+          blueprint_version?: number | null;
+          series_id?: string | null;
+          reuse_policy?: Database["public"]["Enums"]["question_reuse_policy"] | null;
+          question_count: number;
+          selected_pool_question_ids?: string[];
+          distribution?: Json;
+          generated_at?: string;
+        };
+        Update: {
+          id?: string;
+          exam_id?: string;
+          method?: Database["public"]["Enums"]["question_selection_method"];
+          pool_id?: string | null;
+          blueprint_id?: string | null;
+          blueprint_version?: number | null;
+          series_id?: string | null;
+          reuse_policy?: Database["public"]["Enums"]["question_reuse_policy"] | null;
+          question_count?: number;
+          selected_pool_question_ids?: string[];
+          distribution?: Json;
+          generated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "exam_generation_audit_exam_id_fkey";
+            columns: ["exam_id"];
+            isOneToOne: false;
+            referencedRelation: "exams";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       levels: {
         Row: {
@@ -392,6 +777,7 @@ export type Database = {
           points: number;
           prompt: string;
           subtopic: string;
+          source_pool_question_id: string | null;
         };
         Insert: {
           correct_index?: number;
@@ -404,6 +790,7 @@ export type Database = {
           points?: number;
           prompt: string;
           subtopic?: string;
+          source_pool_question_id?: string | null;
         };
         Update: {
           correct_index?: number;
@@ -416,6 +803,7 @@ export type Database = {
           points?: number;
           prompt?: string;
           subtopic?: string;
+          source_pool_question_id?: string | null;
         };
         Relationships: [
           {
@@ -423,6 +811,13 @@ export type Database = {
             columns: ["exam_id"];
             isOneToOne: false;
             referencedRelation: "exams";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "questions_source_pool_question_id_fkey";
+            columns: ["source_pool_question_id"];
+            isOneToOne: false;
+            referencedRelation: "pool_questions";
             referencedColumns: ["id"];
           },
         ];
@@ -608,6 +1003,15 @@ export type Database = {
       exam_access: "public" | "private" | "organization" | "group";
       exam_mode: "practice" | "assessment" | "competitive" | "certification";
       name_display: "full_name" | "first_initial" | "display_name" | "anonymous";
+      question_selection_method: "upload" | "question_pool";
+      question_reuse_policy:
+        | "allow_reuse"
+        | "no_reuse_course"
+        | "no_reuse_series"
+        | "until_pool_exhausted"
+        | "no_reuse_last_n";
+      question_difficulty: "easy" | "medium" | "hard";
+      catalog_status: "active" | "inactive";
     };
     CompositeTypes: {
       [_ in never]: never;
@@ -734,6 +1138,16 @@ export const Constants = {
       exam_access: ["public", "private", "organization", "group"],
       exam_mode: ["practice", "assessment", "competitive", "certification"],
       name_display: ["full_name", "first_initial", "display_name", "anonymous"],
+      question_selection_method: ["upload", "question_pool"],
+      question_reuse_policy: [
+        "allow_reuse",
+        "no_reuse_course",
+        "until_pool_exhausted",
+        "no_reuse_series",
+        "no_reuse_last_n",
+      ],
+      question_difficulty: ["easy", "medium", "hard"],
+      catalog_status: ["active", "inactive"],
     },
   },
 } as const;

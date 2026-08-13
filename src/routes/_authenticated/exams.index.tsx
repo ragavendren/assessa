@@ -27,13 +27,14 @@ export const Route = createFileRoute("/_authenticated/exams/")({
   component: MyExams,
 });
 
-const FILTERS = ["all", "available", "upcoming", "in_progress", "completed"] as const;
+const FILTERS = ["all", "available", "upcoming", "in_progress", "completed", "closed"] as const;
 const FILTER_LABELS: Record<(typeof FILTERS)[number], string> = {
   all: "All",
   available: "Available",
   upcoming: "Upcoming",
   in_progress: "In progress",
   completed: "Completed",
+  closed: "Closed",
 };
 
 type ExamItem = Awaited<ReturnType<typeof listMyExams>>[number];
@@ -49,7 +50,14 @@ function MyExams() {
   const [view, setView] = useListViewMode("my-exams", "grid");
 
   const counts = useMemo(() => {
-    const base = { all: 0, available: 0, upcoming: 0, in_progress: 0, completed: 0 };
+    const base = {
+      all: 0,
+      available: 0,
+      upcoming: 0,
+      in_progress: 0,
+      completed: 0,
+      closed: 0,
+    };
     for (const exam of data ?? []) {
       base.all += 1;
       base[exam.status] += 1;
@@ -211,6 +219,10 @@ function ExamActions({ exam, compact }: { exam: ExamItem; compact?: boolean }) {
     <div className="flex flex-wrap items-center gap-2">
       {exam.status === "upcoming" ? (
         <span className="text-sm text-muted-foreground">Opens {formatDate(exam.startsAt)}</span>
+      ) : exam.status === "closed" ? (
+        <span className="text-sm text-muted-foreground">
+          Closed{exam.endsAt ? ` ${formatDate(exam.endsAt)}` : ""}
+        </span>
       ) : exam.status === "in_progress" ? (
         <Link
           to="/attempt/$attemptId"
