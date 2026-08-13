@@ -135,7 +135,7 @@ export function EmailChipInput({
           setInvalid(false);
         }}
         placeholder={emails.length === 0 ? placeholder : "Add another…"}
-        className="min-w-[10rem] flex-1 border-0 bg-transparent p-0 text-sm outline-none placeholder:text-muted-foreground"
+        className="min-w-0 flex-1 border-0 bg-transparent p-0 text-sm outline-none placeholder:text-muted-foreground"
         autoComplete="off"
       />
     </div>

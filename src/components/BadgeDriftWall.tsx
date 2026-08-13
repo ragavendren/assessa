@@ -1,9 +1,11 @@
+import { BadgeMark } from "@/components/BadgeMark";
 import { cn } from "@/lib/utils";
 import { useMemo } from "react";
 
 type DriftBadge = {
   icon: string;
   name?: string;
+  code?: string;
 };
 
 type BadgeDriftWallProps = {
@@ -31,15 +33,20 @@ export function BadgeDriftWall({ badges, className, limit = 10 }: BadgeDriftWall
       <div className="absolute inset-y-0 right-0 z-[1] w-8 bg-gradient-to-l from-card to-transparent sm:w-10" />
       {icons.map((badge, index) => (
         <span
-          key={`${badge.icon}-${index}`}
+          key={`${badge.code ?? badge.icon}-${index}`}
           className={cn(
-            "relative z-0 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border/60 bg-card/85 text-lg opacity-50 shadow-sm backdrop-blur-[1px] sm:opacity-60",
+            "relative z-0",
             index % 2 === 0 ? "animate-dash-float" : "animate-dash-float-alt",
           )}
           style={{ animationDelay: `${index * 0.45}s` }}
-          title={badge.name}
         >
-          {badge.icon}
+          <BadgeMark
+            icon={badge.icon}
+            size="sm"
+            className="border-0 bg-transparent opacity-70 shadow-none sm:opacity-80"
+            {...(badge.code ? { code: badge.code } : {})}
+            {...(badge.name ? { name: badge.name } : {})}
+          />
         </span>
       ))}
     </div>

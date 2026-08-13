@@ -170,6 +170,7 @@
     color: var(--color-foreground);
     font-family: var(--font-body);
     -webkit-font-smoothing: antialiased;
+    overflow-x: clip;
   }
 
   h1,
@@ -297,6 +298,102 @@
 
 @utility animate-medal-pop {
   animation: medal-pop 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes badge-glitter-twinkle {
+  0%,
+  100% {
+    opacity: 0.15;
+    transform: scale(0.7);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+  70% {
+    opacity: 0.45;
+    transform: scale(0.9);
+  }
+}
+
+@keyframes badge-glitter-spin {
+  0%,
+  100% {
+    opacity: 0.2;
+    transform: rotate(0deg) scale(0.75);
+  }
+  50% {
+    opacity: 1;
+    transform: rotate(20deg) scale(1.2);
+  }
+}
+
+@keyframes badge-shimmer-sweep {
+  0% {
+    transform: translateX(-40px);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  45% {
+    transform: translateX(90px);
+    opacity: 0.9;
+  }
+  70%,
+  100% {
+    transform: translateX(170px);
+    opacity: 0;
+  }
+}
+
+@keyframes badge-shine-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1.08);
+  }
+}
+
+.badge-glitter-dot {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: badge-glitter-twinkle 2.4s ease-in-out infinite;
+}
+
+.badge-glitter-star {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: badge-glitter-spin 2.8s ease-in-out infinite;
+}
+
+.badge-shimmer-sweep {
+  animation: badge-shimmer-sweep 2.8s ease-in-out infinite;
+}
+
+.badge-shimmer-sweep-delayed {
+  animation: badge-shimmer-sweep 2.8s ease-in-out 1.4s infinite;
+}
+
+.badge-shine-pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: badge-shine-pulse 2.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .badge-glitter-dot,
+  .badge-glitter-star,
+  .badge-shimmer-sweep,
+  .badge-shimmer-sweep-delayed,
+  .badge-shine-pulse {
+    animation: none;
+    opacity: 0.55;
+  }
 }
 
 @keyframes achievement-card-in {

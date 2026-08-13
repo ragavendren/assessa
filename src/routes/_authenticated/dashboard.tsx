@@ -1,4 +1,5 @@
 import { BadgeDriftWall } from "@/components/BadgeDriftWall";
+import { BadgeMark } from "@/components/BadgeMark";
 import { Carousel } from "@/components/Carousel";
 import {
   EmptyState,
@@ -294,9 +295,12 @@ function Dashboard() {
                 className="surface-paper dash-lift dash-lift-hover flex h-full min-h-[7.5rem] flex-col items-center justify-center gap-2 px-3 py-4 text-center"
                 title={badge.description || badge.name}
               >
-                <span className="text-3xl leading-none" aria-hidden>
-                  {badge.icon}
-                </span>
+                <BadgeMark
+                  icon={badge.icon}
+                  code={"code" in badge ? (badge.code ?? null) : null}
+                  name={badge.name}
+                  size="lg"
+                />
                 <p className="line-clamp-2 text-xs font-medium leading-snug">{badge.name}</p>
                 {"earnedAt" in badge && badge.earnedAt ? (
                   <p className="text-[10px] text-muted-foreground">{formatDate(badge.earnedAt)}</p>

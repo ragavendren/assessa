@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Assessa BadgeBase  reference artboard for Figma / Illustrator.
+  Production UI uses React: src/components/badges/BadgeBase.tsx
+
+  Track fills:
+    Beginner      #34d399 ’ #059669
+    Intermediate  #60a5fa ’ #2563eb
+    Expertise     #c084fc ’ #7c3aed
+    Elite         #fbbf24 ’ #ea580c
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Badge base">
+  <defs>
+    <linearGradient id="fill" x1="20%" y1="8%" x2="80%" y2="95%">
+      <stop offset="0%" stop-color="#34d399"/>
+      <stop offset="55%" stop-color="#059669"/>
+      <stop offset="100%" stop-color="#047857"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a7f3d0"/>
+      <stop offset="45%" stop-color="#ffffff" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#047857"/>
+    </linearGradient>
+    <linearGradient id="gloss" x1="30%" y1="0%" x2="70%" y2="70%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.55"/>
+      <stop offset="45%" stop-color="#ffffff" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-10%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="3" stdDeviation="3.5" flood-color="#000000" flood-opacity="0.28"/>
+    </filter>
+  </defs>
+  <ellipse cx="64" cy="112" rx="34" ry="8" fill="rgba(16,185,129,0.45)" opacity="0.55"/>
+  <g filter="url(#shadow)">
+    <path d="M64 8c18 6 34 8 46 10v42c0 28-18 48-46 58C36 108 18 88 18 60V18c12-2 28-4 46-10z" fill="url(#rim)"/>
+    <path d="M64 16c15 5 28 7 38 8.5V58c0 23-15 40-38 48C41 98 26 81 26 58V24.5C36 23 49 21 64 16z" fill="url(#fill)"/>
+    <path d="M64 24c12 4 22 5.5 30 6.5V56c0 18-11.5 31.5-30 38-18.5-6.5-30-20-30-38V30.5c8-1 18-2.5 30-6.5z" fill="#059669" opacity="0.35"/>
+    <path d="M42 28c8-4 22-7 36-8 2 10 1 22-4 30-8 2-18 2-28-1 0-7 0-14-4-21z" fill="url(#gloss)"/>
+  </g>
+  <g fill="#a7f3d0" opacity="0.9">
+    <path d="M28 72c-6 4-10 10-11 16 5-2 10-3 14-2-4 4-6 9-6 14 5-3 10-4 15-3-3 5-4 10-3 15 6-5 11-7 16-6-8-12-16-22-25-34z"/>
+    <path d="M100 72c6 4 10 10 11 16-5-2-10-3-14-2 4 4 6 9 6 14-5-3-10-4-15-3 3 5 4 10 3 15-6-5-11-7-16-6 8-12 16-22 25-34z"/>
+  </g>
+  <g fill="#fef3c7">
+    <path d="M64 10l1.4 3.2 3.4.4-2.6 2.3.8 3.3L64 17.4l-3 1.8.8-3.3-2.6-2.3 3.4-.4L64 10z"/>
+    <path d="M40 34l1.1 2.4 2.6.3-2 1.7.6 2.5-2.3-1.4-2.3 1.4.6-2.5-2-1.7 2.6-.3L40 34z"/>
+    <path d="M88 34l1.1 2.4 2.6.3-2 1.7.6 2.5-2.3-1.4-2.3 1.4.6-2.5-2-1.7 2.6-.3L88 34z"/>
+  </g>
+  <!-- Centre glyph slot: place a 24×24 icon at translate(40 40) scale(2) -->
+</svg>

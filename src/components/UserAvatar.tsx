@@ -1,42 +1,25 @@
-import { getAvatar } from "@/lib/avatars";
-import { initials } from "@/lib/gamification";
+import { Avatar } from "@/components/avatars";
 import { cn } from "@/lib/utils";
 
 type UserAvatarProps = {
-  avatarId?: string | null;
-  name?: string | null;
+  avatarId?: string | null | undefined;
+  name?: string | null | undefined;
   className?: string;
-  /** @deprecated kept for call-site compat; unused for image avatars */
+  /** @deprecated kept for call-site compat */
   emojiClassName?: string;
   title?: string;
+  size?: number;
 };
 
-/** Renders a catalog avatar image or initials fallback. */
-export function UserAvatar({ avatarId, name, className, title }: UserAvatarProps) {
-  const avatar = getAvatar(avatarId);
-  if (avatar) {
-    return (
-      <span
-        className={cn(
-          "inline-flex items-center justify-center overflow-hidden rounded-full bg-secondary",
-          className,
-        )}
-        title={title ?? `${avatar.label} (${avatar.category})`}
-      >
-        <img src={avatar.src} alt="" className="h-full w-full object-cover" draggable={false} />
-      </span>
-    );
-  }
-
+/** Renders a catalog SVG avatar or initials fallback. */
+export function UserAvatar({ avatarId, name, className, title, size = 40 }: UserAvatarProps) {
   return (
-    <span
-      className={cn(
-        "inline-flex items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-foreground",
-        className,
-      )}
-      title={title}
-    >
-      {initials(name ?? "")}
-    </span>
+    <Avatar
+      size={size}
+      className={cn(className)}
+      {...(avatarId !== undefined ? { type: avatarId } : {})}
+      {...(name !== undefined ? { name } : {})}
+      {...(title ? { title } : {})}
+    />
   );
 }

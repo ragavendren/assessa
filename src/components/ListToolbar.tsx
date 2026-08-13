@@ -68,7 +68,7 @@ export function ListToolbar<T extends string>({
     <div className="mb-5 space-y-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <input
-          className="field sm:max-w-md"
+          className="field w-full min-w-0 sm:max-w-md"
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
           placeholder={searchPlaceholder}
@@ -134,7 +134,7 @@ export function ListToolbar<T extends string>({
 }
 
 export function listViewClass(view: ListViewMode) {
-  if (view === "grid") return "grid gap-4 md:grid-cols-2";
-  if (view === "stack") return "grid gap-4 grid-cols-1";
+  if (view === "grid") return "grid min-w-0 gap-4 md:grid-cols-2";
+  if (view === "stack") return "grid min-w-0 gap-4 grid-cols-1";
   return "hidden";
 }

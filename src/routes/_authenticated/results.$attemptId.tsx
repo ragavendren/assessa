@@ -1,3 +1,4 @@
+import { BadgeMark } from "@/components/BadgeMark";
 import { PageLoader, ScorePill } from "@/components/platform";
 import { ResultCelebration } from "@/components/ResultCelebration";
 import { formatDuration } from "@/lib/gamification";
@@ -197,12 +198,13 @@ function ResultPage() {
                 key={badge.code}
                 className="flex items-start gap-3.5 rounded-xl border border-border/70 bg-secondary/50 p-4"
               >
-                <span
-                  className="animate-medal-pop text-2xl"
-                  style={{ animationDelay: `${180 + index * 90}ms` }}
-                >
-                  {badge.icon}
-                </span>
+                <BadgeMark
+                  icon={badge.icon}
+                  code={badge.code}
+                  name={badge.name}
+                  size="lg"
+                  className="animate-medal-pop"
+                />
                 <div className="min-w-0">
                   <p className="font-medium">{badge.name}</p>
                   <p className="mt-1 text-xs leading-relaxed text-muted-foreground">

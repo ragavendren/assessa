@@ -1,5 +1,12 @@
 import { AdminNav } from "@/components/AdminNav";
-import { EmptyState, PageLoader, SectionHeading } from "@/components/platform";
+import {
+  AdminEmpty,
+  AdminPageHeader,
+  AdminPanel,
+  ResultCount,
+  StatusPill,
+} from "@/components/admin/AdminPageUi";
+import { PageLoader } from "@/components/platform";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   deleteDepartment,
@@ -8,11 +15,12 @@ import {
   upsertDepartment,
   upsertOrganization,
 } from "@/lib/admin.functions";
+import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { Plus, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Plus, Search, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/admin/organizations")({
@@ -45,18 +53,41 @@ function AdminOrganizationsPage() {
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
   const [orgName, setOrgName] = useState("");
   const [teamName, setTeamName] = useState("");
+  const [orgSearch, setOrgSearch] = useState("");
+
+  const orgs = data?.organizations ?? [];
+  const departments = data?.departments ?? [];
+
+  const filteredOrgs = useMemo(() => {
+    const q = orgSearch.trim().toLowerCase();
+    if (!q) return orgs;
+    return orgs.filter((org) => org.name.toLowerCase().includes(q));
+  }, [orgs, orgSearch]);
+
+  const teamCountByOrg = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const dept of departments) {
+      map.set(dept.organization_id, (map.get(dept.organization_id) ?? 0) + 1);
+    }
+    return map;
+  }, [departments]);
+
+  useEffect(() => {
+    if (selectedOrgId || filteredOrgs.length === 0) return;
+    setSelectedOrgId(filteredOrgs[0]!.id);
+  }, [filteredOrgs, selectedOrgId]);
 
   const selectedOrg = useMemo(
-    () => (data?.organizations ?? []).find((org) => org.id === selectedOrgId) ?? null,
-    [data?.organizations, selectedOrgId],
+    () => orgs.find((org) => org.id === selectedOrgId) ?? null,
+    [orgs, selectedOrgId],
   );
 
   const teams = useMemo(
     () =>
-      (data?.departments ?? []).filter((dept) =>
+      departments.filter((dept) =>
         selectedOrgId ? dept.organization_id === selectedOrgId : false,
       ),
-    [data?.departments, selectedOrgId],
+    [departments, selectedOrgId],
   );
 
   const invalidate = () => {
@@ -93,22 +124,29 @@ function AdminOrganizationsPage() {
   return (
     <div>
       <AdminNav />
-      <SectionHeading eyebrow="Admin" title="Organisations" />
-      <p className="mb-6 max-w-2xl text-sm text-muted-foreground">
-        Participants must pick an organisation and team / group when they sign up or first sign in.
-        Keep names consistent — organisation access and leaderboards match on these values.
-      </p>
+      <AdminPageHeader
+        eyebrow="People"
+        title="Organisations"
+        summary="Participants pick an organisation, then a team / group at signup. Names must match assessment access and leaderboard filters."
+        help={{
+          label: "Why this matters",
+          body: "Organisation and group access on assessments match these names exactly. Keep spelling consistent.",
+        }}
+      />
 
       {isPending || !data ? (
         <PageLoader />
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-          <section className="surface-paper p-5">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <p className="text-hairline text-muted-foreground">Organisations</p>
-              <span className="text-xs text-muted-foreground">{data.organizations.length}</span>
-            </div>
-
+        <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:items-start">
+          <AdminPanel
+            title="Organisations"
+            description="Add a company or school, then select it to manage teams."
+            help={{
+              label: "Inactive orgs",
+              body: "Inactive organisations stay in history but are hidden from signup pickers.",
+            }}
+            action={<ResultCount shown={filteredOrgs.length} total={orgs.length} noun="orgs" />}
+          >
             <form
               className="mb-4 flex gap-2"
               onSubmit={(event) => {
@@ -136,43 +174,66 @@ function AdminOrganizationsPage() {
               </button>
             </form>
 
-            {data.organizations.length === 0 ? (
-              <EmptyState
-                icon="🏢"
-                title="No organisations yet"
-                body="Add the companies or schools that participants belong to."
+            {orgs.length > 0 ? (
+              <label className="relative mb-3 block">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  className="field pl-9"
+                  value={orgSearch}
+                  onChange={(event) => setOrgSearch(event.target.value)}
+                  placeholder="Filter organisations…"
+                  aria-label="Filter organisations"
+                />
+              </label>
+            ) : null}
+
+            {filteredOrgs.length === 0 ? (
+              <AdminEmpty
+                title={orgs.length === 0 ? "No organisations yet" : "No match"}
+                body={
+                  orgs.length === 0
+                    ? "Add the companies or schools that participants belong to."
+                    : "Try a different search."
+                }
               />
             ) : (
-              <ul className="divide-y divide-border">
-                {data.organizations.map((org) => (
-                  <li key={org.id}>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedOrgId(org.id)}
-                      className={
-                        "flex w-full items-center justify-between gap-3 px-2 py-3 text-left text-sm transition-colors " +
-                        (selectedOrgId === org.id
-                          ? "bg-accent/10 font-medium"
-                          : "hover:bg-secondary")
-                      }
-                    >
-                      <span>{org.name}</span>
-                      {!org.active ? (
-                        <span className="text-xs text-muted-foreground">inactive</span>
-                      ) : null}
-                    </button>
-                  </li>
-                ))}
+              <ul className="divide-y divide-border overflow-hidden rounded-md border border-border">
+                {filteredOrgs.map((org) => {
+                  const count = teamCountByOrg.get(org.id) ?? 0;
+                  const selected = selectedOrgId === org.id;
+                  return (
+                    <li key={org.id}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedOrgId(org.id)}
+                        className={cn(
+                          "flex w-full items-center justify-between gap-3 px-3 py-3 text-left text-sm transition-colors",
+                          selected ? "bg-primary/5" : "hover:bg-secondary/50",
+                        )}
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate font-medium">{org.name}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {count} team{count === 1 ? "" : "s"} / group{count === 1 ? "" : "s"}
+                          </span>
+                        </span>
+                        <StatusPill tone={org.active ? "live" : "draft"}>
+                          {org.active ? "Active" : "Inactive"}
+                        </StatusPill>
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             )}
-          </section>
+          </AdminPanel>
 
-          <section className="surface-paper p-5">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <p className="text-hairline text-muted-foreground">
-                Teams / Groups{selectedOrg ? ` · ${selectedOrg.name}` : ""}
-              </p>
-              {selectedOrg ? (
+          <AdminPanel
+            className="lg:sticky lg:top-20"
+            title={selectedOrg ? `Teams / groups · ${selectedOrg.name}` : "Teams / groups"}
+            description="These names appear in signup and One team / group assessment access."
+            action={
+              selectedOrg ? (
                 <button
                   type="button"
                   onClick={() => {
@@ -200,12 +261,11 @@ function AdminOrganizationsPage() {
                 >
                   <Trash2 className="h-3.5 w-3.5" /> Delete organisation
                 </button>
-              ) : null}
-            </div>
-
+              ) : null
+            }
+          >
             {!selectedOrg ? (
-              <EmptyState
-                icon="🗂️"
+              <AdminEmpty
                 title="Select an organisation"
                 body="Choose an organisation on the left to manage its teams / groups."
               />
@@ -239,17 +299,22 @@ function AdminOrganizationsPage() {
                 </form>
 
                 {teams.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="rounded-md border border-dashed border-border bg-secondary/20 px-3 py-8 text-center text-sm text-muted-foreground">
                     No teams / groups yet for this organisation.
                   </p>
                 ) : (
-                  <ul className="divide-y divide-border">
+                  <ul className="divide-y divide-border overflow-hidden rounded-md border border-border">
                     {teams.map((team) => (
                       <li
                         key={team.id}
-                        className="flex items-center justify-between gap-3 px-2 py-3 text-sm"
+                        className="flex items-center justify-between gap-3 px-3 py-3 text-sm"
                       >
-                        <span>{team.name}</span>
+                        <span>
+                          <span className="block font-medium">{team.name}</span>
+                          {!team.active ? (
+                            <span className="text-xs text-muted-foreground">Inactive</span>
+                          ) : null}
+                        </span>
                         <button
                           type="button"
                           onClick={() => {
@@ -274,7 +339,7 @@ function AdminOrganizationsPage() {
                               }
                             })();
                           }}
-                          className="text-muted-foreground hover:text-destructive"
+                          className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                           aria-label={`Delete ${team.name}`}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -285,7 +350,7 @@ function AdminOrganizationsPage() {
                 )}
               </>
             )}
-          </section>
+          </AdminPanel>
         </div>
       )}
     </div>

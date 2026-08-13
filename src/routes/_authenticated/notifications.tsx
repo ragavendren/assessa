@@ -4,7 +4,7 @@ import { formatDate } from "@/lib/gamification";
 import { listNotifications, markNotificationsRead } from "@/lib/platform.functions";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 
@@ -14,7 +14,7 @@ export const Route = createFileRoute("/_authenticated/notifications")({
       { title: "Notifications — Assessa" },
       {
         name: "description",
-        content: "Invitations, results, badge unlocks and reminders for your assessments.",
+        content: "Invitations, new assessments, results, badge unlocks and reminders.",
       },
       { property: "og:title", content: "Notifications — Assessa" },
       { property: "og:description", content: "Your assessment notifications." },
@@ -24,6 +24,18 @@ export const Route = createFileRoute("/_authenticated/notifications")({
 });
 
 type StatusFilter = "all" | "unread" | "read";
+
+function notificationHref(kind: string | null | undefined): string | null {
+  if (kind === "exam_launched" || kind === "invitation") return "/exams";
+  if (kind === "badge") return "/achievements";
+  return null;
+}
+
+function kindLabel(kind: string | null | undefined) {
+  if (kind === "exam_launched") return "New assessment";
+  if (!kind) return "Info";
+  return kind.replaceAll("_", " ");
+}
 
 function Notifications() {
   const fetchNotifications = useServerFn(listNotifications);
@@ -110,41 +122,70 @@ function Notifications() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {visible.map((item) => (
-                <tr key={item.id} className={cn(!item.read && "bg-accent/[0.06]")}>
-                  <td className="p-3">
-                    <p className="font-medium">
-                      {item.icon ?? "🔔"} {item.title}
-                    </p>
-                    {item.body ? (
-                      <p className="text-xs text-muted-foreground">{item.body}</p>
-                    ) : null}
-                  </td>
-                  <td className="p-3 capitalize">{item.kind ?? "info"}</td>
-                  <td className="p-3 text-muted-foreground">{formatDate(item.created_at)}</td>
-                  <td className="p-3">{item.read ? "Read" : "Unread"}</td>
-                </tr>
-              ))}
+              {visible.map((item) => {
+                const href = notificationHref(item.kind);
+                return (
+                  <tr key={item.id} className={cn(!item.read && "bg-accent/[0.06]")}>
+                    <td className="p-3">
+                      <p className="font-medium">
+                        {item.icon ?? "🔔"} {item.title}
+                      </p>
+                      {item.body ? (
+                        <p className="text-xs text-muted-foreground">{item.body}</p>
+                      ) : null}
+                      {href ? (
+                        <Link to={href} className="mt-1 inline-block text-xs text-accent hover:underline">
+                          Open
+                        </Link>
+                      ) : null}
+                    </td>
+                    <td className="p-3 capitalize">{kindLabel(item.kind)}</td>
+                    <td className="p-3 text-muted-foreground">{formatDate(item.created_at)}</td>
+                    <td className="p-3">{item.read ? "Read" : "Unread"}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       ) : (
         <div className={listViewClass(view)}>
-          {visible.map((item) => (
-            <div
-              key={item.id}
-              className={cn("surface-paper flex gap-3 p-4", !item.read && "bg-accent/[0.06]")}
-            >
-              <span className="text-xl">{item.icon ?? "🔔"}</span>
-              <div>
-                <p className="font-medium">{item.title}</p>
-                {item.body ? (
-                  <p className="mt-0.5 text-sm text-muted-foreground">{item.body}</p>
-                ) : null}
-                <p className="mt-1 text-xs text-muted-foreground">{formatDate(item.created_at)}</p>
+          {visible.map((item) => {
+            const href = notificationHref(item.kind);
+            const content = (
+              <>
+                <span className="text-xl">{item.icon ?? "🔔"}</span>
+                <div className="min-w-0">
+                  <p className="font-medium">{item.title}</p>
+                  {item.body ? (
+                    <p className="mt-0.5 text-sm text-muted-foreground">{item.body}</p>
+                  ) : null}
+                  <p className="mt-1 text-xs capitalize text-muted-foreground">
+                    {kindLabel(item.kind)} · {formatDate(item.created_at)}
+                  </p>
+                </div>
+              </>
+            );
+            return href ? (
+              <Link
+                key={item.id}
+                to={href}
+                className={cn(
+                  "surface-paper flex gap-3 p-4 transition-colors hover:bg-secondary/40",
+                  !item.read && "bg-accent/[0.06]",
+                )}
+              >
+                {content}
+              </Link>
+            ) : (
+              <div
+                key={item.id}
+                className={cn("surface-paper flex gap-3 p-4", !item.read && "bg-accent/[0.06]")}
+              >
+                {content}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

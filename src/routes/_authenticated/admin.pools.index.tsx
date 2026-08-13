@@ -7,7 +7,8 @@ import {
   QuestionBankPageHeader,
   QuestionBankWorkflow,
 } from "@/components/admin/pool/QuestionBankUi";
-import { EmptyState, PageLoader } from "@/components/platform";
+import { AdminEmpty, StatusPill } from "@/components/admin/AdminPageUi";
+import { PageLoader } from "@/components/platform";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   deleteQuestionPool,
@@ -89,8 +90,7 @@ function AdminPoolsPage() {
         <PageLoader />
       ) : courses.length === 0 ? (
         <Panel title="Course required" description="Pools belong to a course.">
-          <EmptyState
-            icon="📚"
+          <AdminEmpty
             title="Create a course first"
             body="Add a course, then return here to create pools and import questions."
           />
@@ -183,26 +183,27 @@ function AdminPoolsPage() {
             }
           >
             {data.pools.length === 0 ? (
-              <EmptyState
-                icon="🗂️"
+              <AdminEmpty
                 title="No pools yet"
                 body="Create a pool on the left, then import questions with the CSV template."
               />
             ) : (
-              <ul className="divide-y divide-border rounded-md border border-border">
+              <ul className="divide-y divide-border overflow-hidden rounded-md border border-border">
                 {data.pools.map((pool) => (
                   <li
                     key={pool.id}
-                    className="flex flex-wrap items-center justify-between gap-3 px-3 py-3 text-sm"
+                    className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5 text-sm"
                   >
                     <div className="min-w-0">
                       <p className="truncate font-medium">{pool.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {(pool as { courses?: { name?: string } | null }).courses?.name ?? "Course"}{" "}
-                        · {pool.status}
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {(pool as { courses?: { name?: string } | null }).courses?.name ?? "Course"}
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
+                      <StatusPill tone={pool.status === "active" ? "live" : "draft"}>
+                        {pool.status}
+                      </StatusPill>
                       <Link
                         to="/admin/pools/$poolId"
                         params={{ poolId: pool.id }}

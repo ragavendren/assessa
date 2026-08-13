@@ -1,9 +1,20 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
+import {
+  BarChart3,
+  BookOpen,
+  Building2,
+  ClipboardList,
+  LayoutDashboard,
+  Sparkles,
+  Users,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 type NavItem = {
   to: string;
   label: string;
+  icon?: LucideIcon;
   match?: (pathname: string) => boolean;
 };
 
@@ -15,10 +26,10 @@ type NavGroup = {
 const ADMIN_NAV_GROUPS: NavGroup[] = [
   {
     items: [
-      { to: "/admin", label: "Overview", match: (p) => p === "/admin" },
-      { to: "/admin/users", label: "Users" },
-      { to: "/admin/organizations", label: "Organisations" },
-      { to: "/admin/performance", label: "Performance" },
+      { to: "/admin", label: "Overview", icon: LayoutDashboard, match: (p) => p === "/admin" },
+      { to: "/admin/users", label: "Users", icon: Users },
+      { to: "/admin/organizations", label: "Organisations", icon: Building2 },
+      { to: "/admin/performance", label: "Performance", icon: BarChart3 },
     ],
   },
   {
@@ -27,6 +38,7 @@ const ADMIN_NAV_GROUPS: NavGroup[] = [
       {
         to: "/admin/courses",
         label: "Question bank",
+        icon: BookOpen,
         match: (p) =>
           p.startsWith("/admin/courses") ||
           p.startsWith("/admin/pools") ||
@@ -40,9 +52,10 @@ const ADMIN_NAV_GROUPS: NavGroup[] = [
       {
         to: "/admin/exams/new",
         label: "New assessment",
+        icon: ClipboardList,
         match: (p) => p.startsWith("/admin/exams"),
       },
-      { to: "/admin/gamification", label: "Gamification" },
+      { to: "/admin/gamification", label: "Gamification", icon: Sparkles },
     ],
   },
 ];
@@ -53,7 +66,7 @@ export function AdminNav() {
   });
 
   return (
-    <nav className="mb-8 flex flex-wrap items-center gap-x-2 gap-y-3" aria-label="Admin">
+    <nav className="mb-8 flex max-w-full flex-wrap items-center gap-x-2 gap-y-3" aria-label="Admin">
       {ADMIN_NAV_GROUPS.map((group, groupIndex) => (
         <div
           key={group.label ?? `group-${groupIndex}`}
@@ -67,17 +80,19 @@ export function AdminNav() {
             const active = item.match
               ? item.match(pathname)
               : pathname === item.to || pathname.startsWith(`${item.to}/`);
+            const Icon = item.icon;
             return (
               <Link
                 key={item.to}
                 to={item.to}
                 className={cn(
-                  "rounded-full px-3.5 py-1.5 text-sm transition-colors",
+                  "inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm transition-colors",
                   active
                     ? "bg-primary text-primary-foreground"
                     : "border border-border bg-card text-muted-foreground hover:text-foreground",
                 )}
               >
+                {Icon ? <Icon className="h-3.5 w-3.5" aria-hidden /> : null}
                 {item.label}
               </Link>
             );

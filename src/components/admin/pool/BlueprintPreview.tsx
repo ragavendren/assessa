@@ -13,28 +13,31 @@ export function BlueprintPreview({ allocations, questionCount }: Props) {
   }
   const total = allocations.reduce((s, a) => s + a.count, 0);
   return (
-    <div className="overflow-x-auto rounded-md border border-border">
-      <table className="w-full min-w-[480px] text-left text-sm">
+    <div className="max-w-full overflow-hidden rounded-md border border-border">
+      <table className="w-full table-fixed text-left text-sm">
         <thead className="bg-secondary/60 text-xs uppercase tracking-wide text-muted-foreground">
           <tr>
             <th className="px-3 py-2 font-medium">Topic</th>
-            <th className="px-3 py-2 font-medium">Weight</th>
-            <th className="px-3 py-2 font-medium">Count</th>
-            <th className="px-3 py-2 font-medium">E / M / H</th>
+            <th className="w-16 px-3 py-2 font-medium">Weight</th>
+            <th className="w-14 px-3 py-2 font-medium">Count</th>
+            <th className="hidden w-24 px-3 py-2 font-medium sm:table-cell">E / M / H</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
           {allocations.map((row) => (
             <tr key={`${row.topic}-${row.subtopic ?? ""}`}>
-              <td className="px-3 py-2">
+              <td className="truncate px-3 py-2">
                 {row.topic}
                 {row.subtopic ? (
                   <span className="text-muted-foreground"> · {row.subtopic}</span>
                 ) : null}
+                <span className="mt-0.5 block text-xs tabular-nums text-muted-foreground sm:hidden">
+                  {row.difficulties.easy} / {row.difficulties.medium} / {row.difficulties.hard}
+                </span>
               </td>
               <td className="px-3 py-2 tabular-nums">{row.weightage}%</td>
               <td className="px-3 py-2 tabular-nums font-medium">{row.count}</td>
-              <td className="px-3 py-2 tabular-nums text-muted-foreground">
+              <td className="hidden px-3 py-2 tabular-nums text-muted-foreground sm:table-cell">
                 {row.difficulties.easy} / {row.difficulties.medium} / {row.difficulties.hard}
               </td>
             </tr>

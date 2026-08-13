@@ -1,4 +1,5 @@
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { compareScoreThenAttempts } from "@/lib/gamification";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
@@ -155,6 +156,13 @@ export const updateExamSettings = createServerFn({ method: "POST" })
     if (starts_at && ends_at && new Date(ends_at) <= new Date(starts_at)) {
       throw new Error("End date must be after the start date.");
     }
+
+    const { data: previous } = await supabaseAdmin
+      .from("exams")
+      .select("active, title, access, organization, team_group, starts_at")
+      .eq("id", examId)
+      .maybeSingle();
+
     const { error } = await supabaseAdmin
       .from("exams")
       .update({
@@ -164,6 +172,19 @@ export const updateExamSettings = createServerFn({ method: "POST" })
       })
       .eq("id", examId);
     if (error) throw error;
+
+    if (data.active && previous && !previous.active) {
+      const { notifyExamLaunched } = await import("@/lib/platform.server");
+      await notifyExamLaunched({
+        id: examId,
+        title: previous.title,
+        access: previous.access,
+        organization: previous.organization,
+        team_group: previous.team_group,
+        starts_at: starts_at ?? previous.starts_at ?? null,
+      });
+    }
+
     return { ok: true };
   });
 
@@ -344,6 +365,20 @@ export const createExam = createServerFn({ method: "POST" })
         description: data.description,
       });
     }
+
+    // Public / org / group launches notify the audience; private already gets invitation notifies.
+    if (data.active && data.access !== "private") {
+      const { notifyExamLaunched } = await import("@/lib/platform.server");
+      await notifyExamLaunched({
+        id: exam.id,
+        title: data.title,
+        access: data.access,
+        organization: data.organization || null,
+        team_group: data.team_group || null,
+        starts_at: data.starts_at ?? null,
+      });
+    }
+
     return { examId: exam.id as string };
   });
 
@@ -442,6 +477,13 @@ export const updateExam = createServerFn({ method: "POST" })
     await requireAdmin(context.userId);
 
     const { examId, invitations, questions, ...examFields } = data;
+
+    const { data: previous } = await supabaseAdmin
+      .from("exams")
+      .select("active")
+      .eq("id", examId)
+      .maybeSingle();
+
     const selectionMethod = examFields.question_selection_method ?? "upload";
     const { error } = await supabaseAdmin
       .from("exams")
@@ -523,6 +565,18 @@ export const updateExam = createServerFn({ method: "POST" })
       }
     }
 
+    if (examFields.active && !previous?.active) {
+      const { notifyExamLaunched } = await import("@/lib/platform.server");
+      await notifyExamLaunched({
+        id: examId,
+        title: examFields.title,
+        access: examFields.access,
+        organization: examFields.organization || null,
+        team_group: examFields.team_group || null,
+        starts_at: examFields.starts_at ?? null,
+      });
+    }
+
     return { examId };
   });
 
@@ -549,11 +603,31 @@ export const setExamPublished = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { requireAdmin } = await import("@/lib/platform.server");
     await requireAdmin(context.userId);
+
+    const { data: previous } = await supabaseAdmin
+      .from("exams")
+      .select("active, title, access, organization, team_group, starts_at")
+      .eq("id", data.examId)
+      .maybeSingle();
+
     const { error } = await supabaseAdmin
       .from("exams")
       .update({ active: data.active })
       .eq("id", data.examId);
     if (error) throw error;
+
+    if (data.active && previous && !previous.active) {
+      const { notifyExamLaunched } = await import("@/lib/platform.server");
+      await notifyExamLaunched({
+        id: data.examId,
+        title: previous.title,
+        access: previous.access,
+        organization: previous.organization,
+        team_group: previous.team_group,
+        starts_at: previous.starts_at,
+      });
+    }
+
     return { ok: true };
   });
 
@@ -584,7 +658,7 @@ export const upsertBadge = createServerFn({ method: "POST" })
           .max(60),
         name: z.string().trim().min(2).max(80),
         description: z.string().trim().max(240).default(""),
-        icon: z.string().trim().min(1).max(8),
+        icon: z.string().trim().min(1).max(32),
         category: z.string().trim().max(40).default("custom"),
         track: z.enum(["beginner", "intermediate", "expertise", "elite"]).default("intermediate"),
         condition_type: z.enum([
@@ -665,7 +739,7 @@ export const getAdminUsers = createServerFn({ method: "POST" })
       supabaseAdmin
         .from("profiles")
         .select(
-          "id, full_name, email, organization, department, participant_id, mobile, created_at, updated_at, leaderboard_opt_out",
+          "id, full_name, email, organization, department, participant_id, mobile, avatar_id, created_at, updated_at, leaderboard_opt_out",
         )
         .order("created_at", { ascending: false }),
       supabaseAdmin.from("user_roles").select("user_id, role"),
@@ -701,6 +775,7 @@ export const getAdminUsers = createServerFn({ method: "POST" })
         department: profile.department,
         participantId: profile.participant_id,
         mobile: profile.mobile,
+        avatarId: profile.avatar_id,
         roles: roleByUser.get(profile.id) ?? ["participant"],
         isAdmin: (roleByUser.get(profile.id) ?? []).includes("admin"),
         leaderboardOptOut: profile.leaderboard_opt_out,
@@ -795,6 +870,7 @@ export const getAdminUserDetail = createServerFn({ method: "POST" })
         name: profile.full_name || profile.email,
         fullName: profile.full_name || "",
         email: profile.email,
+        avatarId: profile.avatar_id,
         organization: profile.organization ?? "",
         department: profile.department ?? "",
         participantId: profile.participant_id ?? "",
@@ -861,17 +937,25 @@ export const getAdminAssessmentPerformance = createServerFn({ method: "POST" })
 
       const bestByUser = new Map<
         string,
-        { score: number; passed: boolean; submittedAt: string | null }
+        { score: number; passed: boolean; submittedAt: string | null; attempts: number }
       >();
       for (const attempt of submitted) {
         const score = Number(attempt.score ?? 0);
         const current = bestByUser.get(attempt.user_id);
-        if (!current || score > current.score) {
+        if (!current) {
           bestByUser.set(attempt.user_id, {
             score,
             passed: !!attempt.passed,
             submittedAt: attempt.submitted_at,
+            attempts: 1,
           });
+          continue;
+        }
+        current.attempts += 1;
+        if (score > current.score) {
+          current.score = score;
+          current.passed = !!attempt.passed;
+          current.submittedAt = attempt.submitted_at;
         }
       }
 
@@ -887,10 +971,13 @@ export const getAdminAssessmentPerformance = createServerFn({ method: "POST" })
             score: row.score,
             passed: row.passed,
             submittedAt: row.submittedAt,
+            attempts: row.attempts,
             optedOut: !!profile?.leaderboard_opt_out,
           };
         })
-        .sort((a, b) => b.score - a.score || (a.name ?? "").localeCompare(b.name ?? ""))
+        .sort(
+          (a, b) => compareScoreThenAttempts(a, b) || (a.name ?? "").localeCompare(b.name ?? ""),
+        )
         .map((row, index) => ({ ...row, rank: index + 1 }));
 
       const scores = [...bestByUser.values()].map((row) => row.score);

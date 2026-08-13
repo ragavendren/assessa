@@ -557,13 +557,13 @@ export function ExamEditor({
           </div>
         </div>
 
-        <ol className="grid gap-0 sm:grid-cols-4">
+        <ol className="grid grid-cols-2 gap-0 md:grid-cols-4">
           {TABS.map((item, index) => {
             const Icon = item.icon;
             const active = tab === item.id;
             const done = stepComplete[item.id];
             return (
-              <li key={item.id} className="border-border sm:border-r sm:last:border-r-0">
+              <li key={item.id} className="border-border md:border-r md:last:border-r-0">
                 <button
                   type="button"
                   onClick={() => goToTab(item.id)}
@@ -598,7 +598,7 @@ export function ExamEditor({
         </ol>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_16rem]">
+      <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,16rem)]">
         <div className="min-w-0 space-y-6">
           {tab === "details" ? (
             <div className="space-y-6">
@@ -636,7 +636,7 @@ export function ExamEditor({
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <input
-                      className="field min-w-[12rem] flex-1"
+                      className="field min-w-0 flex-1"
                       placeholder="Add a new category…"
                       value={categoryDraft}
                       onChange={(e) => setCategoryDraft(e.target.value)}
@@ -680,7 +680,7 @@ export function ExamEditor({
                   }}
                 />
 
-                <div className="grid gap-3 sm:grid-cols-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                   <label className="block text-sm">
                     <span className="text-xs text-muted-foreground">Mode *</span>
                     <select
@@ -1135,7 +1135,7 @@ export function ExamEditor({
                         </div>
                         <div className="flex flex-wrap gap-2">
                           <input
-                            className="field min-w-[10rem] flex-1"
+                            className="field min-w-0 flex-1"
                             placeholder="Type a tag and press Enter…"
                             value={tagDraftByIndex[index] ?? ""}
                             onChange={(e) =>
@@ -1323,7 +1323,7 @@ export function ExamEditor({
                           </span>
                         </header>
 
-                        <div className="grid gap-0 lg:grid-cols-[minmax(0,1.35fr)_minmax(16rem,0.9fr)]">
+                        <div className="grid min-w-0 gap-0 lg:grid-cols-1 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,16rem)]">
                           <div className="space-y-2.5 border-border px-5 py-5 sm:px-6 sm:py-6 lg:border-r">
                             <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                               Options

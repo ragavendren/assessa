@@ -1,5 +1,15 @@
 import { AdminNav } from "@/components/AdminNav";
-import { PageLoader, SectionHeading, StatTile } from "@/components/platform";
+import { BadgeMark } from "@/components/BadgeMark";
+import {
+  AdminAccessDenied,
+  AdminEmpty,
+  AdminPageHeader,
+  AdminPanel,
+  ResultCount,
+  StatusPill,
+} from "@/components/admin/AdminPageUi";
+import { PageLoader, StatTile } from "@/components/platform";
+import { BADGE_ICON_CATALOG, resolveBadgeIcon } from "@/lib/badge-icons";
 import { listBadgeConfig, updateXpRule, upsertBadge } from "@/lib/admin.functions";
 import { SKILL_TRACK_LABELS, type SkillTrack } from "@/lib/gamification";
 import { cn } from "@/lib/utils";
@@ -60,7 +70,7 @@ const EMPTY: BadgeForm = {
   code: "",
   name: "",
   description: "",
-  icon: "🏅",
+  icon: "trophy",
   category: "custom",
   track: "intermediate",
   condition_type: "pass_count",
@@ -124,11 +134,19 @@ function GamificationAdmin() {
     });
   }, [badgeSearch, data?.badges, trackFilter]);
 
-  if (isPending) return <PageLoader />;
+  if (isPending) {
+    return (
+      <div>
+        <AdminNav />
+        <PageLoader />
+      </div>
+    );
+  }
   if (error || !data) {
     return (
-      <div className="surface-paper p-8 text-center">
-        <p className="font-display text-xl">Administrator access required</p>
+      <div>
+        <AdminNav />
+        <AdminAccessDenied />
       </div>
     );
   }
@@ -164,37 +182,45 @@ function GamificationAdmin() {
   return (
     <div className="space-y-8">
       <AdminNav />
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <SectionHeading eyebrow="Configure" title="Gamification" />
-        <div className="inline-flex rounded-[var(--radius-md)] border border-border bg-card p-0.5">
-          <button
-            type="button"
-            onClick={() => setPanel("badges")}
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-[calc(var(--radius-md)-2px)] px-3 py-1.5 text-xs font-medium",
-              panel === "badges"
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <Sparkles className="h-3.5 w-3.5" />
-            Badges
-          </button>
-          <button
-            type="button"
-            onClick={() => setPanel("xp")}
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-[calc(var(--radius-md)-2px)] px-3 py-1.5 text-xs font-medium",
-              panel === "xp"
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <Zap className="h-3.5 w-3.5" />
-            XP rules
-          </button>
-        </div>
-      </div>
+      <AdminPageHeader
+        eyebrow="Configure"
+        title="Gamification"
+        summary="Tune XP rules and badges that participants earn across assessments. Changes apply to new awards."
+        help={{
+          label: "How awards work",
+          body: "XP rules fire when someone starts or finishes a paper. Badges use the condition you set here and only grant while Active.",
+        }}
+        action={
+          <div className="inline-flex rounded-[var(--radius-md)] border border-border bg-card p-0.5">
+            <button
+              type="button"
+              onClick={() => setPanel("badges")}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-[calc(var(--radius-md)-2px)] px-3 py-1.5 text-xs font-medium",
+                panel === "badges"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Badges
+            </button>
+            <button
+              type="button"
+              onClick={() => setPanel("xp")}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-[calc(var(--radius-md)-2px)] px-3 py-1.5 text-xs font-medium",
+                panel === "xp"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <Zap className="h-3.5 w-3.5" />
+              XP rules
+            </button>
+          </div>
+        }
+      />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatTile label="Badges" value={data.badges.length} hint={`${activeBadges} active`} />
@@ -208,32 +234,42 @@ function GamificationAdmin() {
       </div>
 
       {panel === "xp" ? (
-        <section>
-          <p className="mb-3 text-sm text-muted-foreground">
-            Points awarded when participants start or finish assessments. Changes save on blur.
-          </p>
+        <AdminPanel
+          title="XP rules"
+          description="Points awarded when participants start or finish assessments. Changes save on blur."
+          help={{
+            label: "When to turn a rule off",
+            body: "Inactive rules stop granting XP immediately. Existing balances are kept.",
+          }}
+          action={<ResultCount shown={data.rules.length} total={data.rules.length} noun="rules" />}
+        >
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {data.rules.map((rule) => (
-              <article key={rule.code} className="surface-paper p-4">
+              <article key={rule.code} className="rounded-lg border border-border bg-card p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="font-medium">{rule.label}</p>
                     <p className="text-xs text-muted-foreground">{rule.code}</p>
                   </div>
-                  <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                    <input
-                      type="checkbox"
-                      checked={rule.active}
-                      onChange={(event) =>
-                        ruleMutation.mutate({
-                          code: rule.code,
-                          points: rule.points,
-                          active: event.target.checked,
-                        })
-                      }
-                    />
-                    On
-                  </label>
+                  <div className="flex items-center gap-2">
+                    <StatusPill tone={rule.active ? "live" : "draft"}>
+                      {rule.active ? "On" : "Off"}
+                    </StatusPill>
+                    <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        checked={rule.active}
+                        onChange={(event) =>
+                          ruleMutation.mutate({
+                            code: rule.code,
+                            points: rule.points,
+                            active: event.target.checked,
+                          })
+                        }
+                      />
+                      On
+                    </label>
+                  </div>
                 </div>
                 <label className="mt-4 block text-xs text-muted-foreground">
                   Points
@@ -258,13 +294,13 @@ function GamificationAdmin() {
               </article>
             ))}
           </div>
-        </section>
+        </AdminPanel>
       ) : (
-        <section className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)]">
-          <div className="space-y-4">
-            <div className="flex flex-wrap items-center gap-2">
+        <section className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,19rem)]">
+          <div className="min-w-0 space-y-4">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <input
-                className="field min-w-[12rem] flex-1"
+                className="field min-w-0 flex-1"
                 placeholder="Search badge library…"
                 value={badgeSearch}
                 onChange={(event) => setBadgeSearch(event.target.value)}
@@ -311,16 +347,14 @@ function GamificationAdmin() {
                     )}
                   >
                     <div className="flex items-start gap-3">
-                      <span className="text-2xl">{badge.icon}</span>
+                      <BadgeMark icon={badge.icon} code={badge.code} name={badge.name} size="lg" />
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="truncate font-medium">{badge.name}</p>
-                          <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
-                            {SKILL_TRACK_LABELS[track]}
-                          </span>
-                          {!badge.active ? (
-                            <span className="text-[10px] uppercase text-muted-foreground">Off</span>
-                          ) : null}
+                          <StatusPill>{SKILL_TRACK_LABELS[track]}</StatusPill>
+                          <StatusPill tone={badge.active ? "live" : "draft"}>
+                            {badge.active ? "Active" : "Off"}
+                          </StatusPill>
                         </div>
                         <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
                           {badge.description || "No description"}
@@ -344,14 +378,17 @@ function GamificationAdmin() {
                 );
               })}
               {filteredBadges.length === 0 ? (
-                <p className="text-sm text-muted-foreground sm:col-span-2">
-                  No badges match this filter.
-                </p>
+                <div className="sm:col-span-2">
+                  <AdminEmpty
+                    title="No badges match this filter"
+                    body="Try a different track or search, or create a new badge."
+                  />
+                </div>
               ) : null}
             </div>
           </div>
 
-          <aside className="xl:sticky xl:top-4 xl:self-start">
+          <aside className="min-w-0 max-w-full lg:sticky lg:top-20 lg:self-start">
             <div className="mb-3 flex items-center justify-between gap-2">
               <p className="text-hairline text-muted-foreground">
                 {editingCode ? `Editing · ${editingCode}` : "Create badge"}
@@ -374,7 +411,7 @@ function GamificationAdmin() {
               className="surface-paper space-y-3 p-5"
             >
               <div className="flex items-center gap-3 rounded-[var(--radius-md)] border border-border bg-secondary/40 px-3 py-3">
-                <span className="text-3xl">{form.icon || "🏅"}</span>
+                <BadgeMark icon={form.icon} code={form.code} name={form.name} size="xl" />
                 <div className="min-w-0">
                   <p className="truncate font-display text-lg">{form.name || "Badge name"}</p>
                   <p className="truncate text-xs text-muted-foreground">
@@ -418,15 +455,42 @@ function GamificationAdmin() {
               </label>
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <label className="block text-sm">
+                <div className="sm:col-span-2">
                   <span className="text-xs text-muted-foreground">Icon</span>
-                  <input
-                    className="field mt-1"
-                    value={form.icon}
-                    onChange={(e) => setForm({ ...form, icon: e.target.value })}
-                    maxLength={8}
-                  />
-                </label>
+                  <div className="mt-1.5 grid grid-cols-6 gap-1.5 sm:grid-cols-8">
+                    {BADGE_ICON_CATALOG.map((item) => {
+                      const selected = resolveBadgeIcon(form.icon, form.code)?.id === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          title={item.label}
+                          onClick={() => setForm({ ...form, icon: item.id })}
+                          className={cn(
+                            "flex h-9 w-full items-center justify-center rounded-md border transition-colors",
+                            selected
+                              ? "border-primary bg-primary/10 text-foreground"
+                              : "border-border bg-card text-muted-foreground hover:bg-secondary hover:text-foreground",
+                          )}
+                        >
+                          <item.Icon className="h-4 w-4" />
+                          <span className="sr-only">{item.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <label className="mt-2 block text-sm">
+                    <span className="sr-only">Custom icon</span>
+                    <input
+                      className="field mt-1"
+                      value={form.icon}
+                      onChange={(e) => setForm({ ...form, icon: e.target.value })}
+                      maxLength={32}
+                      placeholder="Catalog key or emoji"
+                      aria-label="Icon key or emoji"
+                    />
+                  </label>
+                </div>
                 <label className="block text-sm">
                   <span className="text-xs text-muted-foreground">Category</span>
                   <input

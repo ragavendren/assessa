@@ -6,7 +6,7 @@ import { randomBytes } from "node:crypto";
  * Never imported from client code (blocked by the *.server.* filename rule).
  */
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { resolveLevel, type LevelRow } from "@/lib/gamification";
+import { compareScoreThenAttempts, resolveLevel, type LevelRow } from "@/lib/gamification";
 
 const db = supabaseAdmin;
 
@@ -328,6 +328,118 @@ export async function notify(
     console.error("[notify] email delivery failed:", error);
   }
 }
+
+/** Bulk in-app notifications (no email) — chunks inserts for large audiences. */
+export async function notifyMany(
+  userIds: string[],
+  payload: { kind: string; title: string; body?: string; icon?: string },
+) {
+  const unique = [...new Set(userIds.filter(Boolean))];
+  if (unique.length === 0) return;
+
+  const rows = unique.map((userId) => ({
+    user_id: userId,
+    kind: payload.kind,
+    title: payload.title,
+    body: payload.body ?? "",
+    icon: payload.icon ?? "🔔",
+  }));
+
+  const chunkSize = 200;
+  for (let i = 0; i < rows.length; i += chunkSize) {
+    const chunk = rows.slice(i, i + chunkSize);
+    const { error } = await db.from("notifications").insert(chunk);
+    if (error) {
+      console.error("[notifyMany] insert failed:", error);
+      throw error;
+    }
+  }
+}
+
+type ExamLaunchAudience = {
+  id: string;
+  title: string;
+  access: string;
+  organization?: string | null;
+  team_group?: string | null;
+  starts_at?: string | null;
+};
+
+/** Resolve profile IDs that can access an exam (mirrors can_access_exam rules). */
+export async function resolveExamAudienceUserIds(exam: ExamLaunchAudience): Promise<string[]> {
+  const access = exam.access;
+
+  if (access === "public") {
+    const { data, error } = await db.from("profiles").select("id");
+    if (error) throw error;
+    return (data ?? []).map((row) => row.id);
+  }
+
+  if (access === "organization") {
+    const org = exam.organization?.trim();
+    if (!org) return [];
+    const { data, error } = await db.from("profiles").select("id, organization");
+    if (error) throw error;
+    const needle = org.toLowerCase();
+    return (data ?? [])
+      .filter((row) => row.organization?.trim().toLowerCase() === needle)
+      .map((row) => row.id);
+  }
+
+  if (access === "group") {
+    const group = exam.team_group?.trim();
+    if (!group) return [];
+    const { data, error } = await db.from("profiles").select("id, team_group");
+    if (error) throw error;
+    const needle = group.toLowerCase();
+    return (data ?? [])
+      .filter((row) => row.team_group?.trim().toLowerCase() === needle)
+      .map((row) => row.id);
+  }
+
+  if (access === "private") {
+    const { data: invites, error: inviteError } = await db
+      .from("exam_invitations")
+      .select("email")
+      .eq("exam_id", exam.id);
+    if (inviteError) throw inviteError;
+    const emails = [...new Set((invites ?? []).map((row) => row.email))];
+    if (emails.length === 0) return [];
+    const { data: profiles, error } = await db.from("profiles").select("id, email").in("email", emails);
+    if (error) throw error;
+    return (profiles ?? []).map((row) => row.id);
+  }
+
+  return [];
+}
+
+/**
+ * In-app notification when an assessment is newly launched (published).
+ * Audience follows exam access (public / org / group / private invitees).
+ */
+export async function notifyExamLaunched(exam: ExamLaunchAudience) {
+  try {
+    const userIds = await resolveExamAudienceUserIds(exam);
+    if (userIds.length === 0) return;
+
+    const startsLater =
+      exam.starts_at != null && exam.starts_at !== "" && new Date(exam.starts_at).getTime() > Date.now();
+    const body = startsLater
+      ? `Scheduled to open soon — check My Exams when it starts.`
+      : "It's available now in My Exams.";
+
+    await notifyMany(userIds, {
+      kind: "exam_launched",
+      icon: "📢",
+      title: `New assessment — ${exam.title}`,
+      body,
+    });
+  } catch (error) {
+    // Publishing should still succeed if notifications fail.
+    console.error("[notifyExamLaunched] failed:", error);
+  }
+}
+
 
 /* ------------------------------------------------------------------ */
 /* exam serving                                                        */
@@ -764,12 +876,19 @@ async function examRank(examId: string, userId: string) {
     loadAdminUserIds(),
   ]);
   const bestByUser = new Map<string, number>();
+  const attemptsByUser = new Map<string, number>();
   for (const row of data ?? []) {
     if (adminIds.has(row.user_id)) continue;
+    attemptsByUser.set(row.user_id, (attemptsByUser.get(row.user_id) ?? 0) + 1);
     const score = Number(row.score ?? 0);
     if (score > (bestByUser.get(row.user_id) ?? -1)) bestByUser.set(row.user_id, score);
   }
-  const ordered = [...bestByUser.entries()].sort((a, b) => b[1] - a[1]);
+  const ordered = [...bestByUser.entries()].sort((a, b) =>
+    compareScoreThenAttempts(
+      { score: a[1], attempts: attemptsByUser.get(a[0]) ?? 0 },
+      { score: b[1], attempts: attemptsByUser.get(b[0]) ?? 0 },
+    ),
+  );
   const rank = ordered.findIndex(([id]) => id === userId) + 1;
   const scores = ordered.map(([, s]) => s);
   return {
@@ -1025,13 +1144,22 @@ export function maskName(
 export async function listLeaderboardExams(userId: string) {
   const { data: exams } = await db
     .from("exams")
-    .select("id, title, topic, access")
+    .select("id, title, topic, access, duration_minutes, max_attempts, mode, pass_mark, question_count")
     .eq("active", true)
     .eq("enable_leaderboard", true)
     .order("title", { ascending: true });
 
   const visible = await filterAccessibleExams(userId, exams ?? []);
-  return visible.map((exam) => ({ id: exam.id, title: exam.title, topic: exam.topic }));
+  return visible.map((exam) => ({
+    id: exam.id,
+    title: exam.title,
+    topic: exam.topic,
+    durationMinutes: exam.duration_minutes,
+    maxAttempts: exam.max_attempts,
+    mode: exam.mode,
+    passMark: exam.pass_mark,
+    questionCount: exam.question_count,
+  }));
 }
 
 export async function leaderboard(
@@ -1052,6 +1180,15 @@ export async function leaderboard(
   if (scope === "topic" && target) topicFilter = target;
 
   let examTitle: string | null = null;
+  let examMeta: {
+    durationMinutes: number;
+    maxAttempts: number;
+    mode: string;
+    topic: string;
+    passMark: number;
+    questionCount: number;
+  } | null = null;
+
   if (examIdFilter) {
     const exam = await getExam(examIdFilter);
     if (!exam) throw new Error("Assessment not found.");
@@ -1062,15 +1199,24 @@ export async function leaderboard(
         disabled: true,
         rows: [],
         myRank: null,
+        examMeta: null,
       };
     }
     nameMode = exam.leaderboard_name_display;
     examTitle = exam.title;
+    examMeta = {
+      durationMinutes: exam.duration_minutes,
+      maxAttempts: exam.max_attempts,
+      mode: exam.mode,
+      topic: exam.topic,
+      passMark: exam.pass_mark,
+      questionCount: exam.question_count,
+    };
   }
 
   let query = db
     .from("exam_attempts")
-    .select("user_id, score, exam_id, exams!inner(topic, enable_leaderboard)")
+    .select("user_id, score, exam_id, duration_seconds, exams!inner(topic, enable_leaderboard)")
     .eq("status", "submitted");
 
   if (examIdFilter) query = query.eq("exam_id", examIdFilter);
@@ -1080,6 +1226,7 @@ export async function leaderboard(
     user_id: string;
     score: number;
     exam_id: string;
+    duration_seconds: number | null;
     exams: { topic: string; enable_leaderboard: boolean };
   }[];
   records = records.filter((r) => r.exams.enable_leaderboard);
@@ -1100,8 +1247,9 @@ export async function leaderboard(
 
   const audienceScope = scope === "organization" || scope === "department" ? scope : "global";
 
-  // Best score per exam per user, then rank by that (one exam) or average of bests (all).
-  const agg = new Map<string, Map<string, number>>();
+  type BestAttempt = { score: number; durationSeconds: number | null };
+  // Best score per exam per user (ties → faster time), plus total submitted attempts.
+  const agg = new Map<string, { byExam: Map<string, BestAttempt>; attempts: number }>();
   for (const row of records) {
     const profile = profileMap.get(row.user_id);
     if (!profile) continue;
@@ -1115,10 +1263,22 @@ export async function leaderboard(
     // Opted-out participants are excluded from public boards, but always see themselves.
     if (profile.leaderboard_opt_out && row.user_id !== userId) continue;
 
-    const byExam = agg.get(row.user_id) ?? new Map<string, number>();
+    const current = agg.get(row.user_id) ?? { byExam: new Map<string, BestAttempt>(), attempts: 0 };
+    current.attempts += 1;
     const score = Number(row.score ?? 0);
-    byExam.set(row.exam_id, Math.max(byExam.get(row.exam_id) ?? 0, score));
-    agg.set(row.user_id, byExam);
+    const durationSeconds =
+      typeof row.duration_seconds === "number" ? row.duration_seconds : null;
+    const prev = current.byExam.get(row.exam_id);
+    const betterScore = !prev || score > prev.score;
+    const sameScoreFaster =
+      prev &&
+      score === prev.score &&
+      durationSeconds != null &&
+      (prev.durationSeconds == null || durationSeconds < prev.durationSeconds);
+    if (betterScore || sameScoreFaster) {
+      current.byExam.set(row.exam_id, { score, durationSeconds });
+    }
+    agg.set(row.user_id, current);
   }
 
   const boardLabel = examTitle ?? (topicFilter ? `${topicFilter}` : "All assessments");
@@ -1130,16 +1290,27 @@ export async function leaderboard(
   }
 
   const ordered = [...agg.entries()]
-    .map(([id, byExam]) => {
+    .map(([id, { byExam, attempts }]) => {
       const bests = [...byExam.values()];
       const score = examIdFilter
-        ? Math.max(...bests)
-        : Math.round(bests.reduce((sum, value) => sum + value, 0) / bests.length);
-      return { id, score, exams: byExam.size };
+        ? Math.max(...bests.map((b) => b.score))
+        : Math.round(bests.reduce((sum, value) => sum + value.score, 0) / bests.length);
+      const durations = bests
+        .map((b) => b.durationSeconds)
+        .filter((value): value is number => typeof value === "number" && value >= 0);
+      const durationSeconds =
+        durations.length === 0
+          ? null
+          : examIdFilter
+            ? Math.min(...durations)
+            : Math.round(durations.reduce((sum, value) => sum + value, 0) / durations.length);
+      return { id, score, exams: byExam.size, attempts, durationSeconds };
     })
-    .sort((a, b) => b.score - a.score || b.exams - a.exams);
+    .sort(
+      (a, b) => compareScoreThenAttempts(a, b) || b.exams - a.exams || a.id.localeCompare(b.id),
+    );
 
-  const rowsOut = ordered.slice(0, 25).map((entry, index) => {
+  const rowsOut = ordered.slice(0, 50).map((entry, index) => {
     const profile = profileMap.get(entry.id)!;
     return {
       rank: index + 1,
@@ -1156,6 +1327,8 @@ export async function leaderboard(
             ),
       score: entry.score,
       exams: entry.exams,
+      attempts: entry.attempts,
+      durationSeconds: entry.durationSeconds,
       isMe: entry.id === userId,
     };
   });
@@ -1167,5 +1340,6 @@ export async function leaderboard(
     disabled: false,
     rows: rowsOut,
     myRank: myIndex >= 0 ? { rank: myIndex + 1, total: ordered.length } : null,
+    examMeta,
   };
 }

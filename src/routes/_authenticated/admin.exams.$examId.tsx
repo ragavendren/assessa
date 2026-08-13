@@ -1,6 +1,7 @@
 import { AdminNav } from "@/components/AdminNav";
 import { ExamEditor, examToEditorValues } from "@/components/admin/ExamEditor";
-import { PageLoader, SectionHeading } from "@/components/platform";
+import { AdminPageHeader } from "@/components/admin/AdminPageUi";
+import { PageLoader } from "@/components/platform";
 import { getExamForEdit, updateExam } from "@/lib/admin.functions";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
@@ -43,12 +44,23 @@ function EditExamPage() {
   return (
     <div>
       <AdminNav />
-      <SectionHeading eyebrow="Content" title="Edit assessment" />
+      <AdminPageHeader
+        eyebrow="Content"
+        title="Edit assessment"
+        summary="Update details, questions, and publish state. Saving keeps existing attempt history."
+        help={{
+          label: "What you can change",
+          body: "Access, schedule, and the question set can all be edited. Regenerating from a pool replaces cloned questions only.",
+        }}
+      />
       {isPending ? (
         <PageLoader label="Loading assessment…" />
       ) : error || !data ? (
-        <div className="surface-paper p-8 text-center text-sm text-muted-foreground">
-          Could not load this assessment.
+        <div className="surface-paper p-8 text-center">
+          <p className="font-display text-xl">Could not load this assessment</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            It may have been deleted, or you may not have access.
+          </p>
         </div>
       ) : (
         <ExamEditor

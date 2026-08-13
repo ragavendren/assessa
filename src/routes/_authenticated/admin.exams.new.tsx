@@ -1,6 +1,7 @@
 import { AdminNav } from "@/components/AdminNav";
 import { ExamEditor } from "@/components/admin/ExamEditor";
-import { PageLoader, SectionHeading } from "@/components/platform";
+import { AdminPageHeader } from "@/components/admin/AdminPageUi";
+import { PageLoader } from "@/components/platform";
 import { createExam, listExamCategories } from "@/lib/admin.functions";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
@@ -35,7 +36,15 @@ function NewExamPage() {
   return (
     <div>
       <AdminNav />
-      <SectionHeading eyebrow="Content" title="New assessment" />
+      <AdminPageHeader
+        eyebrow="Content"
+        title="New assessment"
+        summary="Set the paper, access, schedule, and questions. A shareable /take/… link is copied when you publish."
+        help={{
+          label: "Authoring path",
+          body: "Upload a CSV or generate from a question pool and blueprint. Preview matches what participants see on results.",
+        }}
+      />
       {isPending ? (
         <PageLoader label="Loading editor…" />
       ) : (

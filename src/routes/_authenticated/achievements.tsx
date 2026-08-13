@@ -1,3 +1,4 @@
+import { BadgeMark } from "@/components/BadgeMark";
 import { ListToolbar, listViewClass, useListViewMode } from "@/components/ListToolbar";
 import { EmptyState, PageLoader } from "@/components/platform";
 import {
@@ -203,17 +204,14 @@ function Achievements() {
                   >
                     <td className="p-3">
                       <div className="flex items-center gap-3">
-                        <span
-                          className={cn(
-                            "text-xl",
-                            badge.earnedAt ? "animate-medal-pop" : "grayscale",
-                          )}
-                          style={
-                            badge.earnedAt ? { animationDelay: `${index * 35 + 80}ms` } : undefined
-                          }
-                        >
-                          {badge.icon}
-                        </span>
+                        <BadgeMark
+                          icon={badge.icon}
+                          code={badge.code}
+                          name={badge.name}
+                          earned={Boolean(badge.earnedAt)}
+                          size="md"
+                          {...(badge.earnedAt ? { className: "animate-medal-pop" } : {})}
+                        />
                         <div>
                           <p className="font-medium">{badge.name}</p>
                           <p className="text-xs text-muted-foreground">{badge.description}</p>
@@ -277,15 +275,17 @@ function BadgeCard({ badge, index }: { badge: BadgeItem; index: number }) {
       ) : null}
 
       <div className="relative z-10 flex items-start justify-between gap-3">
-        <span
+        <BadgeMark
+          icon={badge.icon}
+          code={badge.code}
+          name={badge.name}
+          earned={earned}
+          size="xl"
           className={cn(
-            "inline-flex h-12 w-12 items-center justify-center rounded-full bg-secondary text-3xl transition-transform duration-300 group-hover:scale-110",
-            earned ? "animate-medal-pop" : "grayscale",
+            "transition-transform duration-300 group-hover:scale-110",
+            earned && "animate-medal-pop",
           )}
-          style={earned ? { animationDelay: `${index * 55 + 120}ms` } : undefined}
-        >
-          {badge.icon}
-        </span>
+        />
         <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
           {SKILL_TRACK_LABELS[badgeTrack]}
         </span>

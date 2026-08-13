@@ -8,6 +8,7 @@ type Props = {
   min?: string | undefined;
   hint?: string;
   className?: string;
+  disabled?: boolean;
 };
 
 function splitLocal(value: string): { date: string; time: string } {
@@ -23,18 +24,24 @@ function joinLocal(date: string, time: string): string {
 }
 
 /** Date + time controls that store `YYYY-MM-DDTHH:mm` (datetime-local compatible). */
-export function DateTimeField({ label, value, onChange, min, hint, className }: Props) {
+export function DateTimeField({ label, value, onChange, min, hint, className, disabled }: Props) {
   const { date, time } = splitLocal(value);
   const minDate = min?.split("T")[0];
   const minTime = min && minDate === date ? min.split("T")[1]?.slice(0, 5) : undefined;
 
   return (
-    <div className={cn("rounded-lg border border-border bg-card p-3", className)}>
+    <div
+      className={cn(
+        "rounded-lg border border-border bg-card p-3",
+        disabled && "opacity-60",
+        className,
+      )}
+    >
       <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
         <CalendarClock className="h-3.5 w-3.5" aria-hidden />
         {label}
       </div>
-      <div className="grid grid-cols-[1.35fr_1fr] gap-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
         <label className="block text-sm">
           <span className="sr-only">Date</span>
           <input
@@ -42,6 +49,7 @@ export function DateTimeField({ label, value, onChange, min, hint, className }: 
             className="field"
             value={date}
             min={minDate}
+            disabled={disabled}
             onChange={(event) => onChange(joinLocal(event.target.value, time))}
           />
         </label>
@@ -52,7 +60,7 @@ export function DateTimeField({ label, value, onChange, min, hint, className }: 
             className="field"
             value={time}
             min={minTime}
-            disabled={!date}
+            disabled={disabled || !date}
             onChange={(event) => onChange(joinLocal(date, event.target.value))}
           />
         </label>
@@ -60,7 +68,8 @@ export function DateTimeField({ label, value, onChange, min, hint, className }: 
       {value ? (
         <button
           type="button"
-          className="mt-2 text-xs text-muted-foreground hover:text-foreground hover:underline"
+          disabled={disabled}
+          className="mt-2 text-xs text-muted-foreground hover:text-foreground hover:underline disabled:cursor-not-allowed disabled:no-underline"
           onClick={() => onChange("")}
         >
           Clear

@@ -151,3 +151,17 @@ export function passwordStrength(value: string) {
     ok: passed === passwordRules.length,
   };
 }
+
+/** Higher score ranks first. Equal scores: fewer submitted attempts rank higher. */
+export function compareScoreThenAttempts(
+  a: { score: number; attempts: number },
+  b: { score: number; attempts: number },
+): number {
+  if (b.score !== a.score) return b.score - a.score;
+  return a.attempts - b.attempts;
+}
+
+export function formatAttemptCount(attempts: number): string {
+  if (attempts <= 0) return "No attempts";
+  return attempts === 1 ? "1 attempt" : `${attempts} attempts`;
+}

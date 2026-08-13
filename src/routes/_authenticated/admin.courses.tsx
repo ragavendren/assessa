@@ -7,7 +7,8 @@ import {
   QuestionBankPageHeader,
   QuestionBankWorkflow,
 } from "@/components/admin/pool/QuestionBankUi";
-import { EmptyState, PageLoader } from "@/components/platform";
+import { AdminEmpty, StatusPill } from "@/components/admin/AdminPageUi";
+import { PageLoader } from "@/components/platform";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { deleteCourse, listCourses, upsertCourse } from "@/lib/pool.functions";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -62,8 +63,8 @@ function AdminCoursesPage() {
           label: "What is a course?",
           body: (
             <span>
-              Create one course per subject or certification track (for example “AWS Associate”). You
-              will attach pools and blueprints to it next.
+              Create one course per subject or certification track (for example “AWS Associate”).
+              You will attach pools and blueprints to it next.
             </span>
           ),
         }}
@@ -138,21 +139,24 @@ function AdminCoursesPage() {
             }
           >
             {data.courses.length === 0 ? (
-              <EmptyState
-                icon="📚"
+              <AdminEmpty
                 title="No courses yet"
                 body="Add your first course, then create a question pool for it."
               />
             ) : (
-              <ul className="divide-y divide-border rounded-md border border-border">
+              <ul className="divide-y divide-border overflow-hidden rounded-md border border-border">
                 {data.courses.map((course) => (
                   <li
                     key={course.id}
-                    className="flex items-center justify-between gap-3 px-3 py-3 text-sm"
+                    className="flex items-center justify-between gap-3 px-4 py-3.5 text-sm"
                   >
                     <div className="min-w-0">
                       <p className="truncate font-medium">{course.name}</p>
-                      <p className="text-xs capitalize text-muted-foreground">{course.status}</p>
+                      <div className="mt-1">
+                        <StatusPill tone={course.status === "active" ? "live" : "draft"}>
+                          {course.status}
+                        </StatusPill>
+                      </div>
                     </div>
                     <button
                       type="button"

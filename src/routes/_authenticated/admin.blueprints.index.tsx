@@ -6,7 +6,8 @@ import {
   QuestionBankPageHeader,
   QuestionBankWorkflow,
 } from "@/components/admin/pool/QuestionBankUi";
-import { EmptyState, PageLoader } from "@/components/platform";
+import { AdminEmpty, StatusPill } from "@/components/admin/AdminPageUi";
+import { PageLoader } from "@/components/platform";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   deleteBlueprint,
@@ -142,8 +143,7 @@ function AdminBlueprintsPage() {
           >
             {data.blueprints.length === 0 ? (
               <div>
-                <EmptyState
-                  icon="📐"
+                <AdminEmpty
                   title="No blueprints yet"
                   body={
                     courseCount === 0
@@ -170,11 +170,11 @@ function AdminBlueprintsPage() {
                 </div>
               </div>
             ) : (
-              <ul className="divide-y divide-border rounded-md border border-border">
+              <ul className="divide-y divide-border overflow-hidden rounded-md border border-border">
                 {data.blueprints.map((bp) => (
                   <li
                     key={bp.id}
-                    className="flex items-center justify-between gap-3 px-3 py-3 text-sm"
+                    className="flex items-center justify-between gap-3 px-4 py-3.5 text-sm"
                   >
                     <div className="min-w-0">
                       <Link
@@ -184,14 +184,14 @@ function AdminBlueprintsPage() {
                       >
                         {bp.name}
                         {bp.is_default ? (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                          <StatusPill tone="live">
                             <Star className="h-3 w-3" /> Default
-                          </span>
+                          </StatusPill>
                         ) : null}
                       </Link>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="mt-1 text-xs text-muted-foreground">
                         {(bp as { courses?: { name?: string } | null }).courses?.name ?? "Course"} ·
-                        v{bp.version} · default {bp.default_total_questions} Q · {bp.status}
+                        v{bp.version} · default {bp.default_total_questions} Q
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-3">

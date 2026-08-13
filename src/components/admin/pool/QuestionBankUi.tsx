@@ -52,9 +52,9 @@ export function HelpTip({ label, children, className, side = "right" }: HelpTipP
           id={id}
           role="note"
           className={cn(
-            "absolute z-30 mt-1 w-[min(18rem,calc(100vw-2rem))] rounded-md border border-border bg-card p-3 text-left text-xs leading-relaxed text-muted-foreground shadow-md",
+            "absolute z-30 mt-1 w-72 max-w-[calc(100vw-2.5rem)] rounded-md border border-border bg-card p-3 text-left text-xs leading-relaxed text-muted-foreground shadow-md",
             "top-full",
-            side === "right" ? "left-0 sm:left-auto sm:right-0" : "right-0 sm:left-0 sm:right-auto",
+            side === "right" ? "right-0" : "left-0",
           )}
         >
           <span className="mb-1 block font-medium text-foreground">{label}</span>
@@ -96,7 +96,7 @@ export function QuestionBankPageHeader({
   action?: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+    <div className="mb-6 flex w-full min-w-0 flex-wrap items-start justify-between gap-4">
       <div className="min-w-0 max-w-2xl">
         <p className="text-hairline text-muted-foreground">Question bank</p>
         <div className="mt-0.5 flex items-center gap-2">

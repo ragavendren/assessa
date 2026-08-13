@@ -7,7 +7,8 @@ import {
   QuestionBankPageHeader,
   QuestionBankWorkflow,
 } from "@/components/admin/pool/QuestionBankUi";
-import { EmptyState, PageLoader } from "@/components/platform";
+import { AdminEmpty } from "@/components/admin/AdminPageUi";
+import { PageLoader } from "@/components/platform";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   deleteAssessmentSeries,
@@ -113,8 +114,7 @@ function AdminSeriesPage() {
       toast.error(error instanceof Error ? error.message : "Could not save series"),
   });
 
-  const ready =
-    (coursesData?.courses.length ?? 0) > 0 && pools.length > 0 && blueprints.length > 0;
+  const ready = (coursesData?.courses.length ?? 0) > 0 && pools.length > 0 && blueprints.length > 0;
 
   return (
     <div>
@@ -127,8 +127,9 @@ function AdminSeriesPage() {
           label: "When to use series",
           body: (
             <span>
-              Useful for weekly quizzes or cohort runs where you want controlled reuse. You can still
-              generate assessments without a series by picking pool/blueprint on the exam directly.
+              Useful for weekly quizzes or cohort runs where you want controlled reuse. You can
+              still generate assessments without a series by picking pool/blueprint on the exam
+              directly.
             </span>
           ),
         }}
@@ -146,9 +147,11 @@ function AdminSeriesPage() {
       {isPending || !data ? (
         <PageLoader />
       ) : !ready ? (
-        <Panel title="Prerequisites" description="Series need a course, at least one pool, and a blueprint.">
-          <EmptyState
-            icon="🔗"
+        <Panel
+          title="Prerequisites"
+          description="Series need a course, at least one pool, and a blueprint."
+        >
+          <AdminEmpty
             title="Finish the earlier steps first"
             body="Create a course, import pool questions, and save a blueprint before adding a series."
           />
@@ -310,22 +313,18 @@ function AdminSeriesPage() {
             </form>
           </Panel>
 
-          <Panel
-            title="Your series"
-            description={`${data.series.length} series`}
-          >
+          <Panel title="Your series" description={`${data.series.length} series`}>
             {data.series.length === 0 ? (
-              <EmptyState
-                icon="🔗"
+              <AdminEmpty
                 title="No series yet"
                 body="Add a series when you want related assessments to share pool, blueprint, and reuse defaults."
               />
             ) : (
-              <ul className="divide-y divide-border rounded-md border border-border">
+              <ul className="divide-y divide-border overflow-hidden rounded-md border border-border">
                 {data.series.map((s) => (
                   <li
                     key={s.id}
-                    className="flex items-center justify-between gap-3 px-3 py-3 text-sm"
+                    className="flex items-center justify-between gap-3 px-4 py-3.5 text-sm"
                   >
                     <div className="min-w-0">
                       <p className="truncate font-medium">{s.name}</p>

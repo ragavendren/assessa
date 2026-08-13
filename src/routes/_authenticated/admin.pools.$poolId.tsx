@@ -1,7 +1,8 @@
 import { AdminNav } from "@/components/AdminNav";
 import { QuestionBankNav } from "@/components/admin/QuestionBankNav";
+import { AdminEmpty, StatusPill } from "@/components/admin/AdminPageUi";
 import { HelpTip, Panel, QuestionBankPageHeader } from "@/components/admin/pool/QuestionBankUi";
-import { EmptyState, PageLoader } from "@/components/platform";
+import { PageLoader } from "@/components/platform";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { downloadPoolQuestionCsvTemplate, parsePoolQuestionsCsv } from "@/lib/pool-questions-csv";
 import {
@@ -186,8 +187,7 @@ function AdminPoolDetailPage() {
           title="Pool inventory"
           description="Nothing imported yet — start with the CSV template above."
         >
-          <EmptyState
-            icon="❓"
+          <AdminEmpty
             title="No questions in this pool yet"
             body="Use Download CSV template above, fill your questions, then click Import questions CSV."
           />
@@ -201,25 +201,34 @@ function AdminPoolDetailPage() {
             body: "Blueprint rules match on Topic (and optional Subtopic). Keep naming consistent with your blueprints.",
           }}
         >
-          <div className="-mx-1 overflow-x-auto rounded-md border border-border">
-            <table className="w-full min-w-[640px] text-left text-sm">
+          <div className="max-w-full overflow-hidden rounded-md border border-border">
+            <table className="w-full table-fixed text-left text-sm">
               <thead className="border-b border-border bg-secondary/50 text-xs uppercase text-muted-foreground">
                 <tr>
-                  <th className="px-4 py-2.5">Prompt</th>
-                  <th className="px-4 py-2.5">Topic</th>
-                  <th className="px-4 py-2.5">Difficulty</th>
-                  <th className="px-4 py-2.5">Status</th>
-                  <th className="px-4 py-2.5" />
+                  <th className="px-3 py-2.5">Prompt</th>
+                  <th className="hidden w-[22%] px-3 py-2.5 sm:table-cell">Topic</th>
+                  <th className="hidden w-[18%] px-3 py-2.5 md:table-cell">Difficulty</th>
+                  <th className="w-[18%] px-3 py-2.5">Status</th>
+                  <th className="w-10 px-3 py-2.5" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {data.questions.map((q) => (
                   <tr key={q.id} className="hover:bg-secondary/20">
-                    <td className="max-w-md truncate px-4 py-2.5">{q.prompt}</td>
-                    <td className="px-4 py-2.5">{q.topic}</td>
-                    <td className="px-4 py-2.5 capitalize">{q.difficulty}</td>
-                    <td className="px-4 py-2.5">{q.status}</td>
-                    <td className="px-4 py-2.5 text-right">
+                    <td className="truncate px-3 py-2.5">
+                      <span className="block truncate">{q.prompt}</span>
+                      <span className="mt-0.5 block truncate text-xs text-muted-foreground sm:hidden">
+                        {q.topic}
+                      </span>
+                    </td>
+                    <td className="hidden truncate px-3 py-2.5 sm:table-cell">{q.topic}</td>
+                    <td className="hidden px-3 py-2.5 capitalize md:table-cell">{q.difficulty}</td>
+                    <td className="px-3 py-2.5">
+                      <StatusPill tone={q.status === "active" ? "live" : "draft"}>
+                        {q.status}
+                      </StatusPill>
+                    </td>
+                    <td className="px-3 py-2.5 text-right">
                       <button
                         type="button"
                         className="text-destructive hover:underline"

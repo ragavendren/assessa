@@ -1,8 +1,16 @@
 import { AdminNav } from "@/components/AdminNav";
+import {
+  AdminAccessDenied,
+  AdminEmpty,
+  AdminPageHeader,
+  RankMark,
+  ResultCount,
+  StatusPill,
+} from "@/components/admin/AdminPageUi";
 import { ListToolbar, listViewClass, useListViewMode } from "@/components/ListToolbar";
-import { PageLoader, SectionHeading, StatTile } from "@/components/platform";
+import { EmptyState, Meter, PageLoader, StatTile } from "@/components/platform";
 import { getAdminAssessmentPerformance } from "@/lib/admin.functions";
-import { MODE_LABELS, type ExamMode } from "@/lib/gamification";
+import { formatAttemptCount, MODE_LABELS, type ExamMode } from "@/lib/gamification";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
@@ -56,11 +64,19 @@ function AdminPerformancePage() {
     return assessments.find((exam) => exam.id === selectedId) ?? assessments[0] ?? null;
   }, [assessments, selectedId]);
 
-  if (isPending) return <PageLoader label="Loading performance…" />;
+  if (isPending) {
+    return (
+      <div>
+        <AdminNav />
+        <PageLoader label="Loading performance…" />
+      </div>
+    );
+  }
   if (error || !data) {
     return (
-      <div className="surface-paper p-8 text-center">
-        <p className="font-display text-xl">Administrator access required</p>
+      <div>
+        <AdminNav />
+        <AdminAccessDenied />
       </div>
     );
   }
@@ -68,18 +84,47 @@ function AdminPerformancePage() {
   return (
     <div className="space-y-8">
       <AdminNav />
-      <SectionHeading eyebrow="Analytics" title="Assessment performance" />
+      <AdminPageHeader
+        eyebrow="Analytics"
+        title="Assessment performance"
+        summary="See who opted in, who finished, and the best submitted score per participant. Admin accounts are excluded from leaderboards."
+        help={{
+          label: "How rates are calculated",
+          body: "Completion is unique finishers ÷ unique starters. Pass rate uses submitted attempts against the paper’s pass mark.",
+        }}
+        action={
+          <ResultCount shown={assessments.length} total={data.assessments.length} noun="papers" />
+        }
+      />
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-        <StatTile label="Assessments" value={data.totals.assessments} />
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
+        <StatTile
+          label="Assessments"
+          value={data.totals.assessments}
+          hint="All papers on the platform"
+        />
         <StatTile
           label="Opted-in seats"
           value={data.totals.opted}
           hint="Unique starts across exams"
         />
-        <StatTile label="Completed seats" value={data.totals.completed} />
-        <StatTile label="Avg completion" value={data.totals.averageCompletion} suffix="%" />
-        <StatTile label="Avg pass rate" value={data.totals.averagePassRate} suffix="%" />
+        <StatTile
+          label="Completed seats"
+          value={data.totals.completed}
+          hint="Unique finishers across exams"
+        />
+        <StatTile
+          label="Avg completion"
+          value={data.totals.averageCompletion}
+          suffix="%"
+          hint="Mean completion rate per paper"
+        />
+        <StatTile
+          label="Avg pass rate"
+          value={data.totals.averagePassRate}
+          suffix="%"
+          hint="Mean pass rate per paper"
+        />
       </div>
 
       <ListToolbar
@@ -108,20 +153,26 @@ function AdminPerformancePage() {
       />
 
       {assessments.length === 0 ? (
-        <div className="surface-paper p-6 text-sm text-muted-foreground">
-          No assessments match your filters.
-        </div>
+        <EmptyState
+          icon="📊"
+          title={data.assessments.length === 0 ? "No assessments yet" : "No match"}
+          body={
+            data.assessments.length === 0
+              ? "Create and publish a paper to start tracking completion and pass rates."
+              : "Try a different search or status filter."
+          }
+        />
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
+        <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-start">
           <section className={cn(view === "grid" ? listViewClass("grid") : "space-y-3")}>
             {view === "table" ? (
-              <div className="surface-paper overflow-x-auto">
-                <table className="w-full text-sm">
+              <div className="surface-paper max-w-full overflow-hidden">
+                <table className="w-full table-fixed text-sm">
                   <thead className="text-left text-xs text-muted-foreground">
                     <tr>
-                      <th className="p-3 font-medium">Assessment</th>
-                      <th className="p-3 font-medium">Completion</th>
-                      <th className="p-3 font-medium">Pass</th>
+                      <th className="w-[48%] p-3 font-medium">Assessment</th>
+                      <th className="w-[26%] p-3 font-medium">Completion</th>
+                      <th className="w-[26%] p-3 font-medium">Pass</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
@@ -130,16 +181,30 @@ function AdminPerformancePage() {
                         key={exam.id}
                         className={cn(
                           "cursor-pointer hover:bg-secondary/40",
-                          selected?.id === exam.id && "bg-secondary/50",
+                          selected?.id === exam.id && "bg-primary/5",
                         )}
                         onClick={() => setSelectedId(exam.id)}
                       >
                         <td className="p-3">
-                          <p className="font-medium">{exam.title}</p>
-                          <p className="text-xs text-muted-foreground">{exam.topic}</p>
+                          <p className="truncate font-medium">{exam.title}</p>
+                          <p className="truncate text-xs text-muted-foreground">{exam.topic}</p>
                         </td>
-                        <td className="p-3 tabular-nums">{exam.completionRate}%</td>
-                        <td className="p-3 tabular-nums">{exam.passRate}%</td>
+                        <td className="p-3">
+                          <p className="tabular-nums">{exam.completionRate}%</p>
+                          <Meter
+                            className="mt-1.5 w-full max-w-[6rem]"
+                            value={exam.completionRate}
+                            tone={exam.completionRate >= 70 ? "success" : "accent"}
+                          />
+                        </td>
+                        <td className="p-3">
+                          <p className="tabular-nums">{exam.passRate}%</p>
+                          <Meter
+                            className="mt-1.5 w-full max-w-[6rem]"
+                            value={exam.passRate}
+                            tone={exam.passRate >= exam.passMark ? "success" : "accent"}
+                          />
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -156,21 +221,23 @@ function AdminPerformancePage() {
                     className={cn(
                       "w-full rounded-md border p-4 text-left transition-colors",
                       active
-                        ? "border-accent bg-accent/10"
+                        ? "border-primary/40 bg-primary/5"
                         : "border-border bg-card hover:bg-secondary/40",
                     )}
                   >
                     <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
+                      <div className="min-w-0">
                         <p className="font-medium">{exam.title}</p>
                         <p className="text-xs text-muted-foreground">
                           {exam.topic} · {MODE_LABELS[exam.mode as ExamMode] ?? exam.mode}
-                          {exam.active ? " · published" : " · inactive"}
                         </p>
                       </div>
-                      <span className="rounded-full bg-secondary px-2.5 py-1 text-[11px] font-semibold">
-                        pass mark {exam.passMark}%
-                      </span>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <StatusPill tone={exam.active ? "live" : "draft"}>
+                          {exam.active ? "Published" : "Inactive"}
+                        </StatusPill>
+                        <StatusPill>pass {exam.passMark}%</StatusPill>
+                      </div>
                     </div>
                     <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
                       <div>
@@ -186,15 +253,28 @@ function AdminPerformancePage() {
                         <p className="font-semibold tabular-nums">{exam.passRate}%</p>
                       </div>
                     </div>
+                    <div className="mt-3 space-y-2">
+                      <Meter
+                        value={exam.completionRate}
+                        tone={exam.completionRate >= 70 ? "success" : "accent"}
+                      />
+                      <Meter
+                        value={exam.passRate}
+                        tone={exam.passRate >= exam.passMark ? "success" : "muted"}
+                      />
+                    </div>
                   </button>
                 );
               })
             )}
           </section>
 
-          <section className="surface-paper p-5">
+          <section className="min-w-0 max-w-full surface-paper p-5 lg:sticky lg:top-20 lg:max-h-[calc(100vh-6.5rem)] lg:overflow-y-auto">
             {!selected ? (
-              <p className="text-sm text-muted-foreground">Select an assessment.</p>
+              <AdminEmpty
+                title="Select an assessment"
+                body="Pick a paper to open its leaderboard."
+              />
             ) : (
               <div className="space-y-5">
                 <div>
@@ -217,42 +297,61 @@ function AdminPerformancePage() {
                   <StatTile label="Passed" value={selected.passRate} suffix="%" />
                 </div>
 
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>Completion</span>
+                    <span className="tabular-nums">{selected.completionRate}%</span>
+                  </div>
+                  <Meter
+                    value={selected.completionRate}
+                    tone={selected.completionRate >= 70 ? "success" : "accent"}
+                  />
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>Pass rate</span>
+                    <span className="tabular-nums">{selected.passRate}%</span>
+                  </div>
+                  <Meter
+                    value={selected.passRate}
+                    tone={selected.passRate >= selected.passMark ? "success" : "accent"}
+                  />
+                </div>
+
                 {selected.leaderboard.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No submitted attempts yet.</p>
+                  <p className="rounded-md border border-dashed border-border px-3 py-8 text-center text-sm text-muted-foreground">
+                    No submitted attempts yet.
+                  </p>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                  <div className="max-w-full overflow-hidden">
+                    <table className="w-full table-fixed text-sm">
                       <thead className="text-left text-xs text-muted-foreground">
                         <tr>
-                          <th className="p-2 font-medium">#</th>
+                          <th className="w-10 p-2 font-medium">#</th>
                           <th className="p-2 font-medium">Participant</th>
-                          <th className="p-2 font-medium">Score</th>
-                          <th className="p-2 font-medium">Result</th>
+                          <th className="w-16 p-2 font-medium">Score</th>
+                          <th className="w-[5.5rem] p-2 font-medium">Result</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
                         {selected.leaderboard.map((row) => (
-                          <tr key={row.userId}>
-                            <td className="p-2 tabular-nums text-muted-foreground">{row.rank}</td>
+                          <tr key={row.userId} className={cn(row.rank <= 3 && "bg-secondary/20")}>
                             <td className="p-2">
-                              <p className="font-medium">{row.name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {row.organization || row.email}
-                                {row.optedOut ? " · opted out of public boards" : ""}
+                              <RankMark rank={row.rank} />
+                            </td>
+                            <td className="min-w-0 p-2">
+                              <p className="truncate font-medium">{row.name}</p>
+                              <p className="truncate text-xs text-muted-foreground">
+                                {formatAttemptCount(row.attempts ?? 0)}
+                                {row.organization || row.email
+                                  ? ` · ${row.organization || row.email}`
+                                  : ""}
+                                {row.optedOut ? " · opted out" : ""}
                               </p>
                             </td>
-                            <td className="p-2 font-display text-lg tabular-nums">{row.score}%</td>
+                            <td className="p-2 tabular-nums">{row.score}%</td>
                             <td className="p-2">
-                              <span
-                                className={cn(
-                                  "rounded-full px-2 py-0.5 text-[11px] font-semibold",
-                                  row.passed
-                                    ? "bg-success/12 text-success"
-                                    : "bg-destructive/12 text-destructive",
-                                )}
-                              >
-                                {row.passed ? "Passed" : "Not passed"}
-                              </span>
+                              <StatusPill tone={row.passed ? "success" : "danger"}>
+                                {row.passed ? "Pass" : "Fail"}
+                              </StatusPill>
                             </td>
                           </tr>
                         ))}

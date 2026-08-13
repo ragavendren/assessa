@@ -81,7 +81,9 @@ export const getDashboard = createServerFn({ method: "POST" })
       supabaseAdmin.from("badges").select("id").eq("active", true),
       supabaseAdmin
         .from("exams")
-        .select("id, title, topic, starts_at, ends_at, duration_minutes, question_count, mode, access")
+        .select(
+          "id, title, topic, starts_at, ends_at, duration_minutes, question_count, mode, access",
+        )
         .eq("active", true)
         .order("starts_at"),
       supabaseAdmin
@@ -110,12 +112,13 @@ export const getDashboard = createServerFn({ method: "POST" })
           }).notOpenYet === true,
       )
       .slice(0, 3);
-    const available = visible.filter((e) =>
-      examAvailability({
-        active: true,
-        starts_at: e.starts_at,
-        ends_at: e.ends_at ?? null,
-      }).ok,
+    const available = visible.filter(
+      (e) =>
+        examAvailability({
+          active: true,
+          starts_at: e.starts_at,
+          ends_at: e.ends_at ?? null,
+        }).ok,
     );
 
     const attempts = allAttempts ?? [];
@@ -180,13 +183,15 @@ export const getDashboard = createServerFn({ method: "POST" })
       badgeCount: (badges ?? []).length,
       latestBadges: (badges ?? []).slice(0, 8).map((b) => {
         const badge = b.badges as unknown as {
+          code?: string;
           name: string;
           icon: string;
           description?: string;
         } | null;
         return {
+          code: badge?.code,
           name: badge?.name ?? "Badge",
-          icon: badge?.icon ?? "🏅",
+          icon: badge?.icon ?? "trophy",
           description: badge?.description ?? "",
           earnedAt: b.earned_at,
         };
@@ -201,7 +206,7 @@ export const getDashboard = createServerFn({ method: "POST" })
         return {
           code: badge?.code ?? badge?.name ?? "badge",
           name: badge?.name ?? "Badge",
-          icon: badge?.icon ?? "🏅",
+          icon: badge?.icon ?? "trophy",
           description: badge?.description ?? "",
           earnedAt: b.earned_at,
         };
