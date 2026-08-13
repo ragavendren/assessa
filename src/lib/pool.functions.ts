@@ -131,12 +131,22 @@ export const listQuestionPools = createServerFn({ method: "POST" })
     const supabase = await adminClient(context.userId);
     let query = supabase
       .from("question_pools")
-      .select("*, courses(name)")
+      .select("*, courses(name), pool_questions(count)")
       .order("name", { ascending: true });
     if (data.courseId) query = query.eq("course_id", data.courseId);
     const { data: pools, error } = await query;
     if (error) throw error;
-    return { pools: pools ?? [] };
+    return {
+      pools: (pools ?? []).map((pool) => {
+        const countRaw = (pool as { pool_questions?: Array<{ count: number }> | null })
+          .pool_questions;
+        const questionCount = Array.isArray(countRaw) ? (countRaw[0]?.count ?? 0) : 0;
+        const { pool_questions: _ignored, ...rest } = pool as typeof pool & {
+          pool_questions?: unknown;
+        };
+        return { ...rest, questionCount };
+      }),
+    };
   });
 
 export const upsertQuestionPool = createServerFn({ method: "POST" })

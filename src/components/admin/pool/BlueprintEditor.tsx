@@ -39,9 +39,14 @@ const blankRule = (): RuleForm => ({
 export function BlueprintEditor({
   mode,
   blueprintId,
+  onSaved,
+  onCancel,
 }: {
   mode: "create" | "edit";
   blueprintId?: string;
+  /** When set, stays on the current screen instead of navigating to the edit route. */
+  onSaved?: (blueprintId: string) => void;
+  onCancel?: () => void;
 }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -88,6 +93,15 @@ export function BlueprintEditor({
   );
 
   useEffect(() => {
+    if (mode === "create") {
+      setCourseId("");
+      setName("");
+      setVersion(1);
+      setDefaultTotal(30);
+      setIsDefault(false);
+      setRules([blankRule()]);
+      return;
+    }
     if (!existing) return;
     setCourseId(existing.blueprint.course_id);
     setName(existing.blueprint.name);
@@ -108,7 +122,7 @@ export function BlueprintEditor({
           }))
         : [blankRule()],
     );
-  }, [existing]);
+  }, [existing, mode, blueprintId]);
 
   const weightSum = useMemo(
     () => Math.round(rules.reduce((s, r) => s + Number(r.weightage || 0), 0) * 100) / 100,
@@ -141,7 +155,11 @@ export function BlueprintEditor({
       toast.success(mode === "edit" ? "Blueprint updated" : "Blueprint created");
       void queryClient.invalidateQueries({ queryKey: ["admin-blueprints"] });
       void queryClient.invalidateQueries({ queryKey: ["admin-blueprint", row.id] });
-      void navigate({ to: "/admin/blueprints/$blueprintId", params: { blueprintId: row.id } });
+      if (onSaved) {
+        onSaved(row.id);
+        return;
+      }
+      void navigate({ to: "/admin/blueprints", search: { blueprintId: row.id } });
     },
     onError: (err: Error) => toast.error(err.message || "Save failed"),
   });
@@ -152,21 +170,15 @@ export function BlueprintEditor({
 
   if (mode === "edit" && !existing) {
     return (
-      <div className="mt-8 rounded-lg border border-dashed border-border bg-muted/20 px-6 py-10 text-center">
+      <div className="rounded-lg border border-dashed border-border bg-muted/20 px-6 py-10 text-center">
         <p className="text-sm text-muted-foreground">Blueprint not found.</p>
-        <Link
-          to="/admin/blueprints"
-          className="mt-3 inline-block text-sm text-primary hover:underline"
-        >
-          Back to blueprints
-        </Link>
       </div>
     );
   }
 
   return (
     <form
-      className="mt-6 max-w-4xl space-y-5"
+      className="max-w-4xl space-y-5"
       onSubmit={(e) => {
         e.preventDefault();
         if (!courseId) {
@@ -690,12 +702,23 @@ export function BlueprintEditor({
         >
           {mutation.isPending ? "Saving…" : "Save blueprint"}
         </button>
-        <Link
-          to="/admin/blueprints"
-          className="text-sm text-muted-foreground hover:text-foreground hover:underline"
-        >
-          Cancel
-        </Link>
+        {onCancel ? (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="text-sm text-muted-foreground hover:text-foreground hover:underline"
+          >
+            Cancel
+          </button>
+        ) : (
+          <Link
+            to="/admin/blueprints"
+            search={{}}
+            className="text-sm text-muted-foreground hover:text-foreground hover:underline"
+          >
+            Cancel
+          </Link>
+        )}
         <p className="w-full text-xs text-muted-foreground sm:w-auto">
           After saving, create an assessment and choose Question pool + this blueprint.
         </p>

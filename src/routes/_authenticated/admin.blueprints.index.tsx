@@ -1,22 +1,31 @@
 import { AdminNav } from "@/components/AdminNav";
 import { QuestionBankNav } from "@/components/admin/QuestionBankNav";
+import { BlueprintEditor } from "@/components/admin/pool/BlueprintEditor";
 import { Panel, QuestionBankPageHeader } from "@/components/admin/pool/QuestionBankUi";
 import { AdminEmpty, StatusPill } from "@/components/admin/AdminPageUi";
 import { PageLoader } from "@/components/platform";
 import { useConfirm } from "@/components/ui/confirm-dialog";
+import { Modal } from "@/components/ui/modal";
 import {
   deleteBlueprint,
   listBlueprints,
   listCourses,
   setDefaultBlueprint,
 } from "@/lib/pool.functions";
+import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowRight, Plus, Star, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 
 export const Route = createFileRoute("/_authenticated/admin/blueprints/")({
+  validateSearch: z.object({
+    blueprintId: z.string().uuid().optional(),
+    create: z.coerce.boolean().optional(),
+  }),
   head: () => ({
     meta: [
       { title: "Blueprints — Assessa Admin" },
@@ -31,11 +40,15 @@ export const Route = createFileRoute("/_authenticated/admin/blueprints/")({
 
 function AdminBlueprintsPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate({ from: Route.fullPath });
   const confirm = useConfirm();
+  const { blueprintId: selectedId, create: createFromSearch } = Route.useSearch();
   const fetchBlueprints = useServerFn(listBlueprints);
   const fetchCourses = useServerFn(listCourses);
   const removeBlueprint = useServerFn(deleteBlueprint);
   const markDefault = useServerFn(setDefaultBlueprint);
+
+  const [createOpen, setCreateOpen] = useState(Boolean(createFromSearch));
 
   const { data: coursesData } = useQuery({
     queryKey: ["admin-courses"],
@@ -47,6 +60,47 @@ function AdminBlueprintsPage() {
   });
 
   const courseCount = coursesData?.courses.length ?? 0;
+  const blueprints = data?.blueprints ?? [];
+
+  const selectedBlueprint = useMemo(
+    () => (selectedId ? (blueprints.find((bp) => bp.id === selectedId) ?? null) : null),
+    [blueprints, selectedId],
+  );
+
+  useEffect(() => {
+    if (createFromSearch) {
+      setCreateOpen(true);
+      void navigate({
+        search: (prev) => ({ ...prev, create: undefined }),
+        replace: true,
+      });
+    }
+  }, [createFromSearch, navigate]);
+
+  useEffect(() => {
+    if (!data) return;
+    if (selectedId && blueprints.some((bp) => bp.id === selectedId)) return;
+    if (blueprints.length === 0) return;
+    void navigate({
+      search: (prev) => ({ ...prev, blueprintId: blueprints[0]?.id }),
+      replace: true,
+    });
+  }, [blueprints, data, navigate, selectedId]);
+
+  function selectBlueprint(blueprintId: string) {
+    void navigate({
+      search: (prev) => ({ ...prev, blueprintId, create: undefined }),
+      replace: true,
+    });
+  }
+
+  function openCreate() {
+    setCreateOpen(true);
+  }
+
+  function closeCreate() {
+    setCreateOpen(false);
+  }
 
   return (
     <div>
@@ -54,200 +108,236 @@ function AdminBlueprintsPage() {
       <QuestionBankNav />
       <QuestionBankPageHeader
         title="Blueprints"
-        summary="Blueprints define how many questions come from each topic and the easy/medium/hard mix. Topic weightage must total 100%, and each rule’s difficulty mix must also total 100%."
+        summary="Select a blueprint from the list to edit rules. Create opens in a dialog."
         help={{
           label: "Blueprint rules",
           body: (
             <span>
-              Example: Lambda 25%, DynamoDB 20%, … summing to 100%. On generate, Assessa allocates
-              exact integer counts with largest-remainder rounding.
+              Topic weightage must total 100%, and each rule’s Easy/Medium/Hard mix must also total
+              100%.
             </span>
           ),
         }}
         action={
-          <Link
-            to="/admin/blueprints/new"
-            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3.5 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-          >
-            <Plus className="h-4 w-4" /> New blueprint
-          </Link>
+          courseCount > 0 ? (
+            <button
+              type="button"
+              onClick={openCreate}
+              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3.5 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              <Plus className="h-4 w-4" /> New blueprint
+            </button>
+          ) : null
         }
       />
       {isPending || !data ? (
         <PageLoader />
-      ) : (
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.25fr)]">
-          <Panel
-            title="Checklist before you build"
-            description="Blueprints need a course and work best once pools have tagged topics."
-            help={{
-              label: "Why topics matter",
-              body: "Pool questions should use the same topic names as blueprint rules so generation can find enough inventory.",
-            }}
+      ) : courseCount === 0 ? (
+        <Panel title="Course required" description="Blueprints belong to a course.">
+          <AdminEmpty
+            title="Create a course first"
+            body="Add a course, then return here to define topic weightage rules."
+          />
+          <Link
+            to="/admin/courses"
+            className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
           >
-            <ul className="space-y-3 text-sm">
-              <li className="rounded-md border border-border bg-secondary/30 px-3 py-2">
-                <p className="font-medium">1. Course exists</p>
-                <p className="text-xs text-muted-foreground">
-                  {courseCount > 0 ? `${courseCount} course(s) ready` : "Create a course first"}
-                </p>
-              </li>
-              <li className="rounded-md border border-border bg-secondary/30 px-3 py-2">
-                <p className="font-medium">2. Weightage = 100%</p>
-                <p className="text-xs text-muted-foreground">
-                  Across all topic rules in the blueprint
-                </p>
-              </li>
-              <li className="rounded-md border border-border bg-secondary/30 px-3 py-2">
-                <p className="font-medium">3. Difficulty mix = 100%</p>
-                <p className="text-xs text-muted-foreground">Easy + medium + hard per topic rule</p>
-              </li>
-            </ul>
-            {courseCount === 0 ? (
-              <Link
-                to="/admin/courses"
-                className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-              >
-                Create a course <ArrowRight className="h-4 w-4" />
-              </Link>
-            ) : (
-              <Link
-                to="/admin/blueprints/new"
-                className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-              >
-                Open blueprint editor <ArrowRight className="h-4 w-4" />
-              </Link>
-            )}
-          </Panel>
-
+            Go to courses <ArrowRight className="h-4 w-4" />
+          </Link>
+        </Panel>
+      ) : (
+        <div className="grid gap-3 lg:grid-cols-[minmax(15rem,18rem)_minmax(0,1fr)] lg:items-start">
           <Panel
             title="Your blueprints"
-            description={`${data.blueprints.length} blueprint${data.blueprints.length === 1 ? "" : "s"}`}
+            description={`${blueprints.length} blueprint${blueprints.length === 1 ? "" : "s"}`}
             action={
-              data.blueprints.length > 0 ? (
+              blueprints.length > 0 ? (
                 <Link
                   to="/admin/series"
                   className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
                 >
-                  Optional: series <ArrowRight className="h-3.5 w-3.5" />
+                  Series <ArrowRight className="h-3.5 w-3.5" />
                 </Link>
               ) : null
             }
           >
-            {data.blueprints.length === 0 ? (
+            {blueprints.length === 0 ? (
               <div>
                 <AdminEmpty
                   title="No blueprints yet"
-                  body={
-                    courseCount === 0
-                      ? "Create a course first, then add a blueprint with topic weightage."
-                      : "Create a blueprint with topic weightage rules."
-                  }
+                  body="Create a blueprint with topic weightage rules."
                 />
-                <div className="mt-4">
-                  {courseCount === 0 ? (
-                    <Link
-                      to="/admin/courses"
-                      className="inline-flex rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-                    >
-                      Create a course
-                    </Link>
-                  ) : (
-                    <Link
-                      to="/admin/blueprints/new"
-                      className="inline-flex rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-                    >
-                      New blueprint
-                    </Link>
-                  )}
-                </div>
+                <button
+                  type="button"
+                  onClick={openCreate}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                >
+                  <Plus className="h-4 w-4" /> New blueprint
+                </button>
               </div>
             ) : (
-              <ul className="divide-y divide-border overflow-hidden rounded-md border border-border">
-                {data.blueprints.map((bp) => (
-                  <li
-                    key={bp.id}
-                    className="flex items-center justify-between gap-3 px-4 py-3.5 text-sm"
-                  >
-                    <div className="min-w-0">
-                      <Link
-                        to="/admin/blueprints/$blueprintId"
-                        params={{ blueprintId: bp.id }}
-                        className="inline-flex items-center gap-1.5 font-medium hover:underline"
+              <ul className="max-h-[min(70vh,36rem)] divide-y divide-border overflow-y-auto rounded-md border border-border lg:max-h-[calc(100vh-14rem)]">
+                {blueprints.map((bp) => {
+                  const selected = bp.id === selectedBlueprint?.id;
+                  return (
+                    <li key={bp.id}>
+                      <div
+                        className={cn(
+                          "flex items-start gap-1.5 px-2.5 py-2 text-sm transition-colors",
+                          selected ? "bg-primary/5" : "hover:bg-secondary/60",
+                        )}
                       >
-                        {bp.name}
-                        {bp.is_default ? (
-                          <StatusPill tone="live">
-                            <Star className="h-3 w-3" /> Default
-                          </StatusPill>
-                        ) : null}
-                      </Link>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {(bp as { courses?: { name?: string } | null }).courses?.name ?? "Course"} ·
-                        v{bp.version} · default {bp.default_total_questions} Q
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-3">
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground hover:underline"
-                        onClick={() => {
-                          void (async () => {
-                            try {
-                              await markDefault({
-                                data: { id: bp.id, isDefault: !bp.is_default },
-                              });
-                              toast.success(
-                                bp.is_default ? "Default cleared" : "Set as default blueprint",
-                              );
-                              queryClient.invalidateQueries({ queryKey: ["admin-blueprints"] });
-                            } catch (error: unknown) {
-                              toast.error(
-                                error instanceof Error ? error.message : "Could not update default",
-                              );
-                            }
-                          })();
-                        }}
-                      >
-                        <Star className="h-3.5 w-3.5" />{" "}
-                        {bp.is_default ? "Unset default" : "Make default"}
-                      </button>
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-1 text-xs text-destructive hover:underline"
-                        onClick={() => {
-                          void (async () => {
-                            const ok = await confirm({
-                              title: "Delete blueprint?",
-                              description: `Delete “${bp.name}”? Series that reference it may block deletion.`,
-                              confirmLabel: "Delete",
-                              tone: "destructive",
-                            });
-                            if (!ok) return;
-                            try {
-                              await removeBlueprint({ data: { id: bp.id } });
-                              toast.success("Blueprint deleted");
-                              queryClient.invalidateQueries({ queryKey: ["admin-blueprints"] });
-                            } catch (error: unknown) {
-                              toast.error(
-                                error instanceof Error
-                                  ? error.message
-                                  : "Could not delete blueprint",
-                              );
-                            }
-                          })();
-                        }}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" /> Delete
-                      </button>
-                    </div>
-                  </li>
-                ))}
+                        <button
+                          type="button"
+                          onClick={() => selectBlueprint(bp.id)}
+                          className="min-w-0 flex-1 text-left"
+                        >
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <p className="truncate font-medium">{bp.name}</p>
+                            {bp.is_default ? (
+                              <StatusPill tone="live">
+                                <Star className="h-3 w-3" /> Default
+                              </StatusPill>
+                            ) : null}
+                          </div>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {(bp as { courses?: { name?: string } | null }).courses?.name ??
+                              "Course"}{" "}
+                            · v{bp.version} · {bp.default_total_questions} Q
+                          </p>
+                        </button>
+                        <div className="flex shrink-0 flex-col items-end gap-0.5">
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 rounded-md p-1.5 text-xs text-muted-foreground hover:bg-secondary hover:text-foreground"
+                            title={bp.is_default ? "Unset default" : "Make default"}
+                            onClick={() => {
+                              void (async () => {
+                                try {
+                                  await markDefault({
+                                    data: { id: bp.id, isDefault: !bp.is_default },
+                                  });
+                                  toast.success(
+                                    bp.is_default ? "Default cleared" : "Set as default blueprint",
+                                  );
+                                  queryClient.invalidateQueries({
+                                    queryKey: ["admin-blueprints"],
+                                  });
+                                } catch (error: unknown) {
+                                  toast.error(
+                                    error instanceof Error
+                                      ? error.message
+                                      : "Could not update default",
+                                  );
+                                }
+                              })();
+                            }}
+                          >
+                            <Star className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 rounded-md p-1.5 text-xs text-destructive hover:bg-destructive/10"
+                            aria-label={`Delete ${bp.name}`}
+                            onClick={() => {
+                              void (async () => {
+                                const ok = await confirm({
+                                  title: "Delete blueprint?",
+                                  description: `Delete “${bp.name}”? Series that reference it may block deletion.`,
+                                  confirmLabel: "Delete",
+                                  tone: "destructive",
+                                });
+                                if (!ok) return;
+                                try {
+                                  await removeBlueprint({ data: { id: bp.id } });
+                                  toast.success("Blueprint deleted");
+                                  if (selectedId === bp.id) {
+                                    const next = blueprints.find((item) => item.id !== bp.id);
+                                    void navigate({
+                                      search: (prev) => ({
+                                        ...prev,
+                                        blueprintId: next?.id,
+                                      }),
+                                      replace: true,
+                                    });
+                                  }
+                                  queryClient.invalidateQueries({
+                                    queryKey: ["admin-blueprints"],
+                                  });
+                                } catch (error: unknown) {
+                                  toast.error(
+                                    error instanceof Error
+                                      ? error.message
+                                      : "Could not delete blueprint",
+                                  );
+                                }
+                              })();
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </Panel>
+
+          {selectedBlueprint ? (
+            <div className="min-h-[calc(100vh-13rem)] min-w-0 rounded-[var(--radius-md)] border border-border bg-card p-3 sm:p-4 lg:min-h-[calc(100vh-11.5rem)]">
+              <div className="mb-4">
+                <h2 className="text-base font-semibold tracking-tight">{selectedBlueprint.name}</h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Update topic rules and difficulty mix. Saving replaces all rules for this version.
+                </p>
+              </div>
+              <BlueprintEditor
+                key={selectedBlueprint.id}
+                mode="edit"
+                blueprintId={selectedBlueprint.id}
+                onSaved={(id) => selectBlueprint(id)}
+              />
+            </div>
+          ) : (
+            <Panel
+              title="Select a blueprint"
+              description="Choose a blueprint from the list, or create one."
+            >
+              <AdminEmpty
+                title="Nothing selected"
+                body="Create a blueprint to define topic weightage and difficulty mix."
+              />
+              <button
+                type="button"
+                onClick={openCreate}
+                className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                <Plus className="h-4 w-4" /> New blueprint
+              </button>
+            </Panel>
+          )}
         </div>
       )}
+
+      <Modal
+        open={createOpen}
+        onClose={closeCreate}
+        title="New blueprint"
+        description="Define topic weightage and difficulty mix. Weightages must total 100%."
+        size="xl"
+      >
+        <BlueprintEditor
+          key="create-modal"
+          mode="create"
+          onCancel={closeCreate}
+          onSaved={(id) => {
+            closeCreate();
+            selectBlueprint(id);
+          }}
+        />
+      </Modal>
     </div>
   );
 }

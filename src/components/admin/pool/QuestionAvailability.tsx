@@ -47,8 +47,8 @@ export function QuestionAvailability({
         </button>
         {poolId ? (
           <Link
-            to="/admin/pools/$poolId"
-            params={{ poolId }}
+            to="/admin/pools"
+            search={{ poolId }}
             className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-secondary"
           >
             Add pool questions
