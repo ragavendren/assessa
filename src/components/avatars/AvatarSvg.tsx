@@ -1,6 +1,15 @@
 import { useId, type ReactNode } from "react";
 import type { AvatarDefinition } from "./avatarMap";
-import { BG, CLOTH, HAIR, SKIN, type Accessory, type FaceExtra, type HairStyle, type Outfit } from "./tokens";
+import {
+  BG,
+  CLOTH,
+  HAIR,
+  SKIN,
+  type Accessory,
+  type FaceExtra,
+  type HairStyle,
+  type Outfit,
+} from "./tokens";
 
 type AvatarSvgProps = {
   def: AvatarDefinition;
@@ -13,10 +22,14 @@ export function AvatarSvg({ def, title, className }: AvatarSvgProps) {
   const uid = useId().replace(/:/g, "");
   const label = title ?? def.label;
 
-  if (def.kind === "robot") return <RobotSvg def={def} uid={uid} label={label} className={className} />;
-  if (def.kind === "mascot") return <MascotSvg def={def} uid={uid} label={label} className={className} />;
-  if (def.kind === "initials") return <InitsSvg def={def} uid={uid} label={label} className={className} />;
-  if (def.kind === "placeholder") return <PlaceholderSvg uid={uid} label={label} className={className} />;
+  if (def.kind === "robot")
+    return <RobotSvg def={def} uid={uid} label={label} className={className} />;
+  if (def.kind === "mascot")
+    return <MascotSvg def={def} uid={uid} label={label} className={className} />;
+  if (def.kind === "initials")
+    return <InitsSvg def={def} uid={uid} label={label} className={className} />;
+  if (def.kind === "placeholder")
+    return <PlaceholderSvg uid={uid} label={label} className={className} />;
 
   return <HumanSvg def={def} uid={uid} label={label} className={className} />;
 }
@@ -75,7 +88,12 @@ function HumanSvg({
   const headY = youth ? 56 : 54;
 
   return (
-    <SvgShell uid={uid} label={label} desc={`${def.category} avatar illustration`} className={className}>
+    <SvgShell
+      uid={uid}
+      label={label}
+      desc={`${def.category} avatar illustration`}
+      className={className}
+    >
       <defs>
         <linearGradient id={`bg-${uid}`} x1="20%" y1="0%" x2="80%" y2="100%">
           <stop offset="0%" stopColor={bg} />
@@ -88,9 +106,11 @@ function HumanSvg({
       <OutfitShape outfit={outfit} color={cloth} youth={youth} />
 
       {/* Hair behind (long styles) */}
-      {(style === "long" || style === "curly" || style === "ponytail" || style === "afro" || style === "hijab") && (
-        <HairBack style={style} color={hair} />
-      )}
+      {(style === "long" ||
+        style === "curly" ||
+        style === "ponytail" ||
+        style === "afro" ||
+        style === "hijab") && <HairBack style={style} color={hair} />}
 
       {/* Head */}
       <circle cx="60" cy={headY} r={headR} fill={skin} />
@@ -110,7 +130,11 @@ function HumanSvg({
       />
       {/* Brows */}
       <path
-        d={youth ? "M44 50c3-1.5 6-1.5 8 0M68 50c3-1.5 6-1.5 8 0" : "M42 48c4-2 8-2 10 0M68 48c4-2 8-2 10 0"}
+        d={
+          youth
+            ? "M44 50c3-1.5 6-1.5 8 0M68 50c3-1.5 6-1.5 8 0"
+            : "M42 48c4-2 8-2 10 0M68 48c4-2 8-2 10 0"
+        }
         fill="none"
         stroke={hair}
         strokeWidth={1.7}
@@ -150,8 +174,20 @@ function OutfitShape({ outfit, color, youth }: { outfit: Outfit; color: string; 
     return (
       <g>
         <path d={body} fill={color} />
-        <path d={`M40 ${top}c6 4 12 6 20 6s14-2 20-6`} fill="none" stroke="#0f172a" strokeOpacity="0.2" strokeWidth="3" />
-        <path d="M48 92h24" stroke="#0f172a" strokeOpacity="0.18" strokeWidth="2.5" strokeLinecap="round" />
+        <path
+          d={`M40 ${top}c6 4 12 6 20 6s14-2 20-6`}
+          fill="none"
+          stroke="#0f172a"
+          strokeOpacity="0.2"
+          strokeWidth="3"
+        />
+        <path
+          d="M48 92h24"
+          stroke="#0f172a"
+          strokeOpacity="0.18"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+        />
       </g>
     );
   }
@@ -159,7 +195,13 @@ function OutfitShape({ outfit, color, youth }: { outfit: Outfit; color: string; 
     return (
       <g>
         <path d={body} fill={color} />
-        <path d={`M38 ${top + 4}h44`} stroke="#fff" strokeOpacity="0.25" strokeWidth="4" strokeLinecap="round" />
+        <path
+          d={`M38 ${top + 4}h44`}
+          stroke="#fff"
+          strokeOpacity="0.25"
+          strokeWidth="4"
+          strokeLinecap="round"
+        />
       </g>
     );
   }
@@ -186,7 +228,9 @@ function OutfitShape({ outfit, color, youth }: { outfit: Outfit; color: string; 
 
 function HairBack({ style, color }: { style: HairStyle; color: string }) {
   if (style === "hijab") {
-    return <path d="M24 58c2-30 18-48 36-48s34 18 36 48c-4-18-18-28-36-28S28 40 24 58Z" fill={color} />;
+    return (
+      <path d="M24 58c2-30 18-48 36-48s34 18 36 48c-4-18-18-28-36-28S28 40 24 58Z" fill={color} />
+    );
   }
   if (style === "long" || style === "ponytail") {
     return (
@@ -246,7 +290,11 @@ function HairFront({ style, color }: { style: HairStyle; color: string }) {
     return (
       <g fill={color}>
         <path d="M30 48c2-22 14-34 30-34s28 12 30 34c-6-10-18-16-30-16S36 38 30 48Z" />
-        {style === "bun" ? <circle cx="60" cy="18" r="10" /> : <ellipse cx="92" cy="48" rx="10" ry="14" />}
+        {style === "bun" ? (
+          <circle cx="60" cy="18" r="10" />
+        ) : (
+          <ellipse cx="92" cy="48" rx="10" ry="14" />
+        )}
       </g>
     );
   }
@@ -272,7 +320,9 @@ function HairFront({ style, color }: { style: HairStyle; color: string }) {
     );
   }
   if (style === "long") {
-    return <path d="M30 48c2-22 14-34 30-34s28 12 30 34c-6-10-18-16-30-16S36 38 30 48Z" fill={color} />;
+    return (
+      <path d="M30 48c2-22 14-34 30-34s28 12 30 34c-6-10-18-16-30-16S36 38 30 48Z" fill={color} />
+    );
   }
   // short default
   return (
@@ -303,7 +353,15 @@ function FaceExtras({
     );
   }
   if (face === "mustache") {
-    return <path d={`M50 ${headY + 12}c4 4 16 4 20 0`} fill="none" stroke={hair} strokeWidth="2.4" strokeLinecap="round" />;
+    return (
+      <path
+        d={`M50 ${headY + 12}c4 4 16 4 20 0`}
+        fill="none"
+        stroke={hair}
+        strokeWidth="2.4"
+        strokeLinecap="round"
+      />
+    );
   }
   if (face === "beard") {
     return (
@@ -330,7 +388,12 @@ function Accessories({ accessory, cloth }: { accessory: Accessory; cloth: string
   if (accessory === "headset") {
     return (
       <g>
-        <path d="M34 52c0-16 12-28 26-28s26 12 26 28" fill="none" stroke="#37474F" strokeWidth="3.5" />
+        <path
+          d="M34 52c0-16 12-28 26-28s26 12 26 28"
+          fill="none"
+          stroke="#37474F"
+          strokeWidth="3.5"
+        />
         <rect x="28" y="52" width="10" height="16" rx="3" fill="#455A64" />
         <rect x="82" y="52" width="10" height="16" rx="3" fill="#455A64" />
         <circle cx="88" cy="78" r="5" fill={cloth} />
@@ -434,7 +497,13 @@ function Panda() {
       <circle cx="46" cy="58" r="4" fill="#FAFAFA" />
       <circle cx="74" cy="58" r="4" fill="#FAFAFA" />
       <ellipse cx="60" cy="70" rx="6" ry="4" fill="#212121" />
-      <path d="M52 80c4 5 12 5 16 0" fill="none" stroke="#212121" strokeWidth="2.2" strokeLinecap="round" />
+      <path
+        d="M52 80c4 5 12 5 16 0"
+        fill="none"
+        stroke="#212121"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+      />
     </g>
   );
 }
@@ -474,8 +543,19 @@ function Cat() {
       <circle cx="48" cy="62" r="4" fill="#212121" />
       <circle cx="72" cy="62" r="4" fill="#212121" />
       <path d="M60 68l-5 6h10l-5-6z" fill="#EF5350" />
-      <path d="M42 78c6 2 12 2 18 0M60 78c6 2 12 2 18 0" fill="none" stroke="#EF6C00" strokeWidth="1.5" />
-      <path d="M54 78c2 4 10 4 12 0" fill="none" stroke="#212121" strokeWidth="2" strokeLinecap="round" />
+      <path
+        d="M42 78c6 2 12 2 18 0M60 78c6 2 12 2 18 0"
+        fill="none"
+        stroke="#EF6C00"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M54 78c2 4 10 4 12 0"
+        fill="none"
+        stroke="#212121"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
     </g>
   );
 }
@@ -505,7 +585,13 @@ function Bear() {
       <circle cx="48" cy="58" r="4" fill="#3E2723" />
       <circle cx="72" cy="58" r="4" fill="#3E2723" />
       <ellipse cx="60" cy="68" rx="5" ry="3.5" fill="#5D4037" />
-      <path d="M52 80c4 4 12 4 16 0" fill="none" stroke="#5D4037" strokeWidth="2" strokeLinecap="round" />
+      <path
+        d="M52 80c4 4 12 4 16 0"
+        fill="none"
+        stroke="#5D4037"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
     </g>
   );
 }
@@ -548,7 +634,15 @@ function InitsSvg({
   );
 }
 
-function PlaceholderSvg({ uid, label, className }: { uid: string; label: string; className?: string | undefined }) {
+function PlaceholderSvg({
+  uid,
+  label,
+  className,
+}: {
+  uid: string;
+  label: string;
+  className?: string | undefined;
+}) {
   return (
     <SvgShell uid={uid} label={label} desc="Anonymous placeholder avatar" className={className}>
       <rect width="120" height="120" rx="60" fill="#ECEFF1" />

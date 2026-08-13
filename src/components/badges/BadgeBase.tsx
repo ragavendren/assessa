@@ -201,11 +201,46 @@ export function BadgeBase({
       {earned ? (
         <g className="badge-glitter" filter={`url(#${ids.glitter})`} pointerEvents="none">
           <circle className="badge-glitter-dot" cx="48" cy="36" r="1.6" fill="#fff" />
-          <circle className="badge-glitter-dot" cx="78" cy="42" r="1.3" fill="#fff" style={{ animationDelay: "0.4s" }} />
-          <circle className="badge-glitter-dot" cx="58" cy="52" r="1.1" fill={palette.star} style={{ animationDelay: "0.8s" }} />
-          <circle className="badge-glitter-dot" cx="72" cy="58" r="1.4" fill="#fff" style={{ animationDelay: "1.2s" }} />
-          <circle className="badge-glitter-dot" cx="44" cy="62" r="1" fill={palette.star} style={{ animationDelay: "0.2s" }} />
-          <circle className="badge-glitter-dot" cx="84" cy="54" r="1.2" fill="#fff" style={{ animationDelay: "1s" }} />
+          <circle
+            className="badge-glitter-dot"
+            cx="78"
+            cy="42"
+            r="1.3"
+            fill="#fff"
+            style={{ animationDelay: "0.4s" }}
+          />
+          <circle
+            className="badge-glitter-dot"
+            cx="58"
+            cy="52"
+            r="1.1"
+            fill={palette.star}
+            style={{ animationDelay: "0.8s" }}
+          />
+          <circle
+            className="badge-glitter-dot"
+            cx="72"
+            cy="58"
+            r="1.4"
+            fill="#fff"
+            style={{ animationDelay: "1.2s" }}
+          />
+          <circle
+            className="badge-glitter-dot"
+            cx="44"
+            cy="62"
+            r="1"
+            fill={palette.star}
+            style={{ animationDelay: "0.2s" }}
+          />
+          <circle
+            className="badge-glitter-dot"
+            cx="84"
+            cy="54"
+            r="1.2"
+            fill="#fff"
+            style={{ animationDelay: "1s" }}
+          />
           <path
             className="badge-glitter-star"
             d="M52 44l0.7 1.5 1.6.2-1.2 1.1.4 1.6-1.5-.9-1.5.9.4-1.6-1.2-1.1 1.6-.2L52 44z"

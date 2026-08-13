@@ -152,10 +152,7 @@ function AdminPoolDetailPage() {
     queryFn: () => fetchQuestions({ data: { poolId } }),
   });
 
-  const inventory = useMemo(
-    () => buildInventoryStats(data?.questions ?? []),
-    [data?.questions],
-  );
+  const inventory = useMemo(() => buildInventoryStats(data?.questions ?? []), [data?.questions]);
 
   const filteredQuestions = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -327,8 +324,7 @@ function AdminPoolDetailPage() {
           disabled={importMutation.isPending}
           className="inline-flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
         >
-          <Upload className="h-3.5 w-3.5" />{" "}
-          {importMutation.isPending ? "Importing…" : "Import"}
+          <Upload className="h-3.5 w-3.5" /> {importMutation.isPending ? "Importing…" : "Import"}
         </button>
         {(data?.questions.length ?? 0) > 0 ? (
           <button
@@ -388,7 +384,10 @@ function AdminPoolDetailPage() {
         <PageLoader />
       ) : data.questions.length === 0 && !adding ? (
         <Panel title="Pool inventory" description="Import a CSV or add a single question.">
-          <AdminEmpty title="No questions yet" body="Use Template + Import above, or add one below." />
+          <AdminEmpty
+            title="No questions yet"
+            body="Use Template + Import above, or add one below."
+          />
           <button
             type="button"
             onClick={() => setAdding(true)}
@@ -401,7 +400,11 @@ function AdminPoolDetailPage() {
         <Panel
           title="Add question"
           action={
-            <button type="button" className="text-xs text-muted-foreground hover:underline" onClick={() => setAdding(false)}>
+            <button
+              type="button"
+              className="text-xs text-muted-foreground hover:underline"
+              onClick={() => setAdding(false)}
+            >
               Cancel
             </button>
           }
@@ -498,9 +501,7 @@ function AdminPoolDetailPage() {
                       }
                       className={cn(
                         "flex w-full items-start justify-between gap-2 rounded-md px-2 py-1.5 text-left transition-colors",
-                        selected
-                          ? "bg-primary/10 ring-1 ring-primary/25"
-                          : "hover:bg-secondary/60",
+                        selected ? "bg-primary/10 ring-1 ring-primary/25" : "hover:bg-secondary/60",
                       )}
                     >
                       <div className="min-w-0">

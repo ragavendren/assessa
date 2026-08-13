@@ -170,14 +170,18 @@ export function AvatarPicker({
                   <Avatar type={selected.id} size={40} {...(name ? { name } : {})} />
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{selected.label}</p>
-                    <p className="truncate text-xs capitalize text-muted-foreground">{selected.category}</p>
+                    <p className="truncate text-xs capitalize text-muted-foreground">
+                      {selected.category}
+                    </p>
                   </div>
                 </div>
               ) : null}
 
               <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-0.5">
                 {filtered.length === 0 ? (
-                  <p className="py-8 text-center text-sm text-muted-foreground">No avatars match.</p>
+                  <p className="py-8 text-center text-sm text-muted-foreground">
+                    No avatars match.
+                  </p>
                 ) : (
                   <ul
                     className="grid grid-cols-4 gap-2 sm:grid-cols-5"

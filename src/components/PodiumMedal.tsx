@@ -149,7 +149,14 @@ export function PodiumMedal({ place, size = 88, className }: PodiumMedalProps) {
 
       {/* Shine + shimmer */}
       <g clipPath={`url(#${ids.clip})`} pointerEvents="none">
-        <ellipse className="badge-shine-pulse" cx="52" cy="42" rx="28" ry="22" fill={`url(#${ids.shine})`} />
+        <ellipse
+          className="badge-shine-pulse"
+          cx="52"
+          cy="42"
+          rx="28"
+          ry="22"
+          fill={`url(#${ids.shine})`}
+        />
         <g className="badge-shimmer-sweep">
           <rect
             x="-48"
@@ -165,14 +172,8 @@ export function PodiumMedal({ place, size = 88, className }: PodiumMedalProps) {
 
       {/* Ribbon tails */}
       <g filter={`url(#${ids.glow})`}>
-        <path
-          d="M48 92c-2 8-8 16-14 22l8 4c4-6 8-12 10-18l-4-8z"
-          fill={`url(#${ids.rim})`}
-        />
-        <path
-          d="M80 92c2 8 8 16 14 22l-8 4c-4-6-8-12-10-18l4-8z"
-          fill={`url(#${ids.rim})`}
-        />
+        <path d="M48 92c-2 8-8 16-14 22l8 4c4-6 8-12 10-18l-4-8z" fill={`url(#${ids.rim})`} />
+        <path d="M80 92c2 8 8 16 14 22l-8 4c-4-6-8-12-10-18l4-8z" fill={`url(#${ids.rim})`} />
         <path d="M56 90h16v22H56z" fill={palette.fillTo} />
         <path d="M56 90h16v6H56z" fill={palette.rimFrom} opacity="0.85" />
       </g>
@@ -194,7 +195,12 @@ export function PodiumMedal({ place, size = 88, className }: PodiumMedalProps) {
           fontSize="36"
           fontWeight="800"
           fontFamily="system-ui, Segoe UI, sans-serif"
-          style={{ paintOrder: "stroke", stroke: palette.plate, strokeWidth: 1.2, strokeOpacity: 0.35 }}
+          style={{
+            paintOrder: "stroke",
+            stroke: palette.plate,
+            strokeWidth: 1.2,
+            strokeOpacity: 0.35,
+          }}
         >
           {place}
         </text>

@@ -718,12 +718,33 @@ export const AVATAR_MAP: Record<string, AvatarDefinition> = {
   },
 
   // —— Mascots ——
-  panda: { id: "panda", label: "Panda", category: "mascot", kind: "mascot", bg: "slate", mascot: "panda" },
+  panda: {
+    id: "panda",
+    label: "Panda",
+    category: "mascot",
+    kind: "mascot",
+    bg: "slate",
+    mascot: "panda",
+  },
   fox: { id: "fox", label: "Fox", category: "mascot", kind: "mascot", bg: "peach", mascot: "fox" },
   owl: { id: "owl", label: "Owl", category: "mascot", kind: "mascot", bg: "sand", mascot: "owl" },
   cat: { id: "cat", label: "Cat", category: "mascot", kind: "mascot", bg: "cream", mascot: "cat" },
-  penguin: { id: "penguin", label: "Penguin", category: "mascot", kind: "mascot", bg: "ice", mascot: "penguin" },
-  bear: { id: "bear", label: "Bear", category: "mascot", kind: "mascot", bg: "sand", mascot: "bear" },
+  penguin: {
+    id: "penguin",
+    label: "Penguin",
+    category: "mascot",
+    kind: "mascot",
+    bg: "ice",
+    mascot: "penguin",
+  },
+  bear: {
+    id: "bear",
+    label: "Bear",
+    category: "mascot",
+    kind: "mascot",
+    bg: "sand",
+    mascot: "bear",
+  },
 
   // —— Initials templates ——
   "init-a": {

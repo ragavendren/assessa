@@ -134,7 +134,10 @@ function Notifications() {
                         <p className="text-xs text-muted-foreground">{item.body}</p>
                       ) : null}
                       {href ? (
-                        <Link to={href} className="mt-1 inline-block text-xs text-accent hover:underline">
+                        <Link
+                          to={href}
+                          className="mt-1 inline-block text-xs text-accent hover:underline"
+                        >
                           Open
                         </Link>
                       ) : null}

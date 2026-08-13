@@ -405,7 +405,10 @@ export async function resolveExamAudienceUserIds(exam: ExamLaunchAudience): Prom
     if (inviteError) throw inviteError;
     const emails = [...new Set((invites ?? []).map((row) => row.email))];
     if (emails.length === 0) return [];
-    const { data: profiles, error } = await db.from("profiles").select("id, email").in("email", emails);
+    const { data: profiles, error } = await db
+      .from("profiles")
+      .select("id, email")
+      .in("email", emails);
     if (error) throw error;
     return (profiles ?? []).map((row) => row.id);
   }
@@ -423,7 +426,9 @@ export async function notifyExamLaunched(exam: ExamLaunchAudience) {
     if (userIds.length === 0) return;
 
     const startsLater =
-      exam.starts_at != null && exam.starts_at !== "" && new Date(exam.starts_at).getTime() > Date.now();
+      exam.starts_at != null &&
+      exam.starts_at !== "" &&
+      new Date(exam.starts_at).getTime() > Date.now();
     const body = startsLater
       ? `Scheduled to open soon — check My Exams when it starts.`
       : "It's available now in My Exams.";
@@ -439,7 +444,6 @@ export async function notifyExamLaunched(exam: ExamLaunchAudience) {
     console.error("[notifyExamLaunched] failed:", error);
   }
 }
-
 
 /* ------------------------------------------------------------------ */
 /* exam serving                                                        */
@@ -1144,7 +1148,9 @@ export function maskName(
 export async function listLeaderboardExams(userId: string) {
   const { data: exams } = await db
     .from("exams")
-    .select("id, title, topic, access, duration_minutes, max_attempts, mode, pass_mark, question_count")
+    .select(
+      "id, title, topic, access, duration_minutes, max_attempts, mode, pass_mark, question_count",
+    )
     .eq("active", true)
     .eq("enable_leaderboard", true)
     .order("title", { ascending: true });
@@ -1266,8 +1272,7 @@ export async function leaderboard(
     const current = agg.get(row.user_id) ?? { byExam: new Map<string, BestAttempt>(), attempts: 0 };
     current.attempts += 1;
     const score = Number(row.score ?? 0);
-    const durationSeconds =
-      typeof row.duration_seconds === "number" ? row.duration_seconds : null;
+    const durationSeconds = typeof row.duration_seconds === "number" ? row.duration_seconds : null;
     const prev = current.byExam.get(row.exam_id);
     const betterScore = !prev || score > prev.score;
     const sameScoreFaster =

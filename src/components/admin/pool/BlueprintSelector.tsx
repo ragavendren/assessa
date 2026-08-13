@@ -19,8 +19,7 @@ export function BlueprintSelector({ blueprints, value, disabled, onChange }: Pro
         <option value="">Select blueprint…</option>
         {blueprints.map((b) => (
           <option key={b.id} value={b.id}>
-            {b.name} (v{b.version})
-            {b.is_default ? " · default" : ""}
+            {b.name} (v{b.version}){b.is_default ? " · default" : ""}
           </option>
         ))}
       </select>

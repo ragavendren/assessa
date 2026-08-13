@@ -1,10 +1,6 @@
 import { AdminNav } from "@/components/AdminNav";
 import { QuestionBankNav } from "@/components/admin/QuestionBankNav";
-import {
-  FieldLabel,
-  Panel,
-  QuestionBankPageHeader,
-} from "@/components/admin/pool/QuestionBankUi";
+import { FieldLabel, Panel, QuestionBankPageHeader } from "@/components/admin/pool/QuestionBankUi";
 import { AdminEmpty } from "@/components/admin/AdminPageUi";
 import { PageLoader } from "@/components/platform";
 import { useConfirm } from "@/components/ui/confirm-dialog";

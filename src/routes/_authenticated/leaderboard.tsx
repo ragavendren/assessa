@@ -13,15 +13,7 @@ import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import {
-  ListChecks,
-  Medal,
-  Sparkles,
-  Target,
-  Timer,
-  Trophy,
-  Hash,
-} from "lucide-react";
+import { ListChecks, Medal, Sparkles, Target, Timer, Trophy, Hash } from "lucide-react";
 import type { ReactNode } from "react";
 import { z } from "zod";
 
@@ -140,7 +132,11 @@ function LeaderboardPage() {
             </p>
           </div>
           <div className="animate-brand-rise-delayed flex flex-wrap gap-2">
-            <HeroChip icon={<Trophy className="h-3.5 w-3.5" />} label="Ranked" value={rows.length} />
+            <HeroChip
+              icon={<Trophy className="h-3.5 w-3.5" />}
+              label="Ranked"
+              value={rows.length}
+            />
             <HeroChip
               icon={<Sparkles className="h-3.5 w-3.5" />}
               label="Your place"
@@ -227,7 +223,9 @@ function LeaderboardPage() {
                   <p className="text-hairline text-muted-foreground">Your rank</p>
                   <p className="font-display text-lg leading-none">
                     #{data.myRank.rank}
-                    <span className="ml-1 text-sm text-muted-foreground">of {data.myRank.total}</span>
+                    <span className="ml-1 text-sm text-muted-foreground">
+                      of {data.myRank.total}
+                    </span>
                   </p>
                 </div>
               </div>
@@ -288,8 +286,8 @@ function LeaderboardPage() {
             </section>
           ) : (
             <p className="text-center text-sm text-muted-foreground">
-              Only the top {topThree.length} {topThree.length === 1 ? "spot is" : "spots are"} filled
-              so far.
+              Only the top {topThree.length} {topThree.length === 1 ? "spot is" : "spots are"}{" "}
+              filled so far.
             </p>
           )}
         </div>
@@ -372,8 +370,7 @@ function AssessmentStatsStrip({
       ? {
           icon: <Sparkles className="h-3.5 w-3.5" />,
           label: "Mode",
-          value:
-            mode in MODE_LABELS ? MODE_LABELS[mode as ExamMode] : mode,
+          value: mode in MODE_LABELS ? MODE_LABELS[mode as ExamMode] : mode,
         }
       : null,
     topic
@@ -497,7 +494,9 @@ function PodiumCard({ row, singleExam }: { row: BoardRow; singleExam: boolean })
           </span>
         ) : null}
       </p>
-      <p className="mt-1 font-display text-3xl tabular-nums leading-none text-white">{row.score}%</p>
+      <p className="mt-1 font-display text-3xl tabular-nums leading-none text-white">
+        {row.score}%
+      </p>
       <p className="mt-1 text-[11px] uppercase tracking-wide text-slate-400">{metal.label}</p>
 
       <div className="mt-3 flex flex-wrap justify-center gap-1.5 text-[11px] text-slate-300">
@@ -528,12 +527,7 @@ function PodiumCard({ row, singleExam }: { row: BoardRow; singleExam: boolean })
             #{place}
           </div>
         </div>
-        <div
-          className={cn(
-            "h-2 rounded-b-md bg-gradient-to-r opacity-80",
-            metal.rim,
-          )}
-        />
+        <div className={cn("h-2 rounded-b-md bg-gradient-to-r opacity-80", metal.rim)} />
       </div>
     </div>
   );
@@ -593,7 +587,9 @@ function FieldRow({
         <p className="hidden text-sm tabular-nums text-muted-foreground sm:block">{row.exams}</p>
       ) : null}
 
-      <p className="hidden text-sm tabular-nums text-muted-foreground sm:block">{row.attempts ?? 0}</p>
+      <p className="hidden text-sm tabular-nums text-muted-foreground sm:block">
+        {row.attempts ?? 0}
+      </p>
 
       <p className="hidden text-sm tabular-nums text-muted-foreground sm:block">
         {formatDuration(row.durationSeconds)}

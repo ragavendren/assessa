@@ -11,12 +11,7 @@ import { ListToolbar, listViewClass, useListViewMode } from "@/components/ListTo
 import { PodiumMedal } from "@/components/PodiumMedal";
 import { EmptyState, Meter, PageLoader, StatTile } from "@/components/platform";
 import { getAdminAssessmentPerformance } from "@/lib/admin.functions";
-import {
-  formatDuration,
-  initials,
-  MODE_LABELS,
-  type ExamMode,
-} from "@/lib/gamification";
+import { formatDuration, initials, MODE_LABELS, type ExamMode } from "@/lib/gamification";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
@@ -268,9 +263,7 @@ function AdminPerformancePage() {
                         <StatusPill>pass {exam.passMark}%</StatusPill>
                         <StatusPill>{exam.durationMinutes}m</StatusPill>
                         <StatusPill>
-                          {exam.maxAttempts === 1
-                            ? "1 attempt"
-                            : `${exam.maxAttempts} attempts`}
+                          {exam.maxAttempts === 1 ? "1 attempt" : `${exam.maxAttempts} attempts`}
                         </StatusPill>
                       </div>
                     </div>

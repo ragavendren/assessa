@@ -85,15 +85,7 @@ export type HairStyle =
   | "turban";
 
 export type Outfit =
-  | "blazer"
-  | "shirt"
-  | "tie"
-  | "polo"
-  | "tee"
-  | "hoodie"
-  | "sweater"
-  | "lab"
-  | "grad";
+  "blazer" | "shirt" | "tie" | "polo" | "tee" | "hoodie" | "sweater" | "lab" | "grad";
 
 export type Accessory = "glasses" | "headset" | "laptop" | "backpack" | "cap" | "none";
 

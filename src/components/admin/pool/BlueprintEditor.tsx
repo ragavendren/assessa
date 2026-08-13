@@ -1,5 +1,10 @@
 import { PageLoader } from "@/components/platform";
-import { getBlueprint, listCoursePoolTopics, listCourses, upsertBlueprint } from "@/lib/pool.functions";
+import {
+  getBlueprint,
+  listCoursePoolTopics,
+  listCourses,
+  upsertBlueprint,
+} from "@/lib/pool.functions";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -386,10 +391,7 @@ export function BlueprintEditor({
                             {
                               ...blankRule(),
                               topic: item.topic,
-                              weightage: Math.max(
-                                1,
-                                Math.round(100 / (current.length + 1)),
-                              ),
+                              weightage: Math.max(1, Math.round(100 / (current.length + 1))),
                             },
                           ];
                         });
@@ -476,7 +478,10 @@ export function BlueprintEditor({
                         {topicMatch.count} pool question{topicMatch.count === 1 ? "" : "s"} match
                         this topic
                       </p>
-                    ) : rule.topic.trim() && courseId && !poolTopicsPending && poolTopics.length > 0 ? (
+                    ) : rule.topic.trim() &&
+                      courseId &&
+                      !poolTopicsPending &&
+                      poolTopics.length > 0 ? (
                       <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300">
                         No matching pool topic yet — check spelling against your imports.
                       </p>

@@ -1,10 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import {
-  initialsAvatarDef,
-  resolveAvatarDefinition,
-  type AvatarDefinition,
-} from "./avatarMap";
+import { initialsAvatarDef, resolveAvatarDefinition, type AvatarDefinition } from "./avatarMap";
 import { AvatarSvg } from "./AvatarSvg";
 
 export type AvatarStatus = "online" | "offline" | "busy" | "away" | "dnd";
@@ -89,7 +85,9 @@ export function Avatar({
       ) : null}
 
       {badge ? (
-        <span className="absolute -right-0.5 -top-0.5 flex items-center justify-center">{badge}</span>
+        <span className="absolute -right-0.5 -top-0.5 flex items-center justify-center">
+          {badge}
+        </span>
       ) : null}
     </span>
   );

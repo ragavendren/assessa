@@ -1,6 +1,10 @@
 import type { BadgeGlyphId } from "./badgeMap";
 
-type GlyphProps = { fill?: string | undefined; className?: string | undefined; mark?: string | undefined };
+type GlyphProps = {
+  fill?: string | undefined;
+  className?: string | undefined;
+  mark?: string | undefined;
+};
 
 const stroke = (color: string | undefined) => ({
   fill: "none" as const,
@@ -112,7 +116,11 @@ function MarkGlyph({ fill, className, mark = "★" }: GlyphProps) {
   const s = stroke(fill);
   return (
     <g className={className}>
-      <path {...s} strokeWidth={1.4} d="M12 2.4 13 4.6l2.2.2-1.7 1.55.45 2.15L12 7.4l-1.95 1.1.45-2.15-1.7-1.55 2.2-.2L12 2.4z" />
+      <path
+        {...s}
+        strokeWidth={1.4}
+        d="M12 2.4 13 4.6l2.2.2-1.7 1.55.45 2.15L12 7.4l-1.95 1.1.45-2.15-1.7-1.55 2.2-.2L12 2.4z"
+      />
       <circle cx="12" cy="14.2" r={long ? 6.2 : 6.6} {...s} />
       <text
         x="12"
@@ -193,9 +201,20 @@ function SparklesGlyph({ fill, className }: GlyphProps) {
   const s = stroke(fill);
   return (
     <g className={className}>
-      <path {...s} d="M12 3.5 13.4 7.8 17.5 9.2 13.4 10.6 12 14.9 10.6 10.6 6.5 9.2 10.6 7.8 12 3.5z" />
-      <path {...s} strokeWidth={1.35} d="M18.2 14.2 19 16.4l2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2z" />
-      <path {...s} strokeWidth={1.35} d="M5.5 14.8 6.1 16.5l1.7.6-1.7.6-.6 1.7-.6-1.7-1.7-.6 1.7-.6.6-1.7z" />
+      <path
+        {...s}
+        d="M12 3.5 13.4 7.8 17.5 9.2 13.4 10.6 12 14.9 10.6 10.6 6.5 9.2 10.6 7.8 12 3.5z"
+      />
+      <path
+        {...s}
+        strokeWidth={1.35}
+        d="M18.2 14.2 19 16.4l2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2z"
+      />
+      <path
+        {...s}
+        strokeWidth={1.35}
+        d="M5.5 14.8 6.1 16.5l1.7.6-1.7.6-.6 1.7-.6-1.7-1.7-.6 1.7-.6.6-1.7z"
+      />
     </g>
   );
 }
@@ -216,7 +235,9 @@ function TargetGlyph({ fill, className }: GlyphProps) {
 
 function ZapGlyph({ fill, className }: GlyphProps) {
   const s = stroke(fill);
-  return <path className={className} {...s} d="M13.2 3.2 7 12.5h4.2L9.6 20.8 17.2 10.2h-4.2L13.2 3.2z" />;
+  return (
+    <path className={className} {...s} d="M13.2 3.2 7 12.5h4.2L9.6 20.8 17.2 10.2h-4.2L13.2 3.2z" />
+  );
 }
 
 function FlameGlyph({ fill, className }: GlyphProps) {
@@ -227,7 +248,11 @@ function FlameGlyph({ fill, className }: GlyphProps) {
         {...s}
         d="M12 3.2c1.1 2.4 3.2 4 3.2 7 0 1.1-.35 2-.95 2.75.95-.4 1.65-1.45 1.65-2.85 0-.55.05-1.1.3-1.6 1.25 1.45 2 3.2 2 5.2 0 3.5-2.85 6.35-6.2 6.35S5.8 16.85 5.8 13.35c0-2.9 1.95-5 3.85-7 .4 1.2 1.05 2.15 1.75 2.9-.15-.95-.1-2 .6-4.05z"
       />
-      <path {...s} strokeWidth={1.35} d="M12 11.5c.55 1.1 1.4 1.7 1.4 2.9 0 1.2-.75 2.1-1.4 2.1s-1.4-.9-1.4-2.1c0-1.2.85-1.8 1.4-2.9z" />
+      <path
+        {...s}
+        strokeWidth={1.35}
+        d="M12 11.5c.55 1.1 1.4 1.7 1.4 2.9 0 1.2-.75 2.1-1.4 2.1s-1.4-.9-1.4-2.1c0-1.2.85-1.8 1.4-2.9z"
+      />
     </g>
   );
 }
@@ -236,7 +261,10 @@ function RocketGlyph({ fill, className }: GlyphProps) {
   const s = stroke(fill);
   return (
     <g className={className}>
-      <path {...s} d="M12.4 3.2c2.2.45 4.1 2.35 4.5 4.55.3 1.9-.85 4.75-2.55 6.55l.55 1.8-1.85-.3-.95 1.4-1.25-1.25-1.35 1.25-.95-1.4-1.85.3.55-1.8C6.6 12.5 5.45 9.65 5.75 7.75c.4-2.2 2.3-4.1 4.5-4.55 0 0 1.4.35 2.15 0z" />
+      <path
+        {...s}
+        d="M12.4 3.2c2.2.45 4.1 2.35 4.5 4.55.3 1.9-.85 4.75-2.55 6.55l.55 1.8-1.85-.3-.95 1.4-1.25-1.25-1.35 1.25-.95-1.4-1.85.3.55-1.8C6.6 12.5 5.45 9.65 5.75 7.75c.4-2.2 2.3-4.1 4.5-4.55 0 0 1.4.35 2.15 0z"
+      />
       <circle cx="12.6" cy="8.8" r="1.35" {...s} strokeWidth={1.35} />
       <path {...s} strokeWidth={1.35} d="M8.4 16.8 6.6 19.4M15.6 16.8 17.4 19.4" />
     </g>
@@ -257,7 +285,10 @@ function ShieldGlyph({ fill, className }: GlyphProps) {
   const s = stroke(fill);
   return (
     <g className={className}>
-      <path {...s} d="M12 3.2 19.2 6.2v5.2c0 4.2-2.9 7.2-7.2 8.5-4.3-1.3-7.2-4.3-7.2-8.5V6.2L12 3.2z" />
+      <path
+        {...s}
+        d="M12 3.2 19.2 6.2v5.2c0 4.2-2.9 7.2-7.2 8.5-4.3-1.3-7.2-4.3-7.2-8.5V6.2L12 3.2z"
+      />
       <path {...s} strokeWidth={1.35} d="M12 7.5v8.5M8.8 11.2h6.4" />
     </g>
   );
@@ -417,7 +448,10 @@ function HandshakeGlyph({ fill, className }: GlyphProps) {
   return (
     <g className={className}>
       <path {...s} d="M4.5 11.2 8.5 8l2 2-2.4 1.9 1.3 1.7 2.1-1.65 1.3 1.3-2.5 2-3-2.3-1.9 1.5" />
-      <path {...s} d="M19.5 11.2 15.5 8l-2 2 2.4 1.9-1.3 1.7-2.1-1.65-1.3 1.3 2.5 2 3-2.3 1.9 1.5" />
+      <path
+        {...s}
+        d="M19.5 11.2 15.5 8l-2 2 2.4 1.9-1.3 1.7-2.1-1.65-1.3 1.3 2.5 2 3-2.3 1.9 1.5"
+      />
       <path {...s} d="M9.8 14.2 12 15.9l2.2-1.7" />
     </g>
   );
@@ -441,7 +475,11 @@ function PodiumGlyph({ fill, className }: GlyphProps) {
       <path {...s} d="M9.2 7.2h5.6v12.5H9.2z" />
       <path {...s} d="M3.5 11.5h5v8.2h-5z" />
       <path {...s} d="M15.5 13.5h5v6.2h-5z" />
-      <path {...s} strokeWidth={1.4} d="M12 3.2 13 5.4l2.2.2-1.7 1.55.45 2.1L12 8.05l-1.95 1.2.45-2.1-1.7-1.55 2.2-.2L12 3.2z" />
+      <path
+        {...s}
+        strokeWidth={1.4}
+        d="M12 3.2 13 5.4l2.2.2-1.7 1.55.45 2.1L12 8.05l-1.95 1.2.45-2.1-1.7-1.55 2.2-.2L12 3.2z"
+      />
     </g>
   );
 }
@@ -451,7 +489,10 @@ function FistGlyph({ fill, className }: GlyphProps) {
   return (
     <g className={className}>
       <path {...s} d="M8.8 4.2h2v3.2M11.4 3.8h2v3.6M14 4.4h2v3.2" />
-      <path {...s} d="M7.8 7.8h9.8c1.15 0 2.1.95 2.1 2.1v2c0 3.4-2.35 6.2-5.55 6.85v1.5H10.3v-1.65c-2.75-.95-4.65-3.5-4.65-6.45V10c0-1.2.95-2.2 2.15-2.2z" />
+      <path
+        {...s}
+        d="M7.8 7.8h9.8c1.15 0 2.1.95 2.1 2.1v2c0 3.4-2.35 6.2-5.55 6.85v1.5H10.3v-1.65c-2.75-.95-4.65-3.5-4.65-6.45V10c0-1.2.95-2.2 2.15-2.2z"
+      />
     </g>
   );
 }
@@ -461,7 +502,10 @@ function ClipboardGlyph({ fill, className }: GlyphProps) {
   return (
     <g className={className}>
       <path {...s} d="M9 3.8h6" />
-      <path {...s} d="M8.2 5.2h1.4V4.4c0-.55.45-1 1-1h2.8c.55 0 1 .45 1 1v.8h1.4c1 0 1.8.8 1.8 1.8v11.4c0 1-.8 1.8-1.8 1.8H8.2c-1 0-1.8-.8-1.8-1.8V7c0-1 .8-1.8 1.8-1.8z" />
+      <path
+        {...s}
+        d="M8.2 5.2h1.4V4.4c0-.55.45-1 1-1h2.8c.55 0 1 .45 1 1v.8h1.4c1 0 1.8.8 1.8 1.8v11.4c0 1-.8 1.8-1.8 1.8H8.2c-1 0-1.8-.8-1.8-1.8V7c0-1 .8-1.8 1.8-1.8z"
+      />
       <path {...s} d="M9 12.2 11 14.2l4.2-4.2" />
     </g>
   );
@@ -472,7 +516,10 @@ function RunnerGlyph({ fill, className }: GlyphProps) {
   return (
     <g className={className}>
       <circle cx="14.2" cy="4.8" r="1.8" {...s} />
-      <path {...s} d="M12.8 7.4c1.3.3 2.35 1.2 2.9 2.35l2.2 1-.65 1.45-2.35-1.05-.85 1.55 3 2.25-.9 1.2-3.7-2.8 1-3.8c-.15-.35-.5-.65-.95-.8L8.6 8.3" />
+      <path
+        {...s}
+        d="M12.8 7.4c1.3.3 2.35 1.2 2.9 2.35l2.2 1-.65 1.45-2.35-1.05-.85 1.55 3 2.25-.9 1.2-3.7-2.8 1-3.8c-.15-.35-.5-.65-.95-.8L8.6 8.3"
+      />
       <path {...s} d="M8.8 14.2 6.4 18.8M7.4 11.2 4.2 12.2" />
     </g>
   );

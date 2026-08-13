@@ -201,8 +201,8 @@ function ProfilePage() {
           >
             <SectionHeading eyebrow="Privacy" title="Leaderboard visibility" />
             <p className="rounded-xl border border-border bg-secondary/30 p-4 text-sm text-muted-foreground">
-              Administrator accounts are never listed on public leaderboards, including ranks
-              shown after an attempt.
+              Administrator accounts are never listed on public leaderboards, including ranks shown
+              after an attempt.
             </p>
           </section>
         ) : null}

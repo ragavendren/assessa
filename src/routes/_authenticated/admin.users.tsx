@@ -304,9 +304,7 @@ function AdminUsersPage() {
                             </span>
                             <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
                               {user.optedAssessments} opted
-                              {user.lastActivity
-                                ? ` · ${formatDateTime(user.lastActivity)}`
-                                : ""}
+                              {user.lastActivity ? ` · ${formatDateTime(user.lastActivity)}` : ""}
                             </span>
                           </span>
                         </div>
