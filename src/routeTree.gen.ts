@@ -28,12 +28,20 @@ import { Route as AuthenticatedAdminCoursesRouteImport } from './routes/_authent
 import { Route as AuthenticatedAdminGamificationRouteImport } from './routes/_authenticated/admin.gamification'
 import { Route as AuthenticatedAdminOrganizationsRouteImport } from './routes/_authenticated/admin.organizations'
 import { Route as AuthenticatedAdminPerformanceRouteImport } from './routes/_authenticated/admin.performance'
+import { Route as AuthenticatedAdminPlayRouteImport } from './routes/_authenticated/admin.play'
 import { Route as AuthenticatedAdminPoolsRouteImport } from './routes/_authenticated/admin.pools'
 import { Route as AuthenticatedAdminSeriesRouteImport } from './routes/_authenticated/admin.series'
 import { Route as AuthenticatedAdminUsersRouteImport } from './routes/_authenticated/admin.users'
 import { Route as AuthenticatedAttemptAttemptIdRouteImport } from './routes/_authenticated/attempt.$attemptId'
 import { Route as AuthenticatedExamsIndexRouteImport } from './routes/_authenticated/exams.index'
 import { Route as AuthenticatedExamsExamIdRouteImport } from './routes/_authenticated/exams.$examId'
+import { Route as AuthenticatedPlayIndexRouteImport } from './routes/_authenticated/play.index'
+import { Route as AuthenticatedPlayBattleRouteImport } from './routes/_authenticated/play.battle'
+import { Route as AuthenticatedPlayEscapeRouteImport } from './routes/_authenticated/play.escape'
+import { Route as AuthenticatedPlayFlashRouteImport } from './routes/_authenticated/play.flash'
+import { Route as AuthenticatedPlayLeaderboardRouteImport } from './routes/_authenticated/play.leaderboard'
+import { Route as AuthenticatedPlayTeamRouteImport } from './routes/_authenticated/play.team'
+import { Route as AuthenticatedPlayTopicsRouteImport } from './routes/_authenticated/play.topics'
 import { Route as AuthenticatedResultsAttemptIdRouteImport } from './routes/_authenticated/results.$attemptId'
 import { Route as AuthenticatedAdminBlueprintsIndexRouteImport } from './routes/_authenticated/admin.blueprints.index'
 import { Route as AuthenticatedAdminBlueprintsBlueprintIdRouteImport } from './routes/_authenticated/admin.blueprints.$blueprintId'
@@ -42,6 +50,10 @@ import { Route as AuthenticatedAdminExamsExamIdRouteImport } from './routes/_aut
 import { Route as AuthenticatedAdminExamsNewRouteImport } from './routes/_authenticated/admin.exams.new'
 import { Route as AuthenticatedAdminPoolsIndexRouteImport } from './routes/_authenticated/admin.pools.index'
 import { Route as AuthenticatedAdminPoolsPoolIdRouteImport } from './routes/_authenticated/admin.pools.$poolId'
+import { Route as AuthenticatedPlayEscapeScenarioIdRouteImport } from './routes/_authenticated/play.escape.$scenarioId'
+import { Route as AuthenticatedPlayResultsSessionIdRouteImport } from './routes/_authenticated/play.results.$sessionId'
+import { Route as AuthenticatedPlaySessionSessionIdRouteImport } from './routes/_authenticated/play.session.$sessionId'
+import { Route as AuthenticatedPlayTournamentTournamentIdRouteImport } from './routes/_authenticated/play.tournament.$tournamentId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -145,6 +157,11 @@ const AuthenticatedAdminPerformanceRoute =
     path: '/admin/performance',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedAdminPlayRoute = AuthenticatedAdminPlayRouteImport.update({
+  id: '/admin/play',
+  path: '/admin/play',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedAdminPoolsRoute = AuthenticatedAdminPoolsRouteImport.update({
   id: '/admin/pools',
   path: '/admin/pools',
@@ -178,6 +195,42 @@ const AuthenticatedExamsExamIdRoute =
     path: '/exams/$examId',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedPlayIndexRoute = AuthenticatedPlayIndexRouteImport.update({
+  id: '/play/',
+  path: '/play/',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedPlayBattleRoute = AuthenticatedPlayBattleRouteImport.update({
+  id: '/play/battle',
+  path: '/play/battle',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedPlayEscapeRoute = AuthenticatedPlayEscapeRouteImport.update({
+  id: '/play/escape',
+  path: '/play/escape',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedPlayFlashRoute = AuthenticatedPlayFlashRouteImport.update({
+  id: '/play/flash',
+  path: '/play/flash',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedPlayLeaderboardRoute =
+  AuthenticatedPlayLeaderboardRouteImport.update({
+    id: '/play/leaderboard',
+    path: '/play/leaderboard',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedPlayTeamRoute = AuthenticatedPlayTeamRouteImport.update({
+  id: '/play/team',
+  path: '/play/team',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedPlayTopicsRoute = AuthenticatedPlayTopicsRouteImport.update({
+  id: '/play/topics',
+  path: '/play/topics',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedResultsAttemptIdRoute =
   AuthenticatedResultsAttemptIdRouteImport.update({
     id: '/results/$attemptId',
@@ -226,6 +279,30 @@ const AuthenticatedAdminPoolsPoolIdRoute =
     path: '/$poolId',
     getParentRoute: () => AuthenticatedAdminPoolsRoute,
   } as any)
+const AuthenticatedPlayEscapeScenarioIdRoute =
+  AuthenticatedPlayEscapeScenarioIdRouteImport.update({
+    id: '/$scenarioId',
+    path: '/$scenarioId',
+    getParentRoute: () => AuthenticatedPlayEscapeRoute,
+  } as any)
+const AuthenticatedPlayResultsSessionIdRoute =
+  AuthenticatedPlayResultsSessionIdRouteImport.update({
+    id: '/play/results/$sessionId',
+    path: '/play/results/$sessionId',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedPlaySessionSessionIdRoute =
+  AuthenticatedPlaySessionSessionIdRouteImport.update({
+    id: '/play/session/$sessionId',
+    path: '/play/session/$sessionId',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedPlayTournamentTournamentIdRoute =
+  AuthenticatedPlayTournamentTournamentIdRouteImport.update({
+    id: '/play/tournament/$tournamentId',
+    path: '/play/tournament/$tournamentId',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -245,19 +322,31 @@ export interface FileRoutesByFullPath {
   '/admin/gamification': typeof AuthenticatedAdminGamificationRoute
   '/admin/organizations': typeof AuthenticatedAdminOrganizationsRoute
   '/admin/performance': typeof AuthenticatedAdminPerformanceRoute
+  '/admin/play': typeof AuthenticatedAdminPlayRoute
   '/admin/pools': typeof AuthenticatedAdminPoolsRouteWithChildren
   '/admin/series': typeof AuthenticatedAdminSeriesRoute
   '/admin/users': typeof AuthenticatedAdminUsersRoute
   '/attempt/$attemptId': typeof AuthenticatedAttemptAttemptIdRoute
   '/exams/$examId': typeof AuthenticatedExamsExamIdRoute
+  '/play/battle': typeof AuthenticatedPlayBattleRoute
+  '/play/escape': typeof AuthenticatedPlayEscapeRouteWithChildren
+  '/play/flash': typeof AuthenticatedPlayFlashRoute
+  '/play/leaderboard': typeof AuthenticatedPlayLeaderboardRoute
+  '/play/team': typeof AuthenticatedPlayTeamRoute
+  '/play/topics': typeof AuthenticatedPlayTopicsRoute
   '/results/$attemptId': typeof AuthenticatedResultsAttemptIdRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/exams/': typeof AuthenticatedExamsIndexRoute
+  '/play/': typeof AuthenticatedPlayIndexRoute
   '/admin/blueprints/$blueprintId': typeof AuthenticatedAdminBlueprintsBlueprintIdRoute
   '/admin/blueprints/new': typeof AuthenticatedAdminBlueprintsNewRoute
   '/admin/exams/$examId': typeof AuthenticatedAdminExamsExamIdRoute
   '/admin/exams/new': typeof AuthenticatedAdminExamsNewRoute
   '/admin/pools/$poolId': typeof AuthenticatedAdminPoolsPoolIdRoute
+  '/play/escape/$scenarioId': typeof AuthenticatedPlayEscapeScenarioIdRoute
+  '/play/results/$sessionId': typeof AuthenticatedPlayResultsSessionIdRoute
+  '/play/session/$sessionId': typeof AuthenticatedPlaySessionSessionIdRoute
+  '/play/tournament/$tournamentId': typeof AuthenticatedPlayTournamentTournamentIdRoute
   '/admin/blueprints/': typeof AuthenticatedAdminBlueprintsIndexRoute
   '/admin/pools/': typeof AuthenticatedAdminPoolsIndexRoute
 }
@@ -278,18 +367,30 @@ export interface FileRoutesByTo {
   '/admin/gamification': typeof AuthenticatedAdminGamificationRoute
   '/admin/organizations': typeof AuthenticatedAdminOrganizationsRoute
   '/admin/performance': typeof AuthenticatedAdminPerformanceRoute
+  '/admin/play': typeof AuthenticatedAdminPlayRoute
   '/admin/series': typeof AuthenticatedAdminSeriesRoute
   '/admin/users': typeof AuthenticatedAdminUsersRoute
   '/attempt/$attemptId': typeof AuthenticatedAttemptAttemptIdRoute
   '/exams/$examId': typeof AuthenticatedExamsExamIdRoute
+  '/play/battle': typeof AuthenticatedPlayBattleRoute
+  '/play/escape': typeof AuthenticatedPlayEscapeRouteWithChildren
+  '/play/flash': typeof AuthenticatedPlayFlashRoute
+  '/play/leaderboard': typeof AuthenticatedPlayLeaderboardRoute
+  '/play/team': typeof AuthenticatedPlayTeamRoute
+  '/play/topics': typeof AuthenticatedPlayTopicsRoute
   '/results/$attemptId': typeof AuthenticatedResultsAttemptIdRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/exams': typeof AuthenticatedExamsIndexRoute
+  '/play': typeof AuthenticatedPlayIndexRoute
   '/admin/blueprints/$blueprintId': typeof AuthenticatedAdminBlueprintsBlueprintIdRoute
   '/admin/blueprints/new': typeof AuthenticatedAdminBlueprintsNewRoute
   '/admin/exams/$examId': typeof AuthenticatedAdminExamsExamIdRoute
   '/admin/exams/new': typeof AuthenticatedAdminExamsNewRoute
   '/admin/pools/$poolId': typeof AuthenticatedAdminPoolsPoolIdRoute
+  '/play/escape/$scenarioId': typeof AuthenticatedPlayEscapeScenarioIdRoute
+  '/play/results/$sessionId': typeof AuthenticatedPlayResultsSessionIdRoute
+  '/play/session/$sessionId': typeof AuthenticatedPlaySessionSessionIdRoute
+  '/play/tournament/$tournamentId': typeof AuthenticatedPlayTournamentTournamentIdRoute
   '/admin/blueprints': typeof AuthenticatedAdminBlueprintsIndexRoute
   '/admin/pools': typeof AuthenticatedAdminPoolsIndexRoute
 }
@@ -313,19 +414,31 @@ export interface FileRoutesById {
   '/_authenticated/admin/gamification': typeof AuthenticatedAdminGamificationRoute
   '/_authenticated/admin/organizations': typeof AuthenticatedAdminOrganizationsRoute
   '/_authenticated/admin/performance': typeof AuthenticatedAdminPerformanceRoute
+  '/_authenticated/admin/play': typeof AuthenticatedAdminPlayRoute
   '/_authenticated/admin/pools': typeof AuthenticatedAdminPoolsRouteWithChildren
   '/_authenticated/admin/series': typeof AuthenticatedAdminSeriesRoute
   '/_authenticated/admin/users': typeof AuthenticatedAdminUsersRoute
   '/_authenticated/attempt/$attemptId': typeof AuthenticatedAttemptAttemptIdRoute
   '/_authenticated/exams/$examId': typeof AuthenticatedExamsExamIdRoute
+  '/_authenticated/play/battle': typeof AuthenticatedPlayBattleRoute
+  '/_authenticated/play/escape': typeof AuthenticatedPlayEscapeRouteWithChildren
+  '/_authenticated/play/flash': typeof AuthenticatedPlayFlashRoute
+  '/_authenticated/play/leaderboard': typeof AuthenticatedPlayLeaderboardRoute
+  '/_authenticated/play/team': typeof AuthenticatedPlayTeamRoute
+  '/_authenticated/play/topics': typeof AuthenticatedPlayTopicsRoute
   '/_authenticated/results/$attemptId': typeof AuthenticatedResultsAttemptIdRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/exams/': typeof AuthenticatedExamsIndexRoute
+  '/_authenticated/play/': typeof AuthenticatedPlayIndexRoute
   '/_authenticated/admin/blueprints/$blueprintId': typeof AuthenticatedAdminBlueprintsBlueprintIdRoute
   '/_authenticated/admin/blueprints/new': typeof AuthenticatedAdminBlueprintsNewRoute
   '/_authenticated/admin/exams/$examId': typeof AuthenticatedAdminExamsExamIdRoute
   '/_authenticated/admin/exams/new': typeof AuthenticatedAdminExamsNewRoute
   '/_authenticated/admin/pools/$poolId': typeof AuthenticatedAdminPoolsPoolIdRoute
+  '/_authenticated/play/escape/$scenarioId': typeof AuthenticatedPlayEscapeScenarioIdRoute
+  '/_authenticated/play/results/$sessionId': typeof AuthenticatedPlayResultsSessionIdRoute
+  '/_authenticated/play/session/$sessionId': typeof AuthenticatedPlaySessionSessionIdRoute
+  '/_authenticated/play/tournament/$tournamentId': typeof AuthenticatedPlayTournamentTournamentIdRoute
   '/_authenticated/admin/blueprints/': typeof AuthenticatedAdminBlueprintsIndexRoute
   '/_authenticated/admin/pools/': typeof AuthenticatedAdminPoolsIndexRoute
 }
@@ -349,19 +462,31 @@ export interface FileRouteTypes {
     | '/admin/gamification'
     | '/admin/organizations'
     | '/admin/performance'
+    | '/admin/play'
     | '/admin/pools'
     | '/admin/series'
     | '/admin/users'
     | '/attempt/$attemptId'
     | '/exams/$examId'
+    | '/play/battle'
+    | '/play/escape'
+    | '/play/flash'
+    | '/play/leaderboard'
+    | '/play/team'
+    | '/play/topics'
     | '/results/$attemptId'
     | '/admin/'
     | '/exams/'
+    | '/play/'
     | '/admin/blueprints/$blueprintId'
     | '/admin/blueprints/new'
     | '/admin/exams/$examId'
     | '/admin/exams/new'
     | '/admin/pools/$poolId'
+    | '/play/escape/$scenarioId'
+    | '/play/results/$sessionId'
+    | '/play/session/$sessionId'
+    | '/play/tournament/$tournamentId'
     | '/admin/blueprints/'
     | '/admin/pools/'
   fileRoutesByTo: FileRoutesByTo
@@ -382,18 +507,30 @@ export interface FileRouteTypes {
     | '/admin/gamification'
     | '/admin/organizations'
     | '/admin/performance'
+    | '/admin/play'
     | '/admin/series'
     | '/admin/users'
     | '/attempt/$attemptId'
     | '/exams/$examId'
+    | '/play/battle'
+    | '/play/escape'
+    | '/play/flash'
+    | '/play/leaderboard'
+    | '/play/team'
+    | '/play/topics'
     | '/results/$attemptId'
     | '/admin'
     | '/exams'
+    | '/play'
     | '/admin/blueprints/$blueprintId'
     | '/admin/blueprints/new'
     | '/admin/exams/$examId'
     | '/admin/exams/new'
     | '/admin/pools/$poolId'
+    | '/play/escape/$scenarioId'
+    | '/play/results/$sessionId'
+    | '/play/session/$sessionId'
+    | '/play/tournament/$tournamentId'
     | '/admin/blueprints'
     | '/admin/pools'
   id:
@@ -416,19 +553,31 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/gamification'
     | '/_authenticated/admin/organizations'
     | '/_authenticated/admin/performance'
+    | '/_authenticated/admin/play'
     | '/_authenticated/admin/pools'
     | '/_authenticated/admin/series'
     | '/_authenticated/admin/users'
     | '/_authenticated/attempt/$attemptId'
     | '/_authenticated/exams/$examId'
+    | '/_authenticated/play/battle'
+    | '/_authenticated/play/escape'
+    | '/_authenticated/play/flash'
+    | '/_authenticated/play/leaderboard'
+    | '/_authenticated/play/team'
+    | '/_authenticated/play/topics'
     | '/_authenticated/results/$attemptId'
     | '/_authenticated/admin/'
     | '/_authenticated/exams/'
+    | '/_authenticated/play/'
     | '/_authenticated/admin/blueprints/$blueprintId'
     | '/_authenticated/admin/blueprints/new'
     | '/_authenticated/admin/exams/$examId'
     | '/_authenticated/admin/exams/new'
     | '/_authenticated/admin/pools/$poolId'
+    | '/_authenticated/play/escape/$scenarioId'
+    | '/_authenticated/play/results/$sessionId'
+    | '/_authenticated/play/session/$sessionId'
+    | '/_authenticated/play/tournament/$tournamentId'
     | '/_authenticated/admin/blueprints/'
     | '/_authenticated/admin/pools/'
   fileRoutesById: FileRoutesById
@@ -577,6 +726,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminPerformanceRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/admin/play': {
+      id: '/_authenticated/admin/play'
+      path: '/admin/play'
+      fullPath: '/admin/play'
+      preLoaderRoute: typeof AuthenticatedAdminPlayRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/admin/pools': {
       id: '/_authenticated/admin/pools'
       path: '/admin/pools'
@@ -617,6 +773,55 @@ declare module '@tanstack/react-router' {
       path: '/exams/$examId'
       fullPath: '/exams/$examId'
       preLoaderRoute: typeof AuthenticatedExamsExamIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/play/': {
+      id: '/_authenticated/play/'
+      path: '/play'
+      fullPath: '/play/'
+      preLoaderRoute: typeof AuthenticatedPlayIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/play/battle': {
+      id: '/_authenticated/play/battle'
+      path: '/play/battle'
+      fullPath: '/play/battle'
+      preLoaderRoute: typeof AuthenticatedPlayBattleRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/play/escape': {
+      id: '/_authenticated/play/escape'
+      path: '/play/escape'
+      fullPath: '/play/escape'
+      preLoaderRoute: typeof AuthenticatedPlayEscapeRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/play/flash': {
+      id: '/_authenticated/play/flash'
+      path: '/play/flash'
+      fullPath: '/play/flash'
+      preLoaderRoute: typeof AuthenticatedPlayFlashRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/play/leaderboard': {
+      id: '/_authenticated/play/leaderboard'
+      path: '/play/leaderboard'
+      fullPath: '/play/leaderboard'
+      preLoaderRoute: typeof AuthenticatedPlayLeaderboardRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/play/team': {
+      id: '/_authenticated/play/team'
+      path: '/play/team'
+      fullPath: '/play/team'
+      preLoaderRoute: typeof AuthenticatedPlayTeamRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/play/topics': {
+      id: '/_authenticated/play/topics'
+      path: '/play/topics'
+      fullPath: '/play/topics'
+      preLoaderRoute: typeof AuthenticatedPlayTopicsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/results/$attemptId': {
@@ -675,6 +880,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminPoolsPoolIdRouteImport
       parentRoute: typeof AuthenticatedAdminPoolsRoute
     }
+    '/_authenticated/play/escape/$scenarioId': {
+      id: '/_authenticated/play/escape/$scenarioId'
+      path: '/$scenarioId'
+      fullPath: '/play/escape/$scenarioId'
+      preLoaderRoute: typeof AuthenticatedPlayEscapeScenarioIdRouteImport
+      parentRoute: typeof AuthenticatedPlayEscapeRoute
+    }
+    '/_authenticated/play/results/$sessionId': {
+      id: '/_authenticated/play/results/$sessionId'
+      path: '/play/results/$sessionId'
+      fullPath: '/play/results/$sessionId'
+      preLoaderRoute: typeof AuthenticatedPlayResultsSessionIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/play/session/$sessionId': {
+      id: '/_authenticated/play/session/$sessionId'
+      path: '/play/session/$sessionId'
+      fullPath: '/play/session/$sessionId'
+      preLoaderRoute: typeof AuthenticatedPlaySessionSessionIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/play/tournament/$tournamentId': {
+      id: '/_authenticated/play/tournament/$tournamentId'
+      path: '/play/tournament/$tournamentId'
+      fullPath: '/play/tournament/$tournamentId'
+      preLoaderRoute: typeof AuthenticatedPlayTournamentTournamentIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
@@ -714,6 +947,21 @@ const AuthenticatedAdminPoolsRouteWithChildren =
     AuthenticatedAdminPoolsRouteChildren,
   )
 
+interface AuthenticatedPlayEscapeRouteChildren {
+  AuthenticatedPlayEscapeScenarioIdRoute: typeof AuthenticatedPlayEscapeScenarioIdRoute
+}
+
+const AuthenticatedPlayEscapeRouteChildren: AuthenticatedPlayEscapeRouteChildren =
+  {
+    AuthenticatedPlayEscapeScenarioIdRoute:
+      AuthenticatedPlayEscapeScenarioIdRoute,
+  }
+
+const AuthenticatedPlayEscapeRouteWithChildren =
+  AuthenticatedPlayEscapeRoute._addFileChildren(
+    AuthenticatedPlayEscapeRouteChildren,
+  )
+
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAchievementsRoute: typeof AuthenticatedAchievementsRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
@@ -726,16 +974,27 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAdminGamificationRoute: typeof AuthenticatedAdminGamificationRoute
   AuthenticatedAdminOrganizationsRoute: typeof AuthenticatedAdminOrganizationsRoute
   AuthenticatedAdminPerformanceRoute: typeof AuthenticatedAdminPerformanceRoute
+  AuthenticatedAdminPlayRoute: typeof AuthenticatedAdminPlayRoute
   AuthenticatedAdminPoolsRoute: typeof AuthenticatedAdminPoolsRouteWithChildren
   AuthenticatedAdminSeriesRoute: typeof AuthenticatedAdminSeriesRoute
   AuthenticatedAdminUsersRoute: typeof AuthenticatedAdminUsersRoute
   AuthenticatedAttemptAttemptIdRoute: typeof AuthenticatedAttemptAttemptIdRoute
   AuthenticatedExamsExamIdRoute: typeof AuthenticatedExamsExamIdRoute
+  AuthenticatedPlayBattleRoute: typeof AuthenticatedPlayBattleRoute
+  AuthenticatedPlayEscapeRoute: typeof AuthenticatedPlayEscapeRouteWithChildren
+  AuthenticatedPlayFlashRoute: typeof AuthenticatedPlayFlashRoute
+  AuthenticatedPlayLeaderboardRoute: typeof AuthenticatedPlayLeaderboardRoute
+  AuthenticatedPlayTeamRoute: typeof AuthenticatedPlayTeamRoute
+  AuthenticatedPlayTopicsRoute: typeof AuthenticatedPlayTopicsRoute
   AuthenticatedResultsAttemptIdRoute: typeof AuthenticatedResultsAttemptIdRoute
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
   AuthenticatedExamsIndexRoute: typeof AuthenticatedExamsIndexRoute
+  AuthenticatedPlayIndexRoute: typeof AuthenticatedPlayIndexRoute
   AuthenticatedAdminExamsExamIdRoute: typeof AuthenticatedAdminExamsExamIdRoute
   AuthenticatedAdminExamsNewRoute: typeof AuthenticatedAdminExamsNewRoute
+  AuthenticatedPlayResultsSessionIdRoute: typeof AuthenticatedPlayResultsSessionIdRoute
+  AuthenticatedPlaySessionSessionIdRoute: typeof AuthenticatedPlaySessionSessionIdRoute
+  AuthenticatedPlayTournamentTournamentIdRoute: typeof AuthenticatedPlayTournamentTournamentIdRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -751,16 +1010,30 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAdminGamificationRoute: AuthenticatedAdminGamificationRoute,
   AuthenticatedAdminOrganizationsRoute: AuthenticatedAdminOrganizationsRoute,
   AuthenticatedAdminPerformanceRoute: AuthenticatedAdminPerformanceRoute,
+  AuthenticatedAdminPlayRoute: AuthenticatedAdminPlayRoute,
   AuthenticatedAdminPoolsRoute: AuthenticatedAdminPoolsRouteWithChildren,
   AuthenticatedAdminSeriesRoute: AuthenticatedAdminSeriesRoute,
   AuthenticatedAdminUsersRoute: AuthenticatedAdminUsersRoute,
   AuthenticatedAttemptAttemptIdRoute: AuthenticatedAttemptAttemptIdRoute,
   AuthenticatedExamsExamIdRoute: AuthenticatedExamsExamIdRoute,
+  AuthenticatedPlayBattleRoute: AuthenticatedPlayBattleRoute,
+  AuthenticatedPlayEscapeRoute: AuthenticatedPlayEscapeRouteWithChildren,
+  AuthenticatedPlayFlashRoute: AuthenticatedPlayFlashRoute,
+  AuthenticatedPlayLeaderboardRoute: AuthenticatedPlayLeaderboardRoute,
+  AuthenticatedPlayTeamRoute: AuthenticatedPlayTeamRoute,
+  AuthenticatedPlayTopicsRoute: AuthenticatedPlayTopicsRoute,
   AuthenticatedResultsAttemptIdRoute: AuthenticatedResultsAttemptIdRoute,
   AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,
   AuthenticatedExamsIndexRoute: AuthenticatedExamsIndexRoute,
+  AuthenticatedPlayIndexRoute: AuthenticatedPlayIndexRoute,
   AuthenticatedAdminExamsExamIdRoute: AuthenticatedAdminExamsExamIdRoute,
   AuthenticatedAdminExamsNewRoute: AuthenticatedAdminExamsNewRoute,
+  AuthenticatedPlayResultsSessionIdRoute:
+    AuthenticatedPlayResultsSessionIdRoute,
+  AuthenticatedPlaySessionSessionIdRoute:
+    AuthenticatedPlaySessionSessionIdRoute,
+  AuthenticatedPlayTournamentTournamentIdRoute:
+    AuthenticatedPlayTournamentTournamentIdRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =

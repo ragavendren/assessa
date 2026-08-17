@@ -5,6 +5,7 @@ import {
   BookOpen,
   Building2,
   ClipboardList,
+  Gamepad2,
   LayoutDashboard,
   Sparkles,
   Users,
@@ -56,6 +57,7 @@ const ADMIN_NAV_GROUPS: NavGroup[] = [
         match: (p) => p.startsWith("/admin/exams"),
       },
       { to: "/admin/gamification", label: "Gamification", icon: Sparkles },
+      { to: "/admin/play", label: "Play modes", icon: Gamepad2 },
     ],
   },
 ];

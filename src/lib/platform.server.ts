@@ -7,6 +7,7 @@ import { randomBytes } from "node:crypto";
  */
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { compareScoreThenAttempts, resolveLevel, type LevelRow } from "@/lib/gamification";
+import { careerDomains } from "@/lib/play.math";
 
 const db = supabaseAdmin;
 
@@ -430,8 +431,8 @@ export async function notifyExamLaunched(exam: ExamLaunchAudience) {
       exam.starts_at !== "" &&
       new Date(exam.starts_at).getTime() > Date.now();
     const body = startsLater
-      ? `Scheduled to open soon — check My Exams when it starts.`
-      : "It's available now in My Exams.";
+      ? `Scheduled to open soon — check Assessments when it starts.`
+      : "It's available now in Assessments.";
 
     await notifyMany(userIds, {
       kind: "exam_launched",
@@ -486,7 +487,7 @@ export async function filterAccessibleExams<T extends { id: string; access: stri
       return ok ? exam : null;
     }),
   );
-  return [...publicExams, ...checks.filter((exam): exam is T => exam != null)];
+  return [...publicExams, ...checks.filter((exam) => exam != null)] as T[];
 }
 
 export async function assertExamAccess(userId: string, exam: ExamRow) {
@@ -524,7 +525,7 @@ export async function serveQuestions(questionIds: string[]): Promise<ServedQuest
   if (questionIds.length === 0) return [];
   const { data } = await db
     .from("questions")
-    .select("id, prompt, options, subtopic, points, correct_index, correct_indexes")
+    .select("id, prompt, options, subtopic, points, correct_index, correct_indexes, multi_select")
     .in("id", questionIds);
   const byId = new Map((data ?? []).map((q) => [q.id, q]));
   return questionIds
@@ -540,7 +541,7 @@ export async function serveQuestions(questionIds: string[]): Promise<ServedQuest
         options: (q!.options as string[]) ?? [],
         subtopic: q!.subtopic,
         points: q!.points,
-        multiSelect: correct.length > 1,
+        multiSelect: Boolean((q as { multi_select?: boolean }).multi_select) || correct.length > 1,
       };
     });
 }
@@ -570,7 +571,11 @@ export async function startAttempt(userId: string, examId: string, extra: Record
   if (open) return { attemptId: (open as AttemptRow).id, resumed: true };
 
   const used = await countAttempts(userId, examId);
-  if (used >= exam.max_attempts) throw new Error("You have used all available attempts.");
+  if (used >= exam.max_attempts) {
+    const { consumeEntitlement } = await import("@/lib/play.server");
+    const voucher = await consumeEntitlement(userId, "mock_voucher");
+    if (!voucher) throw new Error("You have used all available attempts.");
+  }
 
   for (const field of exam.extra_fields ?? []) {
     if (field.required && !String(extra[field.key] ?? "").trim()) {
@@ -734,7 +739,11 @@ export async function submitAttempt(
     }
     await awardXpBatch(
       userId,
-      pending.map(({ source, points, referenceId }) => ({ source, points, referenceId })),
+      pending.map(({ source, points, referenceId }) => ({
+        source,
+        points,
+        ...(referenceId !== undefined ? { referenceId } : {}),
+      })),
     );
     for (const row of pending) gains.push({ label: row.label, points: row.points });
   }
@@ -1050,7 +1059,9 @@ export async function summariseResult(
   const [{ data: keys }, xp, levels, rank] = await Promise.all([
     db
       .from("questions")
-      .select("id, prompt, options, correct_index, correct_indexes, explanation, subtopic")
+      .select(
+        "id, prompt, options, correct_index, correct_indexes, multi_select, explanation, subtopic",
+      )
       .in("id", attempt.question_ids),
     getXpTotal(userId),
     getLevels(),
@@ -1077,11 +1088,13 @@ export async function summariseResult(
             options: (q!.options as string[]) ?? [],
             correctIndex: correctIndexes[0] ?? q!.correct_index,
             correctIndexes,
-            multiSelect: correctIndexes.length > 1,
+            multiSelect:
+              Boolean((q as { multi_select?: boolean }).multi_select) || correctIndexes.length > 1,
             explanation: q!.explanation,
             subtopic: q!.subtopic,
             givenIndex: given[0] ?? null,
             givenIndexes: given,
+            correct: sameIndexSet(given, correctIndexes),
           };
         })
     : [];
@@ -1106,6 +1119,15 @@ export async function summariseResult(
       enableLeaderboard: exam.enable_leaderboard,
     },
     review,
+    career: careerDomains(
+      (review ?? []).map((item) => ({
+        topic: exam.topic,
+        subtopic: item.subtopic || "general",
+        mastery: item.correct ? 100 : 0,
+        answered: 1,
+        correct: item.correct ? 1 : 0,
+      })),
+    ),
     rank,
     level: resolveLevel(xp, levels),
     gains: extras?.gains ?? [],

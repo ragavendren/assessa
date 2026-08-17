@@ -17,6 +17,7 @@ export const getParticipantInsight = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { participantStats, getXpTotal, getLevels } = await import("@/lib/platform.server");
     const { resolveLevel } = await import("@/lib/gamification");
+    const { weakestTopics } = await import("@/lib/play.math");
     const userId = context.userId;
 
     const stats = await participantStats(userId);
@@ -46,6 +47,20 @@ export const getParticipantInsight = createServerFn({ method: "POST" })
       return `${exam?.title ?? "Assessment"} (${exam?.topic ?? ""}): ${a.score}% ${a.passed ? "passed" : "not passed"}`;
     });
 
+    const weak = weakestTopics(
+      (mastery ?? []).map((m) => ({
+        topic: m.topic,
+        subtopic: m.subtopic,
+        mastery: m.mastery,
+      })),
+      2,
+    );
+    const weakLabel = weak.map((m) => `${m.topic}/${m.subtopic} (${m.mastery}%)`).join("; ");
+    const playNext =
+      weak.length > 0
+        ? `Topic Challenge on ${weak[0]!.topic} via /play/topics (${weak[0]!.mastery}% mastery)`
+        : "Daily Challenge at /play for quick pool practice";
+
     const facts = [
       `Assessments completed: ${stats.completed}`,
       `Average score: ${stats.average}%`,
@@ -57,6 +72,8 @@ export const getParticipantInsight = createServerFn({ method: "POST" })
         (mastery ?? []).map((m) => `${m.topic}/${m.subtopic} ${m.mastery}%`).join(", ") ||
         "none recorded"
       }`,
+      `Weakest topics: ${weakLabel || "none recorded"}`,
+      `Recommended play action: ${playNext}`,
     ].join("\n");
 
     const { streamText } = await import("ai");
@@ -67,7 +84,8 @@ export const getParticipantInsight = createServerFn({ method: "POST" })
         system:
           "You are an assessment performance coach. Use ONLY the supplied data — never invent scores or topics. " +
           "Reply in 4 short paragraphs, no markdown headings, no bullet lists: (1) score trajectory with real numbers, " +
-          "(2) strongest area, (3) biggest opportunity, (4) one concrete recommended next step plus the XP needed for the next level. " +
+          "(2) strongest area, (3) biggest opportunity — name the weakest 1–2 topics by exact label from the data, " +
+          "(4) one concrete next step: prefer Play Topic Challenge on the weakest topic when mastery is low; mention Daily Challenge as an alternative; include XP to the next level. " +
           "Warm, direct, under 150 words total.",
         prompt: facts,
       });

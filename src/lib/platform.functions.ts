@@ -102,6 +102,7 @@ export const getDashboard = createServerFn({ method: "POST" })
     const visible = await filterAccessibleExams(userId, exams ?? []);
 
     const { examAvailability } = await import("@/lib/exam-availability");
+    const { careerDomains } = await import("@/lib/play.math");
     const upcoming = visible
       .filter(
         (e) =>
@@ -266,6 +267,7 @@ export const getDashboard = createServerFn({ method: "POST" })
         .sort((a, b) => b.attempts - a.attempts)
         .slice(0, 6),
       mastery: masteryRows,
+      career: careerDomains(masteryRows),
     };
   });
 

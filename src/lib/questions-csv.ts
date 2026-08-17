@@ -1,3 +1,5 @@
+import { resolveMultiSelect } from "./question-choice-mode.ts";
+
 export type CsvQuestion = {
   prompt: string;
   options: string[];
@@ -99,9 +101,6 @@ export function parseQuestionsCsv(text: string): {
       errors.push(`Row ${lineNo}: need at least two options`);
       continue;
     }
-    const multiSelect = ["true", "1", "yes", "y"].includes(
-      (row[8] ?? "false").trim().toLowerCase(),
-    );
     const correctRaw = (row[7] ?? "").trim();
     if (!correctRaw) {
       errors.push(`Row ${lineNo}: correct_answers is required (e.g. B or A|C)`);
@@ -119,10 +118,16 @@ export function parseQuestionsCsv(text: string): {
       errors.push(`Row ${lineNo}: could not parse correct_answers "${correctRaw}"`);
       continue;
     }
-    if (!multiSelect && correctIndexes.length > 1) {
-      errors.push(`Row ${lineNo}: multiple answers require multi_select=true`);
+    const mode = resolveMultiSelect({
+      correctCount: correctIndexes.length,
+      multiRaw: row[8] ?? "",
+      typeRaw: row[11] ?? "",
+    });
+    if (mode.error) {
+      errors.push(`Row ${lineNo}: ${mode.error}`);
       continue;
     }
+    const multiSelect = mode.multiSelect;
     questions.push({
       prompt,
       options,

@@ -1,14 +1,15 @@
 import { BadgeMark } from "@/components/BadgeMark";
-import { PageLoader, ScorePill } from "@/components/platform";
+import { MasteryBar, PageLoader, ScorePill } from "@/components/platform";
 import { ResultCelebration } from "@/components/ResultCelebration";
 import { formatDuration } from "@/lib/gamification";
 import { getResult } from "@/lib/platform.functions";
 import { cn } from "@/lib/utils";
+import { flyXpOnce } from "@/lib/xp-fly";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { Check, CircleHelp, Lightbulb, X } from "lucide-react";
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 export const Route = createFileRoute("/_authenticated/results/$attemptId")({
   head: () => ({
@@ -53,12 +54,17 @@ function ResultPage() {
   const [revealed, setRevealed] = useState(false);
   const [pageSize, setPageSize] = useState(5);
   const [page, setPage] = useState(1);
+  const xpOriginRef = useRef<HTMLUListElement>(null);
 
   useEffect(() => {
     if (!data) return;
     setRevealed(false);
     setPage(1);
     const timer = window.setTimeout(() => setRevealed(true), 120);
+    const xp = (data.gains ?? []).reduce((sum, gain) => sum + gain.points, 0);
+    if (xp > 0) {
+      window.setTimeout(() => flyXpOnce(`exam:${attemptId}`, xp, xpOriginRef.current), 400);
+    }
     return () => window.clearTimeout(timer);
   }, [data, attemptId]);
 
@@ -159,7 +165,7 @@ function ResultPage() {
               style={{ animationDelay: "80ms" }}
             >
               <p className="text-hairline text-muted-foreground">XP earned</p>
-              <ul className="mt-4 flex-1 space-y-2.5 text-sm">
+              <ul ref={xpOriginRef} className="mt-4 flex-1 space-y-2.5 text-sm">
                 {data.gains.map((gain) => (
                   <li key={gain.label} className="flex justify-between gap-4">
                     <span className="text-muted-foreground">{gain.label}</span>
@@ -185,6 +191,26 @@ function ResultPage() {
           )}
         </div>
       </div>
+
+      {(data.career ?? []).length > 0 ? (
+        <div
+          className="animate-brand-rise-delayed surface-paper space-y-3 px-6 py-6 sm:px-8"
+          style={{ animationDelay: "100ms" }}
+        >
+          <p className="text-hairline text-muted-foreground">Career readiness</p>
+          <p className="text-sm text-muted-foreground">
+            Skill bands from this assessment&apos;s topic coverage.
+          </p>
+          <div className="mt-2 space-y-3">
+            {(data.career ?? []).map((domain) => (
+              <MasteryBar key={domain.topic} label={domain.topic} value={domain.mastery} />
+            ))}
+          </div>
+          <Link to="/play/topics" className="inline-block text-sm text-accent underline">
+            Practice weak topics in Play →
+          </Link>
+        </div>
+      ) : null}
 
       {data.newBadges.length > 0 ? (
         <div

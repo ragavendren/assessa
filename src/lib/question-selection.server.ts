@@ -45,6 +45,7 @@ function validateClone(q: {
   options: unknown;
   correct_index: number;
   correct_indexes: number[] | null;
+  multi_select?: boolean | null;
 }): { options: string[]; correctIndexes: number[]; multiSelect: boolean } {
   const options = Array.isArray(q.options)
     ? (q.options as unknown[]).map((o) => String(o).trim()).filter(Boolean)
@@ -66,7 +67,7 @@ function validateClone(q: {
   return {
     options,
     correctIndexes: indexes,
-    multiSelect: indexes.length > 1,
+    multiSelect: Boolean(q.multi_select) || indexes.length > 1,
   };
 }
 
@@ -214,7 +215,7 @@ export async function previewOrSelectQuestions(
   const { data: poolRows, error: poolError } = await supabase
     .from("pool_questions")
     .select(
-      "id, prompt, options, correct_index, correct_indexes, explanation, topic, subtopic, difficulty, status",
+      "id, prompt, options, correct_index, correct_indexes, multi_select, explanation, topic, subtopic, difficulty, status",
     )
     .eq("pool_id", args.poolId)
     .eq("status", "active");
@@ -300,6 +301,7 @@ export async function persistGeneratedQuestions(
       options: q.options,
       correct_index: q.correct_index,
       correct_indexes: q.correct_indexes,
+      multi_select: q.multi_select,
       subtopic: q.subtopic,
       explanation: q.explanation,
       source_pool_question_id: q.source_pool_question_id,

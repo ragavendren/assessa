@@ -992,7 +992,7 @@ const notifRows = demoUserIds.flatMap((userId, index) => [
     user_id: userId,
     kind: "invitation",
     title: "You have been invited to a private quiz",
-    body: "Open My Exams when you are ready.",
+    body: "Open Assessments when you are ready.",
     icon: "✉️",
     read: false,
   },

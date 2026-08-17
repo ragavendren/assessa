@@ -11,7 +11,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint .",
-    "test": "node --experimental-strip-types --test src/lib/question-selection.math.test.ts",
+    "test": "node --experimental-strip-types --test src/lib/*.test.ts",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

@@ -207,9 +207,17 @@ export function EmptyState({
 
 export function PageLoader({ label }: { label?: string } = {}) {
   return (
-    <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3">
-      <div className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-accent" />
-      {label ? <p className="text-sm text-muted-foreground">{label}</p> : null}
+    <div
+      className="flex min-h-[50vh] flex-col items-center justify-center gap-4"
+      role="status"
+      aria-live="polite"
+    >
+      <div className="page-loader-mark" aria-hidden>
+        <span className="page-loader-orbit" />
+        <span className="page-loader-orbit page-loader-orbit-2" />
+        <span className="page-loader-core" />
+      </div>
+      <p className="text-sm text-muted-foreground">{label ?? "Loading…"}</p>
     </div>
   );
 }

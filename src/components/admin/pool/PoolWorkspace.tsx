@@ -8,12 +8,25 @@ import {
   deletePoolQuestions,
   importPoolQuestionsCsv,
   listPoolQuestions,
+  previewPoolFillCheck,
   upsertPoolQuestion,
 } from "@/lib/pool.functions";
+import { normalizeTopicKey } from "@/lib/question-selection.math";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ChevronDown, Download, Eraser, Plus, Search, Trash2, Upload, X } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ChevronDown,
+  Download,
+  Eraser,
+  Plus,
+  Search,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { toast } from "sonner";
 
@@ -45,6 +58,7 @@ function buildInventoryStats(questions: PoolQuestion[]) {
   const byTopic = new Map<
     string,
     {
+      topic: string;
       count: number;
       active: number;
       subtopics: Map<string, number>;
@@ -55,20 +69,27 @@ function buildInventoryStats(questions: PoolQuestion[]) {
   let active = 0;
   const difficulty = { easy: 0, medium: 0, hard: 0 };
   const subtopicKeys = new Set<string>();
+  let single = 0;
+  let multi = 0;
 
   for (const question of questions) {
-    const topic = normalizeLabel(question.topic);
+    const topicLabel = normalizeLabel(question.topic);
+    const topic = normalizeTopicKey(topicLabel) || "general";
     const subtopic = normalizeLabel(question.subtopic);
     const diffKey = (
       ["easy", "medium", "hard"].includes(question.difficulty) ? question.difficulty : "medium"
     ) as "easy" | "medium" | "hard";
+    const isMulti = isMultiSelectQuestion(question);
 
     if (question.status === "active") active += 1;
     difficulty[diffKey] += 1;
+    if (isMulti) multi += 1;
+    else single += 1;
 
     let bucket = byTopic.get(topic);
     if (!bucket) {
       bucket = {
+        topic: topicLabel,
         count: 0,
         active: 0,
         subtopics: new Map(),
@@ -81,13 +102,13 @@ function buildInventoryStats(questions: PoolQuestion[]) {
     bucket.difficulty[diffKey] += 1;
     bucket.subtopics.set(subtopic, (bucket.subtopics.get(subtopic) ?? 0) + 1);
     if (subtopic.toLowerCase() !== "general") {
-      subtopicKeys.add(`${topic}::${subtopic.toLowerCase()}`);
+      subtopicKeys.add(`${topic}::${normalizeTopicKey(subtopic)}`);
     }
   }
 
-  const topics: TopicBucket[] = [...byTopic.entries()]
-    .map(([topic, value]) => ({
-      topic,
+  const topics: TopicBucket[] = [...byTopic.values()]
+    .map((value) => ({
+      topic: value.topic,
       count: value.count,
       active: value.active,
       difficulty: value.difficulty,
@@ -104,6 +125,7 @@ function buildInventoryStats(questions: PoolQuestion[]) {
     subtopicCount: subtopicKeys.size,
     difficulty,
     topics,
+    typeMix: { single, multi },
   };
 }
 
@@ -117,6 +139,7 @@ export function PoolWorkspace({
   const confirm = useConfirm();
   const fileRef = useRef<HTMLInputElement>(null);
   const fetchQuestions = useServerFn(listPoolQuestions);
+  const fetchFillCheck = useServerFn(previewPoolFillCheck);
   const importCsv = useServerFn(importPoolQuestionsCsv);
   const saveQuestion = useServerFn(upsertPoolQuestion);
   const removeQuestions = useServerFn(deletePoolQuestions);
@@ -133,7 +156,8 @@ export function PoolWorkspace({
   const [draft, setDraft] = useState({
     prompt: "",
     options: ["", "", "", ""],
-    correctIndex: 0,
+    correctIndexes: [0],
+    multiSelect: false,
     topic: "general",
     subtopic: "general",
     difficulty: "medium" as "easy" | "medium" | "hard",
@@ -152,9 +176,14 @@ export function PoolWorkspace({
     queryKey: ["admin-pool-questions", poolId],
     queryFn: () => fetchQuestions({ data: { poolId } }),
   });
+  const { data: fillCheck } = useQuery({
+    queryKey: ["admin-pool-fill-check", poolId],
+    queryFn: () => fetchFillCheck({ data: { poolId } }),
+  });
 
   function refreshPoolLists() {
     queryClient.invalidateQueries({ queryKey: ["admin-pool-questions", poolId] });
+    queryClient.invalidateQueries({ queryKey: ["admin-pool-fill-check", poolId] });
     queryClient.invalidateQueries({ queryKey: ["admin-pools"] });
   }
 
@@ -163,7 +192,7 @@ export function PoolWorkspace({
   const filteredQuestions = useMemo(() => {
     const q = search.trim().toLowerCase();
     return (data?.questions ?? []).filter((question) => {
-      if (topicFilter !== "all" && normalizeLabel(question.topic) !== topicFilter) return false;
+      if (topicFilter !== "all" && normalizeTopicKey(question.topic) !== topicFilter) return false;
       if (difficultyFilter !== "all" && question.difficulty !== difficultyFilter) return false;
       if (!q) return true;
       return (
@@ -212,14 +241,18 @@ export function PoolWorkspace({
       const options = draft.options.map((o) => o.trim()).filter(Boolean);
       if (draft.prompt.trim().length < 4) throw new Error("Prompt must be at least 4 characters");
       if (options.length < 2) throw new Error("Add at least two options");
-      const correctIndex = Math.min(draft.correctIndex, options.length - 1);
+      const indexes = [
+        ...new Set(draft.multiSelect ? draft.correctIndexes : [draft.correctIndexes[0] ?? 0]),
+      ].filter((i) => i >= 0 && i < options.length);
+      if (indexes.length === 0) throw new Error("Mark at least one correct option");
+      const multiSelect = draft.multiSelect || indexes.length > 1;
       return saveQuestion({
         data: {
           poolId,
           prompt: draft.prompt.trim(),
           options,
-          correct_indexes: [correctIndex],
-          multi_select: false,
+          correct_indexes: indexes,
+          multi_select: multiSelect,
           topic: draft.topic.trim() || "general",
           subtopic: draft.subtopic.trim() || "general",
           difficulty: draft.difficulty,
@@ -231,8 +264,9 @@ export function PoolWorkspace({
       setDraft({
         prompt: "",
         options: ["", "", "", ""],
-        correctIndex: 0,
-        topic: topicFilter !== "all" ? topicFilter : "general",
+        correctIndexes: [0],
+        multiSelect: false,
+        topic: topicLabelForFilter(topicFilter, inventory.topics),
         subtopic: "general",
         difficulty: difficultyFilter !== "all" ? difficultyFilter : "medium",
       });
@@ -293,8 +327,9 @@ export function PoolWorkspace({
           <p className="mt-0.5 text-xs text-muted-foreground">
             Import CSV or add questions here. Topics should match blueprint rules.
             <HelpTip label="CSV tips" className="ml-1">
-              Correct answers: A–F or 1–6. Difficulty: easy, medium, or hard. Assessment CSV on New
-              assessment is a different flow.
+              Correct answers: A–F or 1–6. Multiple letters (A|C) mark a multi-select item (AWS
+              “choose TWO”). Optional question_type=single|multi. Difficulty: easy, medium, or hard.
+              Assessment CSV on New assessment is a different flow.
             </HelpTip>
           </p>
         ) : null}
@@ -383,6 +418,12 @@ export function PoolWorkspace({
         />
       </div>
 
+      {fillCheck ? (
+        <div className={cn(expanded && "shrink-0")}>
+          <PoolFillCheckPanel fillCheck={fillCheck} />
+        </div>
+      ) : null}
+
       {isPending || !data ? (
         <div className={cn(expanded && "min-h-0 flex-1 overflow-auto")}>
           <PageLoader />
@@ -396,7 +437,14 @@ export function PoolWorkspace({
             />
             <button
               type="button"
-              onClick={() => setAdding(true)}
+              onClick={() => {
+                setDraft((current) => ({
+                  ...current,
+                  topic: topicLabelForFilter(topicFilter, inventory.topics),
+                  difficulty: difficultyFilter !== "all" ? difficultyFilter : current.difficulty,
+                }));
+                setAdding(true);
+              }}
               className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90"
             >
               <Plus className="h-3.5 w-3.5" /> Add question
@@ -456,6 +504,12 @@ export function PoolWorkspace({
                 <span>
                   <strong className="text-foreground">{inventory.subtopicCount}</strong> subs
                 </span>
+                <span>
+                  <strong className="text-foreground">{inventory.typeMix.single}</strong> single
+                </span>
+                <span>
+                  <strong className="text-foreground">{inventory.typeMix.multi}</strong> multi
+                </span>
               </div>
               <div className="mt-2 flex gap-1 text-[10px] font-semibold tabular-nums text-muted-foreground">
                 {(
@@ -507,18 +561,17 @@ export function PoolWorkspace({
                 )}
               >
                 {inventory.topics.map((bucket) => {
-                  const selected = topicFilter === bucket.topic;
+                  const topicKey = normalizeTopicKey(bucket.topic);
+                  const selected = topicFilter === topicKey;
                   const namedSubs = bucket.subtopics.filter(
                     (s) => s.name.toLowerCase() !== "general",
                   );
                   return (
-                    <div key={bucket.topic} className="space-y-1">
+                    <div key={topicKey} className="space-y-1">
                       <button
                         type="button"
                         onClick={() =>
-                          setTopicFilter((current) =>
-                            current === bucket.topic ? "all" : bucket.topic,
-                          )
+                          setTopicFilter((current) => (current === topicKey ? "all" : topicKey))
                         }
                         className={cn(
                           "flex w-full items-start justify-between gap-2 rounded-md px-2 py-1.5 text-left transition-colors",
@@ -569,7 +622,9 @@ export function PoolWorkspace({
                 {filteredQuestions.length === inventory.total
                   ? inventory.total
                   : `${filteredQuestions.length}/${inventory.total}`}
-                {topicFilter !== "all" ? ` · ${topicFilter}` : ""}
+                {topicFilter !== "all"
+                  ? ` · ${inventory.topics.find((t) => normalizeTopicKey(t.topic) === topicFilter)?.topic ?? topicFilter}`
+                  : ""}
                 {difficultyFilter !== "all" ? ` · ${difficultyFilter}` : ""}
               </p>
 
@@ -579,7 +634,7 @@ export function PoolWorkspace({
                   onClick={() => {
                     setDraft((d) => ({
                       ...d,
-                      topic: topicFilter !== "all" ? topicFilter : d.topic,
+                      topic: topicLabelForFilter(topicFilter, inventory.topics),
                       difficulty: difficultyFilter !== "all" ? difficultyFilter : d.difficulty,
                     }));
                     setAdding((v) => !v);
@@ -659,6 +714,7 @@ export function PoolWorkspace({
                     const checked = selectedIds.has(q.id);
                     const expanded = expandedId === q.id;
                     const options = normalizeOptions(q.options);
+                    const isMulti = isMultiSelectQuestion(q);
                     const correct = new Set(correctIndexesFor(q));
                     return (
                       <li
@@ -697,6 +753,16 @@ export function PoolWorkspace({
                                   {q.prompt}
                                 </p>
                                 <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
+                                  <span
+                                    className={cn(
+                                      "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+                                      isMulti
+                                        ? "bg-violet-500/15 text-violet-800 dark:text-violet-200"
+                                        : "bg-secondary text-muted-foreground",
+                                    )}
+                                  >
+                                    {isMulti ? "Multi" : "Single"}
+                                  </span>
                                   <span
                                     className={cn(
                                       "capitalize",
@@ -750,7 +816,7 @@ export function PoolWorkspace({
                                     {option}
                                     {isCorrect ? (
                                       <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide text-success">
-                                        Answer
+                                        {correct.size > 1 ? "Correct" : "Answer"}
                                       </span>
                                     ) : null}
                                   </div>
@@ -781,11 +847,19 @@ export function PoolWorkspace({
 type QuestionDraft = {
   prompt: string;
   options: string[];
-  correctIndex: number;
+  correctIndexes: number[];
+  multiSelect: boolean;
   topic: string;
   subtopic: string;
   difficulty: "easy" | "medium" | "hard";
 };
+
+type FillCheckResult = Awaited<ReturnType<typeof previewPoolFillCheck>>;
+
+function topicLabelForFilter(filter: string, topics: TopicBucket[]): string {
+  if (filter === "all") return "general";
+  return topics.find((t) => normalizeTopicKey(t.topic) === filter)?.topic ?? filter;
+}
 
 function normalizeOptions(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
@@ -798,6 +872,132 @@ function correctIndexesFor(question: PoolQuestion): number[] {
   }
   if (typeof question.correct_index === "number") return [question.correct_index];
   return [];
+}
+
+function isMultiSelectQuestion(question: PoolQuestion): boolean {
+  return (
+    Boolean((question as { multi_select?: boolean }).multi_select) ||
+    correctIndexesFor(question).length > 1
+  );
+}
+
+function PoolFillCheckPanel({ fillCheck }: { fillCheck: FillCheckResult }) {
+  const mix = fillCheck.typeMix;
+  const reports = fillCheck.blueprints;
+  const featured = reports.find((b) => b.isDefault) ?? reports[0];
+  const others = featured ? reports.filter((b) => b.id !== featured.id) : [];
+
+  return (
+    <div className="mb-3 rounded-md border border-border bg-secondary/20 px-3 py-2.5">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <p className="text-xs font-semibold">Blueprint fill</p>
+        <p className="text-[11px] tabular-nums text-muted-foreground">
+          {mix.single} single-select · {mix.multi} multi-select
+          <span className="text-muted-foreground/80"> (active)</span>
+        </p>
+      </div>
+      {!fillCheck.hasBlueprints ? (
+        <p className="mt-1.5 text-[11px] text-muted-foreground">
+          Add an active course blueprint to check whether this pool can fill it.
+        </p>
+      ) : featured ? (
+        <div className="mt-2 space-y-2">
+          <BlueprintFitSummary blueprint={featured} />
+          {others.map((blueprint) => (
+            <BlueprintFitSummary key={blueprint.id} blueprint={blueprint} compact />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function BlueprintFitSummary({
+  blueprint,
+  compact = false,
+}: {
+  blueprint: FillCheckResult["blueprints"][number];
+  compact?: boolean;
+}) {
+  const fit = blueprint.fit;
+  const canFill = fit?.canFill === true;
+  const shortages = fit?.shortages ?? [];
+  const unused = fit?.unusedPoolTopics ?? [];
+  const unmatched = fit?.unmatchedRules ?? [];
+  const casing = fit?.casingMismatches ?? [];
+
+  return (
+    <div
+      className={cn(!compact && "rounded-md border border-border/70 bg-background/70 px-2.5 py-2")}
+    >
+      <div className="flex items-start gap-2">
+        {canFill ? (
+          <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success" aria-hidden />
+        ) : (
+          <AlertTriangle
+            className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400"
+            aria-hidden
+          />
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-medium">
+            {blueprint.name}
+            {blueprint.isDefault ? (
+              <span className="ml-1.5 text-[10px] font-normal text-muted-foreground">default</span>
+            ) : null}
+            <span className="ml-1.5 font-normal tabular-nums text-muted-foreground">
+              · {blueprint.questionCount} Q
+            </span>
+          </p>
+          {!fit ? (
+            <p className="mt-0.5 text-[11px] text-muted-foreground">No rules on this blueprint.</p>
+          ) : canFill ? (
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              Pool can fill this blueprint
+              {unused.length > 0 ? ` · unused topics: ${listPreview(unused, 4)}` : ""}.
+            </p>
+          ) : (
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              Short{" "}
+              {listPreview(
+                shortages.map(
+                  (s) =>
+                    `${s.topic}${s.subtopic ? ` / ${s.subtopic}` : ""} (${s.difficulty} −${s.shortage})`,
+                ),
+                4,
+              )}
+              .
+            </p>
+          )}
+          {!compact && fit && unmatched.length > 0 ? (
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              No pool items for{" "}
+              {listPreview(
+                unmatched.map((r) => r.topic),
+                4,
+              )}
+              .
+            </p>
+          ) : null}
+          {!compact && fit && casing.length > 0 ? (
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              Same topic, different spelling:{" "}
+              {listPreview(
+                casing.map((row) => `“${row.poolLabel}” vs “${row.ruleLabel}”`),
+                3,
+              )}
+              .
+            </p>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function listPreview(items: string[], max: number): string {
+  if (items.length <= max) return items.join(", ");
+  return `${items.slice(0, max).join(", ")} +${items.length - max} more`;
 }
 
 function AddQuestionForm({
@@ -833,14 +1033,56 @@ function AddQuestionForm({
           maxLength={4000}
         />
       </div>
+      <fieldset className="flex flex-wrap gap-1.5">
+        <legend className="mb-1 text-[11px] text-muted-foreground">Answer type</legend>
+        {(
+          [
+            { value: false, label: "Choose one" },
+            { value: true, label: "Select all that apply" },
+          ] as const
+        ).map((choice) => (
+          <button
+            key={String(choice.value)}
+            type="button"
+            onClick={() =>
+              setDraft((d) => ({
+                ...d,
+                multiSelect: choice.value,
+                correctIndexes: choice.value
+                  ? d.correctIndexes.length
+                    ? d.correctIndexes
+                    : [0]
+                  : [d.correctIndexes[0] ?? 0],
+              }))
+            }
+            className={cn(
+              "rounded-md border px-2 py-1 text-[11px] font-medium transition-colors",
+              draft.multiSelect === choice.value
+                ? "border-primary/40 bg-primary/10 text-foreground"
+                : "border-border bg-background text-muted-foreground hover:bg-secondary",
+            )}
+          >
+            {choice.label}
+          </button>
+        ))}
+      </fieldset>
       <div className="grid gap-2 sm:grid-cols-2">
         {draft.options.map((option, index) => (
           <label key={index} className="flex items-center gap-2">
             <input
-              type="radio"
+              type={draft.multiSelect ? "checkbox" : "radio"}
               name="correct"
-              checked={draft.correctIndex === index}
-              onChange={() => setDraft((d) => ({ ...d, correctIndex: index }))}
+              checked={draft.correctIndexes.includes(index)}
+              onChange={() =>
+                setDraft((d) => {
+                  if (!d.multiSelect) return { ...d, correctIndexes: [index] };
+                  const has = d.correctIndexes.includes(index);
+                  const next = has
+                    ? d.correctIndexes.filter((i) => i !== index)
+                    : [...d.correctIndexes, index];
+                  return { ...d, correctIndexes: next.length ? next : [index] };
+                })
+              }
               className="accent-[var(--primary)]"
               title="Mark as correct"
             />
@@ -917,7 +1159,9 @@ function AddQuestionForm({
           Cancel
         </button>
         <p className="self-center text-[11px] text-muted-foreground">
-          Select the radio next to the correct option.
+          {draft.multiSelect
+            ? "Check every correct option (select all that apply)."
+            : "Select the radio next to the single correct option."}
         </p>
       </div>
     </form>

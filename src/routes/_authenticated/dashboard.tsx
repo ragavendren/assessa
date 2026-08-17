@@ -11,12 +11,15 @@ import {
   StatTile,
 } from "@/components/platform";
 import { ScoreTrendChart } from "@/components/ScoreTrendChart";
+import { PlayDashboardSection } from "@/components/play/PlayDashboardSection";
 import { getParticipantInsight } from "@/lib/ai.functions";
 import { formatDate } from "@/lib/gamification";
-import { getDashboard } from "@/lib/platform.functions";
+import { beginPlay, getPlayHub } from "@/lib/play.functions";
+import type { PlayKind } from "@/lib/play.math";
+import { getDashboard, listNotifications } from "@/lib/platform.functions";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowRight, Award, Flame, Sparkles, Target, Trophy, Zap } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
@@ -44,11 +47,36 @@ function delay(ms: number): CSSProperties {
 }
 
 function Dashboard() {
+  const navigate = useNavigate();
   const fetchDashboard = useServerFn(getDashboard);
+  const fetchPlayHub = useServerFn(getPlayHub);
+  const startDaily = useServerFn(beginPlay);
   const { data, isPending } = useQuery({
     queryKey: ["dashboard"],
     queryFn: () => fetchDashboard(),
     staleTime: 30_000,
+  });
+  const fetchNotifications = useServerFn(listNotifications);
+  const { data: playHub } = useQuery({
+    queryKey: ["play-hub"],
+    queryFn: () => fetchPlayHub(),
+    staleTime: 30_000,
+  });
+  const { data: notices } = useQuery({
+    queryKey: ["notifications"],
+    queryFn: () => fetchNotifications(),
+    staleTime: 30_000,
+  });
+  const dailyStartMut = useMutation({
+    mutationFn: (args: { kind: PlayKind; courseId?: string }) =>
+      startDaily({
+        data: {
+          kind: args.kind,
+          ...(args.courseId ? { courseId: args.courseId } : {}),
+        },
+      }),
+    onSuccess: (result) =>
+      navigate({ to: "/play/session/$sessionId", params: { sessionId: result.sessionId } }),
   });
 
   const insight = useServerFn(getParticipantInsight);
@@ -59,10 +87,13 @@ function Dashboard() {
   const streak = (type: string) => data.streaks.find((s) => s.type === type);
   const examStreak = streak("exam");
   const passStreak = streak("pass");
+  const playOn = playHub?.menuEnabled === true;
+  const dailyPlayStreak = playOn ? (playHub?.streak.current ?? 0) : 0;
   const focusAreas = [...data.mastery].sort((a, b) => a.mastery - b.mastery).slice(0, 3);
   const availableExams = (data.available ?? []).slice(0, 8);
   const earnedBadges = (data.earnedBadges ?? data.latestBadges ?? []).slice(0, 12);
   const recent = data.recent.slice(0, 6);
+  const unreadNotices = (notices ?? []).filter((item) => !item.read);
 
   const displayName = data.profile.display_name || data.profile.full_name || "Participant";
   const greeting = timeGreeting();
@@ -104,9 +135,16 @@ function Dashboard() {
               />
               <QuestChip
                 icon={<Flame className="h-3.5 w-3.5 animate-dash-flame" />}
-                label={`${examStreak?.current ?? 0} streak`}
+                label={`${examStreak?.current ?? 0} exam streak`}
                 style={delay(190)}
               />
+              {playOn ? (
+                <QuestChip
+                  icon={<Flame className="h-3.5 w-3.5 text-amber-500 animate-dash-flame" />}
+                  label={`${dailyPlayStreak} day streak`}
+                  style={delay(220)}
+                />
+              ) : null}
               <QuestChip
                 icon={<Award className="h-3.5 w-3.5" />}
                 label={`${data.badgeCount} badges`}
@@ -119,16 +157,77 @@ function Dashboard() {
               />
             </div>
           </div>
-          <Link
-            to="/exams"
-            className="animate-dash-pop group inline-flex items-center gap-2 rounded-md border border-amber-200/30 bg-gradient-to-b from-amber-200 to-amber-600 px-4 py-2.5 text-sm font-semibold text-amber-950 shadow-[0_8px_24px_-12px_rgba(251,191,36,0.55)] transition-all duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:from-amber-100 hover:to-amber-500 active:scale-[0.98]"
-            style={delay(160)}
-          >
-            Start assessment
-            <ArrowRight className="h-4 w-4 animate-dash-cta-arrow transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:translate-x-1" />
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              to="/exams"
+              className="animate-dash-pop group inline-flex items-center gap-2 rounded-md border border-amber-200/30 bg-gradient-to-b from-amber-200 to-amber-600 px-4 py-2.5 text-sm font-semibold text-amber-950 shadow-[0_8px_24px_-12px_rgba(251,191,36,0.55)] transition-all duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:from-amber-100 hover:to-amber-500 active:scale-[0.98]"
+              style={delay(160)}
+            >
+              Start assessment
+              <ArrowRight className="h-4 w-4 animate-dash-cta-arrow transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:translate-x-1" />
+            </Link>
+            {playOn && (playHub?.segments.length ?? 0) > 0 ? (
+              <Link
+                to="/play"
+                className="animate-dash-pop inline-flex items-center gap-2 rounded-md border border-border bg-white/70 px-4 py-2.5 text-sm font-semibold backdrop-blur-sm"
+                style={delay(200)}
+              >
+                Open Play
+              </Link>
+            ) : null}
+          </div>
         </div>
       </header>
+
+      {unreadNotices.length > 0 ? (
+        <MotionSection delayMs={10}>
+          <section className="surface-paper rounded-xl p-4">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold">Notifications</h2>
+              <Link to="/notifications" className="text-xs text-accent underline">
+                View all
+              </Link>
+            </div>
+            <ul className="mt-2 space-y-2">
+              {unreadNotices.slice(0, 3).map((item) => {
+                const href =
+                  item.kind === "play_launched"
+                    ? "/play"
+                    : item.kind === "play_battle"
+                      ? "/play/battle"
+                      : item.kind === "badge"
+                        ? "/achievements"
+                        : item.kind === "exam_launched" || item.kind === "invitation"
+                          ? "/exams"
+                          : "/notifications";
+                return (
+                  <li key={item.id}>
+                    <Link to={href} className="block text-sm hover:text-accent">
+                      <span className="mr-1">{item.icon ?? "🔔"}</span>
+                      <span className="font-medium">{item.title}</span>
+                      {item.body ? (
+                        <span className="mt-0.5 block text-xs text-muted-foreground">
+                          {item.body}
+                        </span>
+                      ) : null}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        </MotionSection>
+      ) : null}
+
+      {playOn && playHub ? (
+        <MotionSection delayMs={20}>
+          <PlayDashboardSection
+            hub={playHub}
+            pending={dailyStartMut.isPending}
+            onStart={(kind, courseId) => dailyStartMut.mutate({ kind, courseId })}
+          />
+        </MotionSection>
+      ) : null}
 
       {/* Level + key stats only */}
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1.8fr)]">
@@ -301,7 +400,7 @@ function Dashboard() {
             {earnedBadges.map((badge, index) => (
               <div
                 key={`${"code" in badge && badge.code ? badge.code : badge.name}-${index}`}
-                className="surface-metal dash-lift dash-lift-metal flex h-full min-h-[7.5rem] flex-col items-center justify-center gap-2 px-3 py-4 text-center"
+                className="flex h-full min-h-[7.5rem] flex-col items-center justify-center gap-2 rounded-[var(--radius-lg)] border border-border bg-card px-3 py-4 text-center"
                 title={badge.description || badge.name}
               >
                 <BadgeMark
@@ -353,12 +452,32 @@ function Dashboard() {
               </button>
             }
           />
-          {focusAreas.length === 0 ? (
+          {focusAreas.length === 0 && (data.career ?? []).length === 0 ? (
             <p className="text-sm text-muted-foreground">
               Mastery tips appear after your first attempt.
             </p>
           ) : (
             <div className="space-y-3">
+              {(data.career ?? []).length > 0 ? (
+                <>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Career readiness
+                  </p>
+                  {(data.career ?? []).slice(0, 4).map((row) => (
+                    <MasteryBar
+                      key={row.topic}
+                      label={row.topic}
+                      value={row.mastery}
+                      meta={`${row.subtopics} skill${row.subtopics === 1 ? "" : "s"}`}
+                    />
+                  ))}
+                  {playOn ? (
+                    <Link to="/play/topics" className="inline-block text-xs text-accent underline">
+                      Topic Challenge →
+                    </Link>
+                  ) : null}
+                </>
+              ) : null}
               {focusAreas.map((row) => (
                 <MasteryBar
                   key={`${row.topic}-${row.subtopic}`}

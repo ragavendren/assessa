@@ -35,7 +35,7 @@ export function BadgeDriftWall({ badges, className, limit = 10 }: BadgeDriftWall
         <span
           key={`${badge.code ?? badge.icon}-${index}`}
           className={cn(
-            "relative z-0",
+            "relative z-0 overflow-hidden rounded-md",
             index % 2 === 0 ? "animate-dash-float" : "animate-dash-float-alt",
           )}
           style={{ animationDelay: `${index * 0.45}s` }}
@@ -43,7 +43,7 @@ export function BadgeDriftWall({ badges, className, limit = 10 }: BadgeDriftWall
           <BadgeMark
             icon={badge.icon}
             size="sm"
-            className="border-0 bg-transparent opacity-70 shadow-none sm:opacity-80"
+            className="border-0 bg-transparent opacity-55 shadow-none [&>svg]:overflow-hidden sm:opacity-65"
             {...(badge.code ? { code: badge.code } : {})}
             {...(badge.name ? { name: badge.name } : {})}
           />

@@ -14,7 +14,8 @@ export const Route = createFileRoute("/_authenticated/notifications")({
       { title: "Notifications — Assessa" },
       {
         name: "description",
-        content: "Invitations, new assessments, results, badge unlocks and reminders.",
+        content:
+          "Invitations, new assessments, Play launches, results, badge unlocks and reminders.",
       },
       { property: "og:title", content: "Notifications — Assessa" },
       { property: "og:description", content: "Your assessment notifications." },
@@ -28,11 +29,15 @@ type StatusFilter = "all" | "unread" | "read";
 function notificationHref(kind: string | null | undefined): string | null {
   if (kind === "exam_launched" || kind === "invitation") return "/exams";
   if (kind === "badge") return "/achievements";
+  if (kind === "play_launched") return "/play";
+  if (kind === "play_battle") return "/play/battle";
   return null;
 }
 
 function kindLabel(kind: string | null | undefined) {
   if (kind === "exam_launched") return "New assessment";
+  if (kind === "play_launched") return "Play";
+  if (kind === "play_battle") return "Battle";
   if (!kind) return "Info";
   return kind.replaceAll("_", " ");
 }

@@ -254,12 +254,6 @@ function refineExamWrite(value: z.infer<typeof examWriteObjectSchema>, ctx: z.Re
         message: `Question ${index + 1} needs a valid correct answer.`,
       });
     }
-    if (!question.multi_select && indexes.length > 1) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: `Question ${index + 1}: enable multi-select for multiple answers.`,
-      });
-    }
   }
 }
 
@@ -279,6 +273,7 @@ function mapQuestionsForInsert(examId: string, questions: z.infer<typeof examQue
       options: q.options,
       correct_index: correctIndexes[0] ?? 0,
       correct_indexes: q.multi_select ? correctIndexes : [correctIndexes[0] ?? 0],
+      multi_select: q.multi_select || correctIndexes.length > 1,
       subtopic: q.subtopic || "general",
       explanation: q.explanation,
       source_pool_question_id: q.source_pool_question_id ?? null,
@@ -351,7 +346,7 @@ export const createExam = createServerFn({ method: "POST" })
           kind: "invitation",
           icon: "✉️",
           title: `You have been invited to ${data.title}`,
-          body: "Open My Exams to start when you are ready.",
+          body: "Open Assessments to start when you are ready.",
           href: `/exams/${exam.id}`,
           ctaLabel: "Open assessment",
           // Bulk Resend below covers all invitees (registered + guest).
@@ -550,7 +545,7 @@ export const updateExam = createServerFn({ method: "POST" })
             kind: "invitation",
             icon: "✉️",
             title: `You have been invited to ${examFields.title}`,
-            body: "Open My Exams to start when you are ready.",
+            body: "Open Assessments to start when you are ready.",
             href: `/exams/${examId}`,
             ctaLabel: "Open assessment",
             email: false,

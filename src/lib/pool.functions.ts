@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
+  analyzePoolBlueprintFit,
   distributionMap,
   finalizeAllocations,
   type BlueprintRuleInput,
@@ -283,15 +284,14 @@ export const upsertPoolQuestion = createServerFn({ method: "POST" })
       .filter((i) => i < data.options.length)
       .sort((a, b) => a - b);
     if (indexes.length === 0) throw new Error("Valid correct answer required");
-    if (!data.multi_select && indexes.length > 1) {
-      throw new Error("Enable multi-select for multiple answers");
-    }
+    const multiSelect = data.multi_select || indexes.length > 1;
     const payload = {
       pool_id: data.poolId,
       prompt: data.prompt,
       options: data.options,
       correct_index: indexes[0] ?? 0,
-      correct_indexes: data.multi_select ? indexes : [indexes[0] ?? 0],
+      correct_indexes: multiSelect ? indexes : [indexes[0] ?? 0],
+      multi_select: multiSelect,
       topic: data.topic,
       subtopic: data.subtopic || "general",
       difficulty: data.difficulty,
@@ -420,6 +420,7 @@ export const importPoolQuestionsCsv = createServerFn({ method: "POST" })
       options: q.options,
       correct_index: q.correctIndexes[0] ?? 0,
       correct_indexes: q.multiSelect ? q.correctIndexes : [q.correctIndexes[0] ?? 0],
+      multi_select: q.multiSelect,
       topic: q.topic || "general",
       subtopic: q.subtopic || "general",
       difficulty: q.difficulty,
@@ -703,6 +704,112 @@ export const previewBlueprintDistribution = createServerFn({ method: "POST" })
     }
     const allocations = finalizeAllocations(ruleInputs, data.questionCount);
     return { allocations, distribution: distributionMap(allocations) };
+  });
+
+/** Can this pool fill each course blueprint? Also reports unused topics. */
+export const previewPoolFillCheck = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) => z.object({ poolId: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const supabase = await adminClient(context.userId);
+    const { data: pool, error: poolError } = await supabase
+      .from("question_pools")
+      .select("id, course_id, name")
+      .eq("id", data.poolId)
+      .maybeSingle();
+    if (poolError) throw new Error(poolError.message);
+    if (!pool) throw new Error("Question pool not found.");
+
+    const [{ data: blueprints, error: bpError }, { data: questions, error: qError }] =
+      await Promise.all([
+        supabase
+          .from("course_blueprints")
+          .select("id, name, is_default, default_total_questions, status")
+          .eq("course_id", pool.course_id)
+          .eq("status", "active")
+          .order("is_default", { ascending: false })
+          .order("name", { ascending: true }),
+        supabase
+          .from("pool_questions")
+          .select("id, topic, subtopic, difficulty, status, multi_select, correct_indexes")
+          .eq("pool_id", data.poolId),
+      ]);
+    if (bpError) throw new Error(bpError.message);
+    if (qError) throw new Error(qError.message);
+
+    const inventory = (questions ?? []).map((q) => {
+      const indexes = Array.isArray(q.correct_indexes) ? q.correct_indexes : [];
+      return {
+        id: q.id,
+        topic: q.topic,
+        subtopic: q.subtopic,
+        difficulty: q.difficulty as "easy" | "medium" | "hard",
+        status: q.status,
+        multiSelect: Boolean(q.multi_select) || indexes.length > 1,
+      };
+    });
+
+    const typeMix = inventory
+      .filter((q) => q.status === "active")
+      .reduce(
+        (acc, q) => {
+          if (q.multiSelect) acc.multi += 1;
+          else acc.single += 1;
+          return acc;
+        },
+        { single: 0, multi: 0 },
+      );
+
+    if (!blueprints?.length) {
+      return { blueprints: [] as const, typeMix, hasBlueprints: false as const };
+    }
+
+    const { data: rules, error: rulesError } = await supabase
+      .from("blueprint_rules")
+      .select("*")
+      .in(
+        "blueprint_id",
+        blueprints.map((b) => b.id),
+      );
+    if (rulesError) throw new Error(rulesError.message);
+
+    const rulesByBlueprint = new Map<string, typeof rules>();
+    for (const rule of rules ?? []) {
+      const list = rulesByBlueprint.get(rule.blueprint_id) ?? [];
+      list.push(rule);
+      rulesByBlueprint.set(rule.blueprint_id, list);
+    }
+
+    const reports = blueprints.map((blueprint) => {
+      const blueprintRules = (rulesByBlueprint.get(blueprint.id) ?? []).map((r) => ({
+        topic: r.topic,
+        subtopic: r.subtopic ?? null,
+        weightage: Number(r.weightage),
+        min_questions: r.min_questions,
+        max_questions: r.max_questions,
+        easy_percentage: Number(r.easy_percentage),
+        medium_percentage: Number(r.medium_percentage),
+        hard_percentage: Number(r.hard_percentage),
+      }));
+      const questionCount = blueprint.default_total_questions ?? 30;
+      const fit =
+        blueprintRules.length > 0
+          ? analyzePoolBlueprintFit({
+              questions: inventory,
+              rules: blueprintRules,
+              questionCount,
+            })
+          : null;
+      return {
+        id: blueprint.id,
+        name: blueprint.name,
+        isDefault: Boolean(blueprint.is_default),
+        questionCount,
+        fit,
+      };
+    });
+
+    return { blueprints: reports, typeMix, hasBlueprints: true as const };
   });
 
 // ——— Series ———

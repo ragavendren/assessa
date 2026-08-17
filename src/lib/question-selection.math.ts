@@ -186,6 +186,100 @@ export type SelectablePoolQuestion = {
   difficulty: Difficulty;
 };
 
+/** Trim, lowercase, collapse spaces — used so “Lambda” matches “lambda”. */
+export function normalizeTopicKey(value: string | null | undefined): string {
+  return (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+export function topicsMatch(a: string | null | undefined, b: string | null | undefined): boolean {
+  return normalizeTopicKey(a) === normalizeTopicKey(b);
+}
+
+export type PoolFitQuestion = SelectablePoolQuestion & {
+  status?: string;
+  multiSelect?: boolean;
+};
+
+export type PoolFitReport = {
+  allocations: TopicAllocation[];
+  shortages: Shortage[];
+  canFill: boolean;
+  unusedPoolTopics: string[];
+  unmatchedRules: Array<{ topic: string; subtopic: string | null; inventory: number }>;
+  casingMismatches: Array<{ poolLabel: string; ruleLabel: string }>;
+  typeMix: { single: number; multi: number };
+};
+
+/** Inventory vs a blueprint — shortages, unused topics, and spelling drift. */
+export function analyzePoolBlueprintFit(args: {
+  questions: PoolFitQuestion[];
+  rules: BlueprintRuleInput[];
+  questionCount: number;
+}): PoolFitReport {
+  const eligible = args.questions.filter((q) => (q.status ?? "active") === "active");
+  const allocations = finalizeAllocations(args.rules, args.questionCount);
+  const { shortages } = selectQuestionsFromPool({ allocations, eligible, random: () => 0.5 });
+
+  const poolByKey = new Map<string, string>();
+  for (const q of eligible) {
+    const key = normalizeTopicKey(q.topic);
+    if (!key) continue;
+    if (!poolByKey.has(key)) poolByKey.set(key, q.topic.trim() || q.topic);
+  }
+
+  const ruleByKey = new Map<string, string>();
+  for (const rule of args.rules) {
+    const key = normalizeTopicKey(rule.topic);
+    if (!key) continue;
+    if (!ruleByKey.has(key)) ruleByKey.set(key, rule.topic.trim() || rule.topic);
+  }
+
+  const unusedPoolTopics = [...poolByKey.entries()]
+    .filter(([key]) => !ruleByKey.has(key))
+    .map(([, label]) => label)
+    .sort((a, b) => a.localeCompare(b));
+
+  const unmatchedRules = args.rules
+    .map((rule) => {
+      const inventory = eligible.filter((q) => {
+        if (!topicsMatch(q.topic, rule.topic)) return false;
+        if (!rule.subtopic) return true;
+        return topicsMatch(q.subtopic, rule.subtopic);
+      }).length;
+      return {
+        topic: rule.topic,
+        subtopic: rule.subtopic ?? null,
+        inventory,
+      };
+    })
+    .filter((row) => row.inventory === 0);
+
+  const casingMismatches: Array<{ poolLabel: string; ruleLabel: string }> = [];
+  for (const [key, ruleLabel] of ruleByKey) {
+    const poolLabel = poolByKey.get(key);
+    if (poolLabel && poolLabel !== ruleLabel) {
+      casingMismatches.push({ poolLabel, ruleLabel });
+    }
+  }
+
+  let single = 0;
+  let multi = 0;
+  for (const q of eligible) {
+    if (q.multiSelect) multi += 1;
+    else single += 1;
+  }
+
+  return {
+    allocations,
+    shortages,
+    canFill: shortages.length === 0,
+    unusedPoolTopics,
+    unmatchedRules,
+    casingMismatches,
+    typeMix: { single, multi },
+  };
+}
+
 export function selectQuestionsFromPool(args: {
   allocations: TopicAllocation[];
   eligible: SelectablePoolQuestion[];
@@ -203,8 +297,8 @@ export function selectQuestionsFromPool(args: {
 
   for (const alloc of allocations) {
     const topicMatch = (q: SelectablePoolQuestion) =>
-      q.topic === alloc.topic &&
-      (alloc.subtopic == null || alloc.subtopic === "" || q.subtopic === alloc.subtopic);
+      topicsMatch(q.topic, alloc.topic) &&
+      (alloc.subtopic == null || alloc.subtopic === "" || topicsMatch(q.subtopic, alloc.subtopic));
 
     let takenForTopic = 0;
 

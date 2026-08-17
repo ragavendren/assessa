@@ -1,3 +1,5 @@
+import { resolveMultiSelect } from "./question-choice-mode.ts";
+
 export type PoolCsvQuestion = {
   prompt: string;
   options: string[];
@@ -35,6 +37,26 @@ export function poolQuestionCsvTemplate(): string {
       "Serverless",
       "aws|compute",
       "Lambda runs code without servers",
+      "1",
+    ]
+      .map(csvEscape)
+      .join(","),
+    [
+      "Which TWO services can run containers on AWS?",
+      "ECS",
+      "Lambda",
+      "EKS",
+      "RDS",
+      "",
+      "",
+      "A|C",
+      "true",
+      "Compute",
+      "Containers",
+      "medium",
+      "Containers",
+      "aws|containers",
+      "ECS and EKS orchestrate containers. Multiple letters = multi-select.",
       "1",
     ]
       .map(csvEscape)
@@ -121,6 +143,7 @@ type ColumnMap = {
   options: number[];
   correct: number;
   multi: number;
+  type: number;
   topic: number;
   subtopic: number;
   difficulty: number;
@@ -170,6 +193,7 @@ function buildColumnMap(headerCells: string[]): ColumnMap | null {
     options: options.length >= 2 ? options : [prompt + 1, prompt + 2, prompt + 3, prompt + 4],
     correct: find("correct_answers", "correct_answer", "correct", "answer", "answers"),
     multi: find("multi_select", "multiselect", "multi"),
+    type: find("question_type", "type", "choice_type"),
     topic: find("topic", "tag", "category"),
     subtopic: find("subtopic", "sub_topic"),
     difficulty: find("difficulty", "diff"),
@@ -187,6 +211,7 @@ function positionalMap(): ColumnMap {
     options: [1, 2, 3, 4, 5, 6],
     correct: 7,
     multi: 8,
+    type: -1,
     topic: 9,
     subtopic: 10,
     difficulty: 11,
@@ -271,7 +296,16 @@ export function parsePoolQuestionsCsv(text: string): {
       continue;
     }
 
-    const multiSelect = cell(row, map.multi).toLowerCase().startsWith("t");
+    const mode = resolveMultiSelect({
+      correctCount: validCorrect.length,
+      multiRaw: cell(row, map.multi),
+      typeRaw: cell(row, map.type),
+    });
+    if (mode.error) {
+      errors.push(`Row ${lineNo}: ${mode.error}`);
+      continue;
+    }
+    const multiSelect = mode.multiSelect;
     const topic = cell(row, map.topic) || "general";
     // Exam CSV puts explanation where pool expects subtopic when using positional map —
     // prefer explicit explanation column; otherwise keep subtopic and leave explanation empty.

@@ -1,23 +1,25 @@
+import { LeaderboardChip, LeaderboardHero } from "@/components/leaderboard/BoardStage";
 import { ListToolbar, listViewClass, useListViewMode } from "@/components/ListToolbar";
-import { EmptyState, PageLoader, ScorePill, SectionHeading } from "@/components/platform";
+import { EmptyState, Meter, PageLoader, ScorePill } from "@/components/platform";
 import { MODE_LABELS, formatDate, type ExamMode } from "@/lib/gamification";
 import { listMyExams } from "@/lib/platform.functions";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
+import { CirclePlay, Clock3, ListChecks, Trophy } from "lucide-react";
 import { useMemo, useState } from "react";
 
 export const Route = createFileRoute("/_authenticated/exams/")({
   head: () => ({
     meta: [
-      { title: "My Exams — Assessa" },
+      { title: "Assessments — Assessa" },
       {
         name: "description",
         content:
           "Available, upcoming, in-progress and completed assessments with attempts remaining and best scores.",
       },
-      { property: "og:title", content: "My Exams — Assessa" },
+      { property: "og:title", content: "Assessments — Assessa" },
       {
         property: "og:description",
         content: "Every assessment assigned to you, with attempts and results.",
@@ -78,11 +80,41 @@ function MyExams() {
     });
   }, [data, filter, search]);
 
-  if (isPending || !data) return <PageLoader />;
+  if (isPending || !data) return <PageLoader label="Loading assessments…" />;
+
+  const ready = counts.available + counts.in_progress;
 
   return (
-    <div>
-      <SectionHeading eyebrow="Assessments" title="My exams" />
+    <div className="space-y-6">
+      <LeaderboardHero
+        kicker="My assessments"
+        title="Assessments"
+        subtitle="Start, resume, or review every paper assigned to you — timed rules, attempts and best scores in one place."
+        chips={
+          <>
+            <LeaderboardChip
+              icon={<CirclePlay className="h-3.5 w-3.5" />}
+              label="Ready now"
+              value={ready}
+            />
+            <LeaderboardChip
+              icon={<Clock3 className="h-3.5 w-3.5" />}
+              label="In progress"
+              value={counts.in_progress}
+            />
+            <LeaderboardChip
+              icon={<Trophy className="h-3.5 w-3.5" />}
+              label="Completed"
+              value={counts.completed}
+            />
+            <LeaderboardChip
+              icon={<ListChecks className="h-3.5 w-3.5" />}
+              label="All papers"
+              value={counts.all}
+            />
+          </>
+        }
+      />
 
       <ListToolbar
         search={search}
@@ -126,7 +158,9 @@ function MyExams() {
                     <p className="text-xs text-muted-foreground">{exam.topic}</p>
                   </td>
                   <td className="p-3">{MODE_LABELS[exam.mode as ExamMode] ?? exam.mode}</td>
-                  <td className="p-3 capitalize">{exam.status.replace("_", " ")}</td>
+                  <td className="p-3">
+                    <StatusPill status={exam.status} />
+                  </td>
                   <td className="p-3 tabular-nums">
                     {exam.attemptsUsed}/{exam.maxAttempts}
                   </td>
@@ -157,50 +191,93 @@ function MyExams() {
 }
 
 function ExamCard({ exam, dense }: { exam: ExamItem; dense?: boolean }) {
+  const attemptPct =
+    exam.maxAttempts > 0 ? Math.min(100, (exam.attemptsUsed / exam.maxAttempts) * 100) : 0;
+  const live = exam.status === "available" || exam.status === "in_progress";
+  const schedule =
+    exam.status === "upcoming"
+      ? `Opens ${formatDate(exam.startsAt)}`
+      : exam.endsAt
+        ? `Closes ${formatDate(exam.endsAt)}`
+        : null;
+
   return (
-    <article className={cn("surface-paper flex flex-col", dense ? "p-5" : "p-6")}>
+    <article
+      className={cn(
+        "flex flex-col",
+        live ? "surface-metal" : "surface-paper",
+        exam.status === "in_progress" && "ring-1 ring-accent/40",
+        dense ? "p-5" : "p-6",
+      )}
+    >
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <p className="text-hairline text-muted-foreground">{exam.topic}</p>
           <h3 className={cn("mt-1 font-display", dense ? "text-xl" : "text-2xl")}>{exam.title}</h3>
         </div>
-        <span className="rounded-full bg-secondary px-2.5 py-1 text-[11px] font-semibold">
-          {MODE_LABELS[exam.mode as ExamMode] ?? exam.mode}
-        </span>
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <StatusPill status={exam.status} />
+          <span className="rounded-full bg-secondary px-2.5 py-0.5 text-[11px] font-semibold">
+            {MODE_LABELS[exam.mode as ExamMode] ?? exam.mode}
+          </span>
+        </div>
       </div>
 
       {exam.description ? (
         <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{exam.description}</p>
       ) : null}
 
-      <dl className="mt-4 grid grid-cols-3 gap-3 text-xs">
-        <div>
+      <dl className="mt-4 grid grid-cols-3 gap-2 text-xs">
+        <div className="rounded-md bg-background/60 px-2.5 py-2">
           <dt className="text-muted-foreground">Questions</dt>
-          <dd className="mt-0.5 font-semibold">{exam.questionCount}</dd>
+          <dd className="mt-0.5 font-semibold tabular-nums">{exam.questionCount}</dd>
         </div>
-        <div>
+        <div className="rounded-md bg-background/60 px-2.5 py-2">
           <dt className="text-muted-foreground">Duration</dt>
-          <dd className="mt-0.5 font-semibold">{exam.duration} min</dd>
+          <dd className="mt-0.5 font-semibold tabular-nums">{exam.duration} min</dd>
         </div>
-        <div>
+        <div className="rounded-md bg-background/60 px-2.5 py-2">
           <dt className="text-muted-foreground">Pass mark</dt>
-          <dd className="mt-0.5 font-semibold">{exam.passMark}%</dd>
+          <dd className="mt-0.5 font-semibold tabular-nums">{exam.passMark}%</dd>
         </div>
       </dl>
 
-      <div className="mt-4 flex items-center gap-3 text-xs text-muted-foreground">
-        <span>
-          Attempts {exam.attemptsUsed}/{exam.maxAttempts}
-        </span>
-        {exam.bestScore != null ? (
-          <ScorePill score={exam.bestScore} passed={exam.bestPassed} />
-        ) : null}
+      <div className="mt-4 space-y-1.5">
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>
+            Attempts {exam.attemptsUsed}/{exam.maxAttempts}
+          </span>
+          {exam.bestScore != null ? (
+            <ScorePill score={exam.bestScore} passed={exam.bestPassed} />
+          ) : null}
+        </div>
+        <Meter value={attemptPct} tone={exam.attemptsLeft > 0 ? "accent" : "muted"} />
       </div>
+
+      {schedule ? <p className="mt-3 text-xs text-muted-foreground">{schedule}</p> : null}
 
       <div className="mt-5">
         <ExamActions exam={exam} />
       </div>
     </article>
+  );
+}
+
+function StatusPill({ status }: { status: ExamItem["status"] }) {
+  const tone =
+    status === "available"
+      ? "bg-success/12 text-success"
+      : status === "in_progress"
+        ? "bg-amber-500/15 text-amber-800"
+        : status === "completed"
+          ? "bg-primary/10 text-primary"
+          : status === "upcoming"
+            ? "bg-sky-500/12 text-sky-800"
+            : "bg-muted text-muted-foreground";
+  return (
+    <span className={cn("rounded-full px-2.5 py-0.5 text-[11px] font-semibold capitalize", tone)}>
+      {status.replace("_", " ")}
+    </span>
   );
 }
 
