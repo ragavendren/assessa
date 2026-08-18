@@ -190,6 +190,7 @@ export const updateExamSettings = createServerFn({ method: "POST" })
 
 const examQuestionSchema = z.object({
   prompt: z.string().trim().min(4).max(4000),
+  image_url: z.string().trim().max(2048).nullable().optional(),
   options: z.array(z.string().trim().min(1).max(1000)).min(2).max(6),
   correct_index: z.number().int().min(0).max(5),
   correct_indexes: z.array(z.number().int().min(0).max(5)).min(1).max(6).optional(),
@@ -270,6 +271,7 @@ function mapQuestionsForInsert(examId: string, questions: z.infer<typeof examQue
     return {
       exam_id: examId,
       prompt: q.prompt,
+      image_url: q.image_url ?? null,
       options: q.options,
       correct_index: correctIndexes[0] ?? 0,
       correct_indexes: q.multi_select ? correctIndexes : [correctIndexes[0] ?? 0],
@@ -449,6 +451,7 @@ export const getExamForEdit = createServerFn({ method: "POST" })
               : [q.correct_index];
           return {
             prompt: q.prompt,
+            image_url: (q as { image_url?: string | null }).image_url ?? null,
             options: (q.options as string[]) ?? [],
             correct_index: indexes[0] ?? 0,
             correct_indexes: indexes,

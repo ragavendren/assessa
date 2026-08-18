@@ -21,6 +21,7 @@ import {
   resolveSupabaseProjectId,
   resolveSupabaseUrl,
 } from "./lib/env.mjs";
+import { seedFunEvent } from "./seed-fun-event.mjs";
 
 loadEnv();
 
@@ -230,6 +231,11 @@ for (const org of orgs) {
   }
 }
 console.log("[db:seed] organisations + teams/groups ready");
+
+const funEvent = await seedFunEvent(admin);
+console.log(
+  `[db:seed] Team Fun Day course + ${funEvent.questions} visual icebreaker questions ready`,
+);
 
 /* ------------------------------------------------------------------ */
 /* demo participants                                                   */

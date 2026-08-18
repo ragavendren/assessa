@@ -59,7 +59,7 @@ function Landing() {
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-[70vh] bg-[url('/brand/assessa-icon-512.png')] bg-[length:min(72vw,34rem)] bg-[position:right_-4rem_top_4rem] bg-no-repeat opacity-[0.08] mix-blend-multiply md:bg-[position:right_6%_top_10%] md:opacity-[0.12]"
+        className="pointer-events-none absolute inset-x-0 top-24 h-[70vh] bg-[url('/brand/assessa-icon-512.png')] bg-[length:min(72vw,34rem)] bg-[position:right_-4rem_top_0] bg-no-repeat opacity-[0.08] mix-blend-multiply md:top-28 md:bg-[position:right_6%_top_8%] md:opacity-[0.12]"
       />
       <div
         aria-hidden

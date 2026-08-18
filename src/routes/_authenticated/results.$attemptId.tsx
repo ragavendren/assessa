@@ -33,6 +33,7 @@ export const Route = createFileRoute("/_authenticated/results/$attemptId")({
 type ReviewItem = {
   id: string;
   prompt: string;
+  imageUrl?: string | null;
   options: string[];
   correctIndex: number;
   correctIndexes: number[];
@@ -427,6 +428,14 @@ function ReviewCard({
             {item.multiSelect ? " · select all that apply" : ""}
           </p>
           <h3 className="mt-2 text-base font-medium leading-snug sm:text-lg">{item.prompt}</h3>
+          {item.imageUrl ? (
+            <img
+              src={item.imageUrl}
+              alt="Question prompt reference"
+              className="mt-3 w-full max-w-xl rounded-md border border-border object-contain"
+              loading="lazy"
+            />
+          ) : null}
         </div>
         <StatusBadge status={status} />
       </header>

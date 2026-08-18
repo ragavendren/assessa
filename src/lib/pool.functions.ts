@@ -16,6 +16,7 @@ import {
   type ReusePolicy,
 } from "@/lib/question-selection.server";
 import { parsePoolQuestionsCsv } from "@/lib/pool-questions-csv";
+import { resolveImageRef } from "@/lib/question-image-ref";
 
 const reusePolicySchema = z.enum([
   "allow_reuse",
@@ -264,6 +265,7 @@ export const upsertPoolQuestion = createServerFn({ method: "POST" })
         id: z.string().uuid().optional(),
         poolId: z.string().uuid(),
         prompt: z.string().trim().min(4).max(4000),
+        image_url: z.string().trim().max(2048).optional().default(""),
         options: z.array(z.string().trim().min(1).max(1000)).min(2).max(6),
         correct_indexes: z.array(z.number().int().min(0).max(5)).min(1).max(6),
         multi_select: z.boolean().default(false),
@@ -288,6 +290,7 @@ export const upsertPoolQuestion = createServerFn({ method: "POST" })
     const payload = {
       pool_id: data.poolId,
       prompt: data.prompt,
+      image_url: data.image_url || null,
       options: data.options,
       correct_index: indexes[0] ?? 0,
       correct_indexes: multiSelect ? indexes : [indexes[0] ?? 0],
@@ -389,7 +392,13 @@ export const clearPoolQuestions = createServerFn({ method: "POST" })
 export const importPoolQuestionsCsv = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) =>
-    z.object({ poolId: z.string().uuid(), csvText: z.string().min(1).max(2_000_000) }).parse(input),
+    z
+      .object({
+        poolId: z.string().uuid(),
+        csvText: z.string().min(1).max(2_000_000),
+        imageMap: z.record(z.string(), z.string().url()).optional().default({}),
+      })
+      .parse(input),
   )
   .handler(async ({ data, context }) => {
     const supabase = await adminClient(context.userId);
@@ -414,22 +423,27 @@ export const importPoolQuestionsCsv = createServerFn({ method: "POST" })
       };
     }
 
-    const rows = questions.map((q) => ({
-      pool_id: data.poolId,
-      prompt: q.prompt,
-      options: q.options,
-      correct_index: q.correctIndexes[0] ?? 0,
-      correct_indexes: q.multiSelect ? q.correctIndexes : [q.correctIndexes[0] ?? 0],
-      multi_select: q.multiSelect,
-      topic: q.topic || "general",
-      subtopic: q.subtopic || "general",
-      difficulty: q.difficulty,
-      skill: q.skill || "",
-      tags: q.tags ?? [],
-      explanation: q.explanation || "",
-      marks: q.marks || 1,
-      status: "active" as const,
-    }));
+    const rows = questions.map((q) => {
+      const image_url = resolveImageRef(q.imageRef, data.imageMap);
+
+      return {
+        pool_id: data.poolId,
+        prompt: q.prompt,
+        image_url,
+        options: q.options,
+        correct_index: q.correctIndexes[0] ?? 0,
+        correct_indexes: q.multiSelect ? q.correctIndexes : [q.correctIndexes[0] ?? 0],
+        multi_select: q.multiSelect,
+        topic: q.topic || "general",
+        subtopic: q.subtopic || "general",
+        difficulty: q.difficulty,
+        skill: q.skill || "",
+        tags: q.tags ?? [],
+        explanation: q.explanation || "",
+        marks: q.marks || 1,
+        status: "active" as const,
+      };
+    });
 
     // Insert in chunks to avoid payload limits
     const chunkSize = 100;

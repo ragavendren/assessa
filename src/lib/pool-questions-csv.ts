@@ -2,6 +2,7 @@ import { resolveMultiSelect } from "./question-choice-mode.ts";
 
 export type PoolCsvQuestion = {
   prompt: string;
+  imageRef: string;
   options: string[];
   correctIndexes: number[];
   multiSelect: boolean;
@@ -15,7 +16,7 @@ export type PoolCsvQuestion = {
 };
 
 const HEADER =
-  "prompt,option_a,option_b,option_c,option_d,option_e,option_f,correct_answers,multi_select,topic,subtopic,difficulty,skill,tags,explanation,marks";
+  "prompt,image,option_a,option_b,option_c,option_d,option_e,option_f,correct_answers,multi_select,topic,subtopic,difficulty,skill,tags,explanation,marks";
 
 /** Separate from exam CSV — optional classification columns never fail import when absent. */
 export function poolQuestionCsvTemplate(): string {
@@ -23,6 +24,7 @@ export function poolQuestionCsvTemplate(): string {
     HEADER,
     [
       "Which service provides serverless compute?",
+      "lambda-architecture.png",
       "EC2",
       "Lambda",
       "RDS",
@@ -43,6 +45,7 @@ export function poolQuestionCsvTemplate(): string {
       .join(","),
     [
       "Which TWO services can run containers on AWS?",
+      "ecs-eks-overview.png",
       "ECS",
       "Lambda",
       "EKS",
@@ -140,6 +143,7 @@ function normalizeHeader(name: string): string {
 
 type ColumnMap = {
   prompt: number;
+  image: number;
   options: number[];
   correct: number;
   multi: number;
@@ -190,6 +194,7 @@ function buildColumnMap(headerCells: string[]): ColumnMap | null {
 
   return {
     prompt,
+    image: find("image", "image_url", "prompt_image", "prompt_image_url", "image_ref"),
     options: options.length >= 2 ? options : [prompt + 1, prompt + 2, prompt + 3, prompt + 4],
     correct: find("correct_answers", "correct_answer", "correct", "answer", "answers"),
     multi: find("multi_select", "multiselect", "multi"),
@@ -208,17 +213,18 @@ function positionalMap(): ColumnMap {
   // Legacy fixed layout (pool template / exam-like rows)
   return {
     prompt: 0,
-    options: [1, 2, 3, 4, 5, 6],
-    correct: 7,
-    multi: 8,
+    image: 1,
+    options: [2, 3, 4, 5, 6, 7],
+    correct: 8,
+    multi: 9,
     type: -1,
-    topic: 9,
-    subtopic: 10,
-    difficulty: 11,
-    skill: 12,
-    tags: 13,
-    explanation: 14,
-    marks: 15,
+    topic: 10,
+    subtopic: 11,
+    difficulty: 12,
+    skill: 13,
+    tags: 14,
+    explanation: 15,
+    marks: 16,
   };
 }
 
@@ -306,6 +312,7 @@ export function parsePoolQuestionsCsv(text: string): {
       continue;
     }
     const multiSelect = mode.multiSelect;
+    const imageRef = cell(row, map.image);
     const topic = cell(row, map.topic) || "general";
     // Exam CSV puts explanation where pool expects subtopic when using positional map —
     // prefer explicit explanation column; otherwise keep subtopic and leave explanation empty.
@@ -329,6 +336,7 @@ export function parsePoolQuestionsCsv(text: string): {
 
     questions.push({
       prompt,
+      imageRef,
       options,
       correctIndexes: multiSelect ? validCorrect : [validCorrect[0]!],
       multiSelect,

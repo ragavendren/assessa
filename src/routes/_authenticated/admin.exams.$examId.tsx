@@ -1,6 +1,7 @@
 import { AdminNav } from "@/components/AdminNav";
 import { ExamEditor, examToEditorValues } from "@/components/admin/ExamEditor";
 import { AdminPageHeader } from "@/components/admin/AdminPageUi";
+import { OverviewNav } from "@/components/admin/OverviewNav";
 import { PageLoader } from "@/components/platform";
 import { getExamForEdit, updateExam } from "@/lib/admin.functions";
 import { useQuery } from "@tanstack/react-query";
@@ -44,8 +45,9 @@ function EditExamPage() {
   return (
     <div>
       <AdminNav />
+      <OverviewNav />
       <AdminPageHeader
-        eyebrow="Content"
+        eyebrow="Overview"
         title="Edit assessment"
         summary="Update details, questions, and publish state. Saving keeps existing attempt history."
         help={{

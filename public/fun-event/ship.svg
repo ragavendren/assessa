@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" role="img" aria-label="Launch trophy">
+  <rect width="800" height="450" rx="28" fill="#F6EFE4"/>
+  <path d="M400 70l70 150H330z" fill="#C45C26"/>
+  <rect x="376" y="220" width="48" height="90" fill="#2A2420"/>
+  <rect x="340" y="310" width="120" height="28" rx="8" fill="#3D342C"/>
+  <circle cx="400" cy="150" r="28" fill="#F4D06F"/>
+  <path d="M250 320c40-40 80-40 120 0" fill="none" stroke="#E8C39E" stroke-width="10" stroke-linecap="round"/>
+  <path d="M430 320c40-40 80-40 120 0" fill="none" stroke="#E8C39E" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="220" cy="120" r="8" fill="#C45C26"/>
+  <circle cx="580" cy="100" r="6" fill="#F4D06F"/>
+  <circle cx="620" cy="180" r="5" fill="#C45C26"/>
+  <text x="400" y="430" text-anchor="middle" font-family="Georgia, serif" font-size="22" fill="#2A2420">We shipped it</text>
+</svg>

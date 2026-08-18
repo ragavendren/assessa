@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { BookOpen, Flame, GraduationCap, Swords, Trophy } from "lucide-react";
+import { BookOpen, Flame, GraduationCap, Puzzle, Swords, Trophy } from "lucide-react";
 import { useMemo } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -15,13 +15,14 @@ import { z } from "zod";
 export const Route = createFileRoute("/_authenticated/play/")({
   validateSearch: z.object({
     courseId: z.string().uuid().optional(),
+    activityId: z.string().uuid().optional(),
   }),
   head: () => ({
     meta: [
       { title: "Play — Assessa" },
       {
         name: "description",
-        content: "Daily, topic, speed, survival and team challenges by course.",
+        content: "Daily, topic, speed, survival and team challenges by course or activity.",
       },
     ],
   }),
@@ -36,24 +37,39 @@ const LINK_MODES: Partial<
   battle: { to: "/play/battle" },
   team: { to: "/play/team" },
   escape: { to: "/play/escape" },
+  arena: { to: "/play/arena" },
 };
 
 function PlayHub() {
   const navigate = useNavigate({ from: Route.fullPath });
-  const { courseId: searchCourseId } = Route.useSearch();
+  const { courseId: searchCourseId, activityId: searchActivityId } = Route.useSearch();
   const fetchHub = useServerFn(getPlayHub);
   const start = useServerFn(beginPlay);
   const { data, isPending } = useQuery({ queryKey: ["play-hub"], queryFn: () => fetchHub() });
   const startMut = useMutation({
-    mutationFn: (args: { kind: PlayKind; courseId: string }) =>
-      start({ data: { kind: args.kind, courseId: args.courseId } }),
+    mutationFn: (args: { kind: PlayKind; courseId?: string; poolId?: string | null }) =>
+      start({
+        data: {
+          kind: args.kind,
+          ...(args.courseId ? { courseId: args.courseId } : {}),
+          ...(args.poolId ? { poolId: args.poolId } : {}),
+        },
+      }),
     onSuccess: (result) =>
       navigate({ to: "/play/session/$sessionId", params: { sessionId: result.sessionId } }),
     onError: (error) => toast.error(error instanceof Error ? error.message : "Could not start"),
   });
 
   const segments = data?.segments ?? [];
-  const selected = segments.find((s) => s.courseId === searchCourseId) ?? segments[0] ?? null;
+  const courseSegments = segments.filter((s) => s.scope === "course");
+  const activitySegments = segments.filter((s) => s.scope === "activity");
+  const selected =
+    (searchActivityId
+      ? activitySegments.find((s) => s.id === searchActivityId)
+      : courseSegments.find((s) => s.id === searchCourseId)) ??
+    courseSegments[0] ??
+    activitySegments[0] ??
+    null;
 
   const boardKind = useMemo(() => {
     if (!selected) return null;
@@ -87,7 +103,8 @@ function PlayHub() {
         <BookOpen className="mx-auto h-10 w-10 text-muted-foreground" />
         <h1 className="font-display text-2xl">Play is not configured yet</h1>
         <p className="text-sm text-muted-foreground">
-          An admin needs to enable play modes and attach question pools to a course in Play control.
+          An admin needs to enable play modes, attach pools to a course, or map modes to an activity
+          in Play control.
         </p>
       </div>
     );
@@ -100,14 +117,14 @@ function PlayHub() {
           <p className="text-xs uppercase tracking-wide text-muted-foreground">Play</p>
           <h1 className="font-display text-2xl">Challenge yourself</h1>
           <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-            Course-scoped games from your question pools. Pick a course, then a mode.
+            Games from your question pools. Pick a course or an activity, then a mode.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {selected && boardKind ? (
+          {selected && boardKind && selected.scope === "course" ? (
             <Link
               to="/play/leaderboard"
-              search={{ courseId: selected.courseId, kind: boardKind }}
+              search={{ courseId: selected.id, kind: boardKind }}
               className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-sm font-medium hover:bg-secondary"
             >
               <Trophy className="h-4 w-4 text-amber-500" />
@@ -121,43 +138,70 @@ function PlayHub() {
         </div>
       </header>
 
-      <section>
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Course
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {segments.map((segment) => (
-            <button
-              key={segment.courseId}
-              type="button"
-              onClick={() =>
-                navigate({ search: (prev) => ({ ...prev, courseId: segment.courseId }) })
-              }
-              className={cn(
-                "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition-colors",
-                selected?.courseId === segment.courseId
-                  ? "border-primary bg-primary/10 font-medium text-primary"
-                  : "border-border hover:bg-secondary",
-              )}
-            >
-              <GraduationCap className="h-4 w-4 shrink-0" />
-              {segment.courseName}
-              <span className="text-xs text-muted-foreground">({segment.modes.length})</span>
-            </button>
-          ))}
-        </div>
-      </section>
+      {courseSegments.length > 0 ? (
+        <section>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Course
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {courseSegments.map((segment) => (
+              <button
+                key={segment.id}
+                type="button"
+                onClick={() => navigate({ search: { courseId: segment.id } })}
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition-colors",
+                  selected?.scope === "course" && selected.id === segment.id
+                    ? "border-primary bg-primary/10 font-medium text-primary"
+                    : "border-border hover:bg-secondary",
+                )}
+              >
+                <GraduationCap className="h-4 w-4 shrink-0" />
+                {segment.name}
+                <span className="text-xs text-muted-foreground">({segment.modes.length})</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
-      {selected && boardKind ? (
+      {activitySegments.length > 0 ? (
+        <section>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Activity
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {activitySegments.map((segment) => (
+              <button
+                key={segment.id}
+                type="button"
+                onClick={() => navigate({ search: { activityId: segment.id } })}
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition-colors",
+                  selected?.scope === "activity" && selected.id === segment.id
+                    ? "border-primary bg-primary/10 font-medium text-primary"
+                    : "border-border hover:bg-secondary",
+                )}
+              >
+                <Puzzle className="h-4 w-4 shrink-0" />
+                {segment.name}
+                <span className="text-xs text-muted-foreground">({segment.modes.length})</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {selected && boardKind && selected.scope === "course" ? (
         <section className="surface-paper rounded-xl p-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="flex items-center gap-2 text-sm font-semibold">
               <Trophy className="h-4 w-4 text-amber-500" />
-              Leaderboard · {PLAY_KIND_META[boardKind].label} · {selected.courseName}
+              Leaderboard · {PLAY_KIND_META[boardKind].label} · {selected.name}
             </h2>
             <Link
               to="/play/leaderboard"
-              search={{ courseId: selected.courseId, kind: boardKind }}
+              search={{ courseId: selected.id, kind: boardKind }}
               className="text-xs font-medium text-accent underline"
             >
               Full board
@@ -166,8 +210,8 @@ function PlayHub() {
           <div className="mt-3">
             <PlayLeaderboardPanel
               kind={boardKind}
-              courseId={selected.courseId}
-              courseName={selected.courseName}
+              courseId={selected.id}
+              courseName={selected.name}
             />
           </div>
         </section>
@@ -198,7 +242,9 @@ function PlayHub() {
         </section>
       ) : null}
 
-      {(data.enabled.knockout && data.tournaments[0]) || data.enabled.escape ? (
+      {(data.enabled.knockout && data.tournaments[0]) ||
+      data.enabled.escape ||
+      data.arenas.length > 0 ? (
         <section>
           <h2 className="text-sm font-semibold">Events</h2>
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -223,6 +269,17 @@ function PlayHub() {
                 <p className="mt-1 text-xs text-muted-foreground">Bracket tournament</p>
               </Link>
             ) : null}
+            {data.arenas.map((arena) => (
+              <Link
+                key={arena.id}
+                to="/play/arena/$arenaId"
+                params={{ arenaId: arena.id }}
+                className="rounded-xl border border-border p-4 hover:bg-secondary"
+              >
+                <p className="font-medium">Live Arena · {arena.name}</p>
+                <p className="mt-1 text-xs capitalize text-muted-foreground">{arena.status}</p>
+              </Link>
+            ))}
           </div>
         </section>
       ) : null}
@@ -239,11 +296,24 @@ function SegmentPanel({
   data: NonNullable<Awaited<ReturnType<typeof getPlayHub>>>;
   startMut: {
     isPending: boolean;
-    mutate: (args: { kind: PlayKind; courseId: string }) => void;
+    mutate: (args: { kind: PlayKind; courseId?: string; poolId?: string | null }) => void;
   };
 }) {
   const daily = segment.modes.find((m) => m.kind === "daily");
   const weekly = segment.modes.find((m) => m.kind === "weekly");
+
+  function launch(kind: PlayKind) {
+    const mode = segment.modes.find((m) => m.kind === kind);
+    startMut.mutate({
+      kind,
+      ...(segment.scope === "course"
+        ? { courseId: segment.id }
+        : mode?.bindingCourseId
+          ? { courseId: mode.bindingCourseId }
+          : {}),
+      ...(mode?.poolId ? { poolId: mode.poolId } : {}),
+    });
+  }
 
   return (
     <div className="space-y-6">
@@ -252,7 +322,7 @@ function SegmentPanel({
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {segment.courseName}
+                {segment.name}
               </p>
               <h2 className="mt-1 text-lg font-semibold">
                 {daily ? PLAY_KIND_META.daily.label : PLAY_KIND_META.weekly.label}
@@ -281,7 +351,7 @@ function SegmentPanel({
                 <button
                   type="button"
                   disabled={startMut.isPending}
-                  onClick={() => startMut.mutate({ kind: "daily", courseId: segment.courseId })}
+                  onClick={() => launch("daily")}
                   className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
                 >
                   Start daily
@@ -292,7 +362,7 @@ function SegmentPanel({
               <button
                 type="button"
                 disabled={startMut.isPending || data.weekly.completed}
-                onClick={() => startMut.mutate({ kind: "weekly", courseId: segment.courseId })}
+                onClick={() => launch("weekly")}
                 className="rounded-md border border-border px-3 py-2 text-sm"
               >
                 {data.weekly.completed ? "Weekly done" : "Weekly challenge"}
@@ -312,18 +382,27 @@ function SegmentPanel({
               {modes.map((mode) => {
                 const link = LINK_MODES[mode.kind];
                 if (link) {
+                  const search =
+                    mode.kind === "arena" && segment.scope === "activity"
+                      ? { activityId: segment.id }
+                      : link.searchKey
+                        ? {
+                            [link.searchKey]:
+                              segment.scope === "course"
+                                ? segment.id
+                                : (mode.bindingCourseId ?? segment.id),
+                          }
+                        : undefined;
                   return (
                     <PlayModeCard
                       key={mode.kind}
                       kind={mode.kind}
-                      courseId={segment.courseId}
+                      courseId={segment.id}
                       questionCount={mode.questionCount}
                       durationSeconds={mode.durationSeconds}
                       lives={mode.lives}
                       to={link.to}
-                      {...(link.searchKey
-                        ? { search: { [link.searchKey]: segment.courseId } }
-                        : {})}
+                      {...(search ? { search } : {})}
                       {...(link.params ? { params: link.params } : {})}
                       footer={
                         mode.kind === "battle" ? (
@@ -337,12 +416,12 @@ function SegmentPanel({
                   <PlayModeCard
                     key={mode.kind}
                     kind={mode.kind}
-                    courseId={segment.courseId}
+                    courseId={segment.id}
                     questionCount={mode.questionCount}
                     durationSeconds={mode.durationSeconds}
                     lives={mode.lives}
                     pending={startMut.isPending}
-                    onStart={() => startMut.mutate({ kind: mode.kind, courseId: segment.courseId })}
+                    onStart={() => launch(mode.kind)}
                   />
                 );
               })}

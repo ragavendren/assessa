@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" role="img" aria-label="Sticky note wall">
+  <rect width="800" height="450" rx="28" fill="#F6EFE4"/>
+  <rect x="150" y="70" width="500" height="300" rx="16" fill="#3D342C"/>
+  <rect x="190" y="110" width="110" height="110" rx="8" fill="#F4D06F" transform="rotate(-6 245 165)"/>
+  <rect x="330" y="120" width="110" height="110" rx="8" fill="#E8C39E" transform="rotate(4 385 175)"/>
+  <rect x="470" y="108" width="110" height="110" rx="8" fill="#C45C26" transform="rotate(-3 525 163)"/>
+  <rect x="250" y="230" width="110" height="110" rx="8" fill="#FFF8EE" transform="rotate(5 305 285)"/>
+  <rect x="400" y="236" width="110" height="110" rx="8" fill="#F4D06F" transform="rotate(-4 455 291)"/>
+  <text x="400" y="430" text-anchor="middle" font-family="Georgia, serif" font-size="22" fill="#2A2420">Idea parking lot</text>
+</svg>

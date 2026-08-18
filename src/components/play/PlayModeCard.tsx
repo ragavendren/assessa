@@ -5,6 +5,7 @@ import {
   BookOpen,
   Calendar,
   Heart,
+  LandPlot,
   Layers,
   Route,
   Swords,
@@ -28,6 +29,7 @@ const MODE_ICONS: Partial<Record<PlayKind, LucideIcon>> = {
   rapid: Zap,
   battle: Swords,
   team: Users,
+  arena: LandPlot,
 };
 
 export function playModeIcon(kind: PlayKind) {

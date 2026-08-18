@@ -38,6 +38,7 @@ type PoolQ = {
   id: string;
   pool_id: string;
   prompt: string;
+  image_url?: string | null;
   options: unknown;
   correct_index: number;
   correct_indexes: number[] | null;
@@ -66,6 +67,7 @@ function publicQuestion(q: PoolQ) {
   return {
     id: q.id,
     prompt: q.prompt,
+    imageUrl: q.image_url ?? null,
     options: Array.isArray(q.options) ? (q.options as string[]) : [],
     topic: q.topic,
     subtopic: q.subtopic,
@@ -82,7 +84,7 @@ async function loadPoolQuestions(
   let query = db
     .from("pool_questions")
     .select(
-      "id, pool_id, prompt, options, correct_index, correct_indexes, multi_select, explanation, topic, subtopic, difficulty, status",
+      "id, pool_id, prompt, image_url, options, correct_index, correct_indexes, multi_select, explanation, topic, subtopic, difficulty, status",
     )
     .eq("status", "active");
   if (poolId) query = query.eq("pool_id", poolId);
@@ -141,8 +143,12 @@ type ResolvedChallenge = {
   allowedTopics: string[] | null;
 };
 
-function rulesJson(rules: PlayRules, allowedTopics: string[] | null): Json {
-  return serializePlayRules(rules, allowedTopics) as Json;
+function rulesJson(
+  rules: PlayRules,
+  allowedTopics: string[] | null,
+  extras?: StoredPlayRules,
+): Json {
+  return serializePlayRules(rules, allowedTopics, extras) as Json;
 }
 
 async function playMenuEnabled(): Promise<boolean> {
@@ -187,7 +193,11 @@ function resolveGlobalChallenge(
     const bound = globalRows.find((row) => row.course_id === courseId);
     if (bound) return bound.status === "active" ? bound : null;
   }
-  return globalRows.find((row) => !row.course_id && row.status === "active") ?? null;
+  return (
+    globalRows.find((row) => !row.course_id && row.status === "active") ??
+    globalRows.find((row) => row.status === "active") ??
+    null
+  );
 }
 
 async function ensureChallenge(args: {
@@ -310,7 +320,7 @@ async function loadQuestionsByIds(ids: string[]): Promise<PoolQ[]> {
   const { data, error } = await db
     .from("pool_questions")
     .select(
-      "id, pool_id, prompt, options, correct_index, correct_indexes, multi_select, explanation, topic, subtopic, difficulty, status",
+      "id, pool_id, prompt, image_url, options, correct_index, correct_indexes, multi_select, explanation, topic, subtopic, difficulty, status",
     )
     .in("id", ids);
   if (error) throw new Error(error.message);
@@ -485,11 +495,13 @@ async function buildPlaySegments(
     kind: string;
     status: string;
     course_id: string | null;
+    activity_id: string | null;
     pool_id: string | null;
     topic: string | null;
     rules: Json | null;
   }>,
   inventory: CatalogPool[],
+  activities: Array<{ id: string; name: string }>,
 ): Promise<PlaySegment[]> {
   const enabled = enabledKinds(challengeRows);
   const globals = challengeRows.filter((row) => !row.topic);
@@ -513,7 +525,9 @@ async function buildPlaySegments(
     for (const kind of PLAY_KINDS) {
       if (kind === "knockout" || kind === "escape") continue;
       const bound = globals.find((row) => row.kind === kind && row.course_id === courseId);
-      const fallback = globals.find((row) => row.kind === kind && !row.course_id);
+      const fallback = globals.find(
+        (row) => row.kind === kind && !row.course_id && !row.activity_id,
+      );
       const row = bound ?? fallback;
       const kindOn = enabled[kind];
       const active = Boolean(row && row.status === "active" && kindOn);
@@ -528,7 +542,9 @@ async function buildPlaySegments(
       const hasPool =
         kind === "flash"
           ? filtered.some((pool) => pool.questionCount > 0)
-          : filtered.some((pool) => pool.questionCount >= rules.questionCount);
+          : kind === "arena"
+            ? filtered.some((pool) => pool.questionCount > 0)
+            : filtered.some((pool) => pool.questionCount >= rules.questionCount);
       if (!active || !hasPool) continue;
       modes.push({
         kind,
@@ -536,6 +552,7 @@ async function buildPlaySegments(
         label: PLAY_KIND_META[kind].label,
         blurb: PLAY_KIND_META[kind].blurb,
         poolId: row?.pool_id ?? filtered[0]?.id ?? null,
+        bindingCourseId: row?.course_id ?? courseId,
         questionCount: rules.questionCount,
         durationSeconds: rules.durationSeconds,
         lives: rules.lives,
@@ -543,15 +560,66 @@ async function buildPlaySegments(
       });
     }
     if (modes.length === 0) continue;
+    const name = courseNameById.get(courseId) ?? pools[0]?.courseName ?? "Course";
     segments.push({
+      scope: "course",
+      id: courseId,
+      name,
       courseId,
-      courseName: courseNameById.get(courseId) ?? pools[0]?.courseName ?? "Course",
+      courseName: name,
       poolCount: pools.length,
       questionCount: pools.reduce((sum, pool) => sum + pool.questionCount, 0),
       modes,
     });
   }
-  return segments.sort((a, b) => a.courseName.localeCompare(b.courseName));
+
+  for (const activity of activities) {
+    const modes: PlaySegmentMode[] = [];
+    for (const kind of PLAY_KINDS) {
+      if (kind === "knockout" || kind === "escape") continue;
+      const row = globals.find((r) => r.kind === kind && r.activity_id === activity.id);
+      if (!row || row.status !== "active" || !enabled[kind]) continue;
+      const stored = parseStoredRules(row.rules);
+      const rules = mergePlayRules(kind, stored ?? undefined);
+      const filtered = filterCatalog(inventory, {
+        poolId: row.pool_id ?? null,
+        courseId: row.course_id ?? null,
+        allowedTopics: allowedTopicsOf(stored),
+      });
+      const hasPool = filtered.some((pool) => pool.questionCount > 0);
+      if (!hasPool && kind !== "arena") continue;
+      modes.push({
+        kind,
+        enabled: true,
+        label: PLAY_KIND_META[kind].label,
+        blurb: PLAY_KIND_META[kind].blurb,
+        poolId: row.pool_id ?? filtered[0]?.id ?? null,
+        bindingCourseId: row.course_id ?? null,
+        questionCount: rules.questionCount,
+        durationSeconds: rules.durationSeconds,
+        lives: rules.lives,
+        hasPool,
+      });
+    }
+    if (modes.length === 0) continue;
+    const poolId = modes.find((m) => m.poolId)?.poolId;
+    const pools = poolId ? inventory.filter((p) => p.id === poolId) : [];
+    segments.push({
+      scope: "activity",
+      id: activity.id,
+      name: activity.name,
+      courseId: activity.id,
+      courseName: activity.name,
+      poolCount: pools.length,
+      questionCount: pools.reduce((sum, pool) => sum + pool.questionCount, 0),
+      modes,
+    });
+  }
+
+  return segments.sort((a, b) => {
+    if (a.scope !== b.scope) return a.scope === "course" ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
 }
 
 export async function listPlayHub(userId: string) {
@@ -568,9 +636,11 @@ export async function listPlayHub(userId: string) {
     { data: matches },
     { data: scenarios },
     { data: tournaments },
+    { data: activities },
+    { data: arenas },
     menuFlag,
   ] = await Promise.all([
-    db.from("challenges").select("id, kind, status, course_id, pool_id, topic, rules"),
+    db.from("challenges").select("id, kind, status, course_id, activity_id, pool_id, topic, rules"),
     db
       .from("play_sessions")
       .select("id, score, status, started_at")
@@ -608,6 +678,13 @@ export async function listPlayHub(userId: string) {
       .limit(8),
     db.from("escape_scenarios").select("id, name, intro, status").eq("status", "active"),
     db.from("play_tournaments").select("id, name, size, status").neq("status", "complete").limit(8),
+    db.from("play_activities").select("id, name").eq("status", "active").order("name"),
+    db
+      .from("play_arenas")
+      .select("id, name, activity_id, status")
+      .in("status", ["lobby", "question", "locked", "revealed"])
+      .order("created_at", { ascending: false })
+      .limit(12),
     playMenuEnabled(),
   ]);
 
@@ -615,7 +692,9 @@ export async function listPlayHub(userId: string) {
   const enabled = menuEnabled
     ? enabledKinds(challengeRows ?? [])
     : (Object.fromEntries(PLAY_KINDS.map((kind) => [kind, false])) as Record<PlayKind, boolean>);
-  const segments = menuEnabled ? await buildPlaySegments(challengeRows ?? [], inventory) : [];
+  const segments = menuEnabled
+    ? await buildPlaySegments(challengeRows ?? [], inventory, activities ?? [])
+    : [];
   const weekInstanceIds = new Set((weekInstances ?? []).map((row) => row.id));
   const weeklySubmitted = (weeklyDone ?? []).filter(
     (row) =>
@@ -647,6 +726,7 @@ export async function listPlayHub(userId: string) {
     matches: enabled.battle ? (matches ?? []) : [],
     scenarios: enabled.escape ? (scenarios ?? []) : [],
     tournaments: enabled.knockout ? (tournaments ?? []) : [],
+    arenas: enabled.arena ? (arenas ?? []) : [],
     segments,
     menuEnabled,
   };
@@ -780,6 +860,9 @@ export async function startPlaySession(
 ) {
   await requirePlayMenu();
   const kind = args.kind;
+  if (kind === "arena") {
+    throw new Error("Join Live Arena from Play — it is a hosted team event.");
+  }
   const challenge = await ensureChallenge({
     kind,
     ...(args.topic != null ? { topic: args.topic } : {}),
@@ -1624,16 +1707,24 @@ export async function adminListPlay(userId: string) {
     { data: challengeRows },
     { data: sessionRows },
     { data: courses },
+    { data: activities },
     inventory,
     scenarios,
     tournaments,
+    { data: arenas },
   ] = await Promise.all([
     db.from("challenges").select("*").order("kind"),
     db.from("play_sessions").select("kind").gte("started_at", since),
     db.from("courses").select("id, name").eq("status", "active").order("name"),
+    db.from("play_activities").select("id, name, status").order("name"),
     loadCatalogInventory(),
     listEscapeScenarios({ all: true }),
     db.from("play_tournaments").select("*").order("created_at", { ascending: false }),
+    db
+      .from("play_arenas")
+      .select("id, name, activity_id, status, segment_count, questions_per_segment, created_at")
+      .order("created_at", { ascending: false })
+      .limit(30),
   ]);
   const sessionCounts = new Map<string, number>();
   for (const row of sessionRows ?? []) {
@@ -1650,11 +1741,16 @@ export async function adminListPlay(userId: string) {
       kind,
       name: row?.name ?? PLAY_KIND_META[kind].label,
       courseId: row?.course_id ?? null,
+      activityId: row?.activity_id ?? null,
       poolId: row?.pool_id ?? null,
       topic: row?.topic ?? null,
       status: (row?.status ?? "active") as "active" | "inactive",
       rules,
       allowedTopics: allowedTopicsOf(stored),
+      segmentCount: stored?.segmentCount ?? (kind === "arena" ? 3 : null),
+      questionsPerSegment: stored?.questionsPerSegment ?? (kind === "arena" ? 4 : null),
+      correctMarks: stored?.correctMarks ?? (kind === "arena" ? 2 : null),
+      wrongMarks: stored?.wrongMarks ?? (kind === "arena" ? 1 : null),
       sessions7d: sessionCounts.get(kind) ?? 0,
     };
   });
@@ -1662,9 +1758,68 @@ export async function adminListPlay(userId: string) {
     menuEnabled: await playMenuEnabled(),
     challenges,
     courses: courses ?? [],
+    activities: activities ?? [],
     pools: inventory,
     scenarios,
     tournaments: tournaments.data ?? [],
+    arenas: arenas ?? [],
+  };
+}
+
+async function notifyPlayAudience(payload: {
+  kind: string;
+  title: string;
+  body: string;
+  icon: string;
+}) {
+  try {
+    const { data: people } = await db.from("profiles").select("id");
+    await notifyMany(
+      (people ?? []).map((row) => row.id),
+      payload,
+    );
+  } catch (error) {
+    console.error("[notifyPlayAudience] failed:", error);
+  }
+}
+
+function playKindNotice(kind: PlayKind) {
+  const meta = PLAY_KIND_META[kind];
+  const icons: Record<PlayKind, string> = {
+    topic: "🎯",
+    daily: "📅",
+    weekly: "📆",
+    speed: "⚡",
+    survival: "❤️",
+    marathon: "🏃",
+    flash: "🃏",
+    rapid: "🔥",
+    battle: "⚔️",
+    team: "👥",
+    knockout: "🏆",
+    escape: "🚪",
+    arena: "🏟️",
+  };
+  const kinds: Record<PlayKind, string> = {
+    topic: "play_topics",
+    daily: "play_mode",
+    weekly: "play_mode",
+    speed: "play_mode",
+    survival: "play_mode",
+    marathon: "play_mode",
+    flash: "play_flash",
+    rapid: "play_mode",
+    battle: "play_battle",
+    team: "play_team",
+    knockout: "play_tournament",
+    escape: "play_escape",
+    arena: "play_arena",
+  };
+  return {
+    kind: kinds[kind],
+    title: `${meta.label} is on`,
+    body: `${meta.blurb} Open Play to join.`,
+    icon: icons[kind],
   };
 }
 
@@ -1676,6 +1831,7 @@ export async function adminUpsertChallenge(
     name: string;
     status: "active" | "inactive";
     courseId: string | null;
+    activityId: string | null;
     poolId: string | null;
     allowedTopics: string[] | null;
     rules: StoredPlayRules;
@@ -1683,11 +1839,23 @@ export async function adminUpsertChallenge(
 ) {
   await requireAdmin(userId);
   await bootstrapPlayKinds();
+  const previous = payload.id
+    ? (await db.from("challenges").select("status").eq("id", payload.id).maybeSingle()).data?.status
+    : (
+        await db
+          .from("challenges")
+          .select("status")
+          .eq("kind", payload.kind)
+          .is("topic", null)
+          .limit(1)
+          .maybeSingle()
+      ).data?.status;
   const rules = mergePlayRules(payload.kind, payload.rules);
-  const stored = rulesJson(rules, payload.allowedTopics);
+  const stored = rulesJson(rules, payload.allowedTopics, payload.rules);
   const patch = {
     name: payload.name,
     course_id: payload.courseId,
+    activity_id: payload.activityId,
     pool_id: payload.poolId,
     topic: null as string | null,
     rules: stored,
@@ -1701,6 +1869,9 @@ export async function adminUpsertChallenge(
       .eq("id", payload.id)
       .eq("kind", payload.kind);
     if (error) throw new Error(error.message);
+    if (payload.status === "active" && previous !== "active") {
+      await notifyPlayAudience(playKindNotice(payload.kind));
+    }
     return { id: payload.id };
   }
   const { data: existing } = await db
@@ -1713,6 +1884,9 @@ export async function adminUpsertChallenge(
   if (existing) {
     const { error } = await db.from("challenges").update(patch).eq("id", existing.id);
     if (error) throw new Error(error.message);
+    if (payload.status === "active" && previous !== "active") {
+      await notifyPlayAudience(playKindNotice(payload.kind));
+    }
     return { id: existing.id };
   }
   const { data, error } = await db
@@ -1721,6 +1895,9 @@ export async function adminUpsertChallenge(
     .select("id")
     .single();
   if (error) throw new Error(error.message);
+  if (payload.status === "active" && previous !== "active") {
+    await notifyPlayAudience(playKindNotice(payload.kind));
+  }
   return { id: data.id };
 }
 
@@ -1731,12 +1908,21 @@ export async function adminSetKindStatus(
 ) {
   await requireAdmin(userId);
   await bootstrapPlayKinds();
+  const { data: current } = await db
+    .from("challenges")
+    .select("status")
+    .eq("kind", kind)
+    .is("topic", null);
+  const wasActive = (current ?? []).some((row) => row.status === "active");
   const { error } = await db
     .from("challenges")
     .update({ status, updated_at: new Date().toISOString() })
     .eq("kind", kind)
     .is("topic", null);
   if (error) throw new Error(error.message);
+  if (status === "active" && !wasActive) {
+    await notifyPlayAudience(playKindNotice(kind));
+  }
   return { ok: true as const };
 }
 
@@ -1750,16 +1936,12 @@ export async function adminSetPlayMenu(userId: string, menuEnabled: boolean) {
   });
   if (error) throw new Error(error.message);
   if (menuEnabled && !wasOn) {
-    const { data: people } = await db.from("profiles").select("id");
-    await notifyMany(
-      (people ?? []).map((row) => row.id),
-      {
-        kind: "play_launched",
-        title: "Play is live",
-        body: "Daily challenges, flash cards, survival and more are ready. Open Play to start.",
-        icon: "🎮",
-      },
-    );
+    await notifyPlayAudience({
+      kind: "play_launched",
+      title: "Play is live",
+      body: "Daily challenges, flash cards, survival and more are ready. Open Play to start.",
+      icon: "🎮",
+    });
   }
   return { menuEnabled };
 }
@@ -1770,11 +1952,24 @@ export async function adminSetEscapeStatus(
   status: "active" | "inactive",
 ) {
   await requireAdmin(userId);
+  const { data: previous } = await db
+    .from("escape_scenarios")
+    .select("status, name")
+    .eq("id", scenarioId)
+    .maybeSingle();
   const { error } = await db
     .from("escape_scenarios")
     .update({ status, updated_at: new Date().toISOString() })
     .eq("id", scenarioId);
   if (error) throw new Error(error.message);
+  if (status === "active" && previous?.status !== "active") {
+    await notifyPlayAudience({
+      kind: "play_escape",
+      title: `${previous?.name ?? "Escape room"} is live`,
+      body: "A new escape scene is ready. Open Play to start.",
+      icon: "🚪",
+    });
+  }
   return { ok: true as const };
 }
 
@@ -1795,7 +1990,14 @@ export async function adminSaveEscape(
   const status = payload.status ?? "active";
   const courseId = payload.courseId ?? null;
   const poolId = payload.poolId ?? null;
+  let previousStatus: string | null = null;
   if (id) {
+    const { data: existing } = await db
+      .from("escape_scenarios")
+      .select("status")
+      .eq("id", id)
+      .maybeSingle();
+    previousStatus = existing?.status ?? null;
     await db
       .from("escape_scenarios")
       .update({
@@ -1835,6 +2037,14 @@ export async function adminSaveEscape(
       })),
     );
   }
+  if (status === "active" && previousStatus !== "active") {
+    await notifyPlayAudience({
+      kind: "play_escape",
+      title: `${payload.name} is live`,
+      body: "A new escape scene is ready. Open Play to start.",
+      icon: "🚪",
+    });
+  }
   return { id };
 }
 
@@ -1855,6 +2065,12 @@ export async function adminCreateTournament(
     .select("*")
     .single();
   if (error) throw new Error(error.message);
+  await notifyPlayAudience({
+    kind: "play_tournament",
+    title: `${payload.name} is open`,
+    body: `A ${payload.size}-player knockout is open. Join from Play before it starts.`,
+    icon: "🏆",
+  });
   return data;
 }
 
@@ -1917,6 +2133,12 @@ export async function adminStartTournament(userId: string, tournamentId: string)
     }
   }
   await db.from("play_tournaments").update({ status: "active" }).eq("id", tournamentId);
+  await notifyPlayAudience({
+    kind: "play_tournament",
+    title: `${t.name} has started`,
+    body: "The knockout bracket is live. Open Play to follow the matches.",
+    icon: "🏆",
+  });
   return { ok: true as const };
 }
 

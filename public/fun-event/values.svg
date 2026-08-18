@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" role="img" aria-label="Team value cards">
+  <rect width="800" height="450" rx="28" fill="#F6EFE4"/>
+  <rect x="80" y="120" width="150" height="190" rx="18" fill="#FFF8EE" stroke="#2A2420" stroke-width="5"/>
+  <text x="155" y="230" text-anchor="middle" font-family="Georgia, serif" font-size="28" fill="#2A2420">Kind</text>
+  <rect x="250" y="100" width="150" height="210" rx="18" fill="#C45C26"/>
+  <text x="325" y="220" text-anchor="middle" font-family="Georgia, serif" font-size="26" fill="#FFF8EE">Ship</text>
+  <rect x="420" y="120" width="150" height="190" rx="18" fill="#F4D06F" stroke="#2A2420" stroke-width="5"/>
+  <text x="495" y="230" text-anchor="middle" font-family="Georgia, serif" font-size="24" fill="#2A2420">Learn</text>
+  <rect x="590" y="110" width="130" height="200" rx="18" fill="#3D342C"/>
+  <text x="655" y="225" text-anchor="middle" font-family="Georgia, serif" font-size="22" fill="#FFF8EE">Ego</text>
+  <text x="400" y="430" text-anchor="middle" font-family="Georgia, serif" font-size="22" fill="#2A2420">What we keep</text>
+</svg>

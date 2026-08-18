@@ -1,15 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
-import {
-  BarChart3,
-  BookOpen,
-  Building2,
-  ClipboardList,
-  Gamepad2,
-  LayoutDashboard,
-  Sparkles,
-  Users,
-} from "lucide-react";
+import { BookOpen, LayoutDashboard, Sparkles, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 type NavItem = {
@@ -27,10 +18,22 @@ type NavGroup = {
 const ADMIN_NAV_GROUPS: NavGroup[] = [
   {
     items: [
-      { to: "/admin", label: "Overview", icon: LayoutDashboard, match: (p) => p === "/admin" },
-      { to: "/admin/users", label: "Users", icon: Users },
-      { to: "/admin/organizations", label: "Organisations", icon: Building2 },
-      { to: "/admin/performance", label: "Performance", icon: BarChart3 },
+      {
+        to: "/admin",
+        label: "Overview",
+        icon: LayoutDashboard,
+        match: (p) =>
+          p === "/admin" ||
+          p === "/admin/" ||
+          p.startsWith("/admin/exams") ||
+          p.startsWith("/admin/performance"),
+      },
+      {
+        to: "/admin/users",
+        label: "User management",
+        icon: Users,
+        match: (p) => p.startsWith("/admin/users") || p.startsWith("/admin/organizations"),
+      },
     ],
   },
   {
@@ -51,13 +54,11 @@ const ADMIN_NAV_GROUPS: NavGroup[] = [
   {
     items: [
       {
-        to: "/admin/exams/new",
-        label: "New assessment",
-        icon: ClipboardList,
-        match: (p) => p.startsWith("/admin/exams"),
+        to: "/admin/gamification",
+        label: "Engagement",
+        icon: Sparkles,
+        match: (p) => p.startsWith("/admin/gamification") || p.startsWith("/admin/play"),
       },
-      { to: "/admin/gamification", label: "Gamification", icon: Sparkles },
-      { to: "/admin/play", label: "Play modes", icon: Gamepad2 },
     ],
   },
 ];

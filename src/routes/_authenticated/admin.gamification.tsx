@@ -8,6 +8,7 @@ import {
   ResultCount,
   StatusPill,
 } from "@/components/admin/AdminPageUi";
+import { EngagementNav } from "@/components/admin/EngagementNav";
 import { PageLoader, StatTile } from "@/components/platform";
 import { BADGE_ICON_CATALOG, resolveBadgeIcon } from "@/lib/badge-icons";
 import { listBadgeConfig, updateXpRule, upsertBadge } from "@/lib/admin.functions";
@@ -138,6 +139,7 @@ function GamificationAdmin() {
     return (
       <div>
         <AdminNav />
+        <EngagementNav />
         <PageLoader />
       </div>
     );
@@ -146,6 +148,7 @@ function GamificationAdmin() {
     return (
       <div>
         <AdminNav />
+        <EngagementNav />
         <AdminAccessDenied />
       </div>
     );
@@ -182,8 +185,9 @@ function GamificationAdmin() {
   return (
     <div className="space-y-5">
       <AdminNav />
+      <EngagementNav />
       <AdminPageHeader
-        eyebrow="Configure"
+        eyebrow="Engagement"
         title="Gamification"
         summary="Tune XP rules and badges that participants earn across assessments. Changes apply to new awards."
         help={{

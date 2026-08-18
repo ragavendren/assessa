@@ -47,4 +47,15 @@ describe("parseQuestionsCsv", () => {
     assert.equal(questions[0]?.multiSelect, true);
     assert.deepEqual(questions[0]?.correctIndexes, [0, 2]);
   });
+
+  it("reads optional image filename or URL from the image column", () => {
+    const csv = [
+      "prompt,image,option_a,option_b,option_c,option_d,option_e,option_f,correct_answers,multi_select,tag,explanation",
+      "What is shown?,pizza.svg,Taco,Pizza,Salad,Soup,,,B,false,Snacks,Friday classic",
+    ].join("\n");
+    const { questions, errors } = parseQuestionsCsv(csv);
+    assert.deepEqual(errors, []);
+    assert.equal(questions[0]?.imageRef, "pizza.svg");
+    assert.deepEqual(questions[0]?.correctIndexes, [1]);
+  });
 });

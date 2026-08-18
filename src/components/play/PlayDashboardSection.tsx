@@ -21,6 +21,7 @@ const LINK_MODES: Partial<Record<PlayKind, { to: string; search?: boolean }>> = 
   battle: { to: "/play/battle" },
   team: { to: "/play/team" },
   escape: { to: "/play/escape" },
+  arena: { to: "/play/arena" },
 };
 
 const REQUIRED_KINDS: PlayKind[] = ["daily", "weekly"];
@@ -32,6 +33,7 @@ const POSSIBLE_KINDS: PlayKind[] = [
   "rapid",
   "marathon",
   "battle",
+  "arena",
 ];
 
 export function PlayDashboardSection({
@@ -45,12 +47,16 @@ export function PlayDashboardSection({
 }) {
   if (hub.menuEnabled === false) return null;
 
-  const segment = hub.segments[0] ?? null;
-  const courseId = segment?.courseId ?? "";
+  const segment = hub.segments.find((s) => s.scope === "course") ?? hub.segments[0] ?? null;
   const available = new Map<PlayKind, { courseId: string; mode: PlaySegment["modes"][number] }>();
   for (const item of hub.segments) {
     for (const mode of item.modes) {
-      if (!available.has(mode.kind)) available.set(mode.kind, { courseId: item.courseId, mode });
+      if (!available.has(mode.kind)) {
+        available.set(mode.kind, {
+          courseId: item.scope === "course" ? item.id : (mode.bindingCourseId ?? item.id),
+          mode,
+        });
+      }
     }
   }
 
@@ -87,7 +93,14 @@ export function PlayDashboardSection({
           </div>
           <Link
             to="/play"
-            {...(courseId ? { search: { courseId } } : {})}
+            {...(segment
+              ? {
+                  search:
+                    segment.scope === "activity"
+                      ? { activityId: segment.id }
+                      : { courseId: segment.id },
+                }
+              : {})}
             className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
           >
             Open Play
@@ -224,7 +237,7 @@ export function PlayDashboardSection({
         </div>
       ) : null}
 
-      {segment && boardKind ? (
+      {segment && boardKind && segment.scope === "course" ? (
         <div className="surface-paper rounded-xl p-4">
           <div className="mb-2 flex items-center justify-between gap-2">
             <p className="text-sm font-semibold">Play leaderboard</p>

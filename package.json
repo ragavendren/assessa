@@ -19,6 +19,7 @@
     "db:migrate": "node scripts/db-migrate.mjs",
     "db:migrate:new": "node scripts/db-migrate-new.mjs",
     "db:seed": "node scripts/db-seed.mjs",
+    "db:seed:fun-event": "node scripts/seed-fun-event.mjs",
     "db:setup": "npm run db:migrate && npm run db:seed",
     "db:sync-auth-emails": "node scripts/sync-supabase-auth-emails.mjs",
     "db:inspect-auth-mail": "node scripts/inspect-auth-mail.mjs",
@@ -45,6 +46,7 @@
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.2.1",
     "tw-animate-css": "^1.3.4",
+    "uqr": "^0.1.3",
     "zod": "^3.24.2"
   },
   "devDependencies": {

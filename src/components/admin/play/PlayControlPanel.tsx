@@ -1,8 +1,13 @@
 import { AdminEmpty, AdminPanel, ResultCount, StatusPill } from "@/components/admin/AdminPageUi";
+import { ArenaShareCard } from "@/components/play/ArenaShareCard";
 import { StatTile } from "@/components/platform";
 import {
+  createLiveArena,
   createPlayTournament,
+  deleteLiveArena,
+  deletePlayActivity,
   saveEscapeScenario,
+  savePlayActivity,
   savePlayChallenge,
   setEscapeStatus,
   setPlayKindStatus,
@@ -12,6 +17,7 @@ import {
 import { PLAY_KIND_GROUPS, PLAY_KIND_META, type PlayKind, type PlayRules } from "@/lib/play.math";
 import { cn } from "@/lib/utils";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -22,11 +28,16 @@ export type AdminPlayChallenge = {
   kind: PlayKind;
   name: string;
   courseId: string | null;
+  activityId: string | null;
   poolId: string | null;
   topic: string | null;
   status: "active" | "inactive";
   rules: PlayRules;
   allowedTopics: string[] | null;
+  segmentCount: number | null;
+  questionsPerSegment: number | null;
+  correctMarks: number | null;
+  wrongMarks: number | null;
   sessions7d: number;
 };
 
@@ -43,6 +54,7 @@ export type AdminPlayData = {
   menuEnabled: boolean;
   challenges: AdminPlayChallenge[];
   courses: Array<{ id: string; name: string }>;
+  activities: Array<{ id: string; name: string; status: string }>;
   pools: AdminPlayPool[];
   scenarios: Array<{
     id: string;
@@ -66,6 +78,15 @@ export type AdminPlayData = {
     status: string;
     pool_id: string | null;
   }>;
+  arenas: Array<{
+    id: string;
+    name: string;
+    activity_id: string | null;
+    status: string;
+    segment_count: number;
+    questions_per_segment: number;
+    created_at: string;
+  }>;
 };
 
 type Panel = "modes" | "escape" | "events";
@@ -76,6 +97,7 @@ type ChallengeSavePayload = {
   name: string;
   status: "active" | "inactive";
   courseId: string | null;
+  activityId: string | null;
   poolId: string | null;
   allowedTopics: string[] | null;
   rules: {
@@ -88,6 +110,10 @@ type ChallengeSavePayload = {
     xpPoints: number;
     reward: boolean;
     perItem: boolean;
+    segmentCount?: number;
+    questionsPerSegment?: number;
+    correctMarks?: number;
+    wrongMarks?: number;
   };
 };
 
@@ -95,6 +121,7 @@ type ChallengeForm = {
   name: string;
   status: "active" | "inactive";
   courseId: string;
+  activityId: string;
   poolId: string;
   allTopics: boolean;
   allowedTopics: string[];
@@ -107,6 +134,10 @@ type ChallengeForm = {
   xpPoints: number;
   reward: boolean;
   perItem: boolean;
+  segmentCount: number;
+  questionsPerSegment: number;
+  correctMarks: number;
+  wrongMarks: number;
 };
 
 type SceneDraft = { title: string; body: string; topic: string; questionCount: number };
@@ -196,7 +227,7 @@ export function PlayControlPanel({ data }: { data: AdminPlayData }) {
           [
             ["modes", "Modes"],
             ["escape", "Escape rooms"],
-            ["events", "Tournaments"],
+            ["events", "Events"],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -224,12 +255,12 @@ export function PlayControlPanel({ data }: { data: AdminPlayData }) {
         <StatTile
           label="Question pools"
           value={data.pools.length}
-          hint={`${data.courses.length} courses`}
+          hint={`${data.courses.length} courses · ${data.activities.length} activities`}
         />
         <StatTile label="Plays (7 days)" value={sessions7d} />
         <StatTile
           label="Events"
-          value={data.tournaments.length}
+          value={data.tournaments.length + data.arenas.length}
           hint={`${data.scenarios.filter((s) => s.status === "active").length} escape rooms live`}
         />
       </div>
@@ -282,7 +313,7 @@ function ModesPanel({
         <AdminPanel
           key={group.label}
           title={group.label}
-          description="Turn a mode on for participants, then bind it to a course, pool, and topic mix."
+          description="Turn a mode on for participants, then bind it to a course, an activity, a pool, and a topic mix."
           action={
             <ResultCount shown={group.kinds.length} total={group.kinds.length} noun="modes" />
           }
@@ -372,9 +403,11 @@ function ModeEditor({
     <AdminPanel
       title={`Configure · ${PLAY_KIND_META[challenge.kind].label}`}
       description={
-        challenge.kind === "flash"
-          ? "Participants pick a course, then a topic, then start the deck. Bind a course (or leave Any) and optionally limit topics."
-          : "Participants only see this mode when it is On. Course, pool, and topics control which bank questions are drawn."
+        challenge.kind === "arena"
+          ? "Map Live Arena to an Activity so it shows in that Play hub segment. Host each live event from Events."
+          : challenge.kind === "flash"
+            ? "Participants pick a course, then a topic, then start the deck. Bind a course (or leave Any) and optionally limit topics."
+            : "Participants only see this mode when it is On. Course and Activity control which Play hub segment it appears under; pool and topics control the bank."
       }
       action={
         <div className="flex gap-2">
@@ -395,10 +428,14 @@ function ModeEditor({
                 name: form.name,
                 status: form.status,
                 courseId: form.courseId || null,
+                activityId: form.activityId || null,
                 poolId: form.poolId || null,
                 allowedTopics: form.allTopics ? null : form.allowedTopics,
                 rules: {
-                  questionCount: form.questionCount,
+                  questionCount:
+                    challenge.kind === "arena"
+                      ? form.segmentCount * form.questionsPerSegment
+                      : form.questionCount,
                   durationSeconds: form.durationMinutes > 0 ? form.durationMinutes * 60 : null,
                   perQuestionSeconds: form.perQuestionSeconds > 0 ? form.perQuestionSeconds : null,
                   lives: form.lives > 0 ? form.lives : null,
@@ -407,6 +444,14 @@ function ModeEditor({
                   xpPoints: form.xpPoints,
                   reward: form.reward,
                   perItem: form.perItem,
+                  ...(challenge.kind === "arena"
+                    ? {
+                        segmentCount: form.segmentCount,
+                        questionsPerSegment: form.questionsPerSegment,
+                        correctMarks: form.correctMarks,
+                        wrongMarks: form.wrongMarks,
+                      }
+                    : {}),
                 },
               })
             }
@@ -454,6 +499,22 @@ function ModeEditor({
           </select>
         </label>
         <label className="block text-xs">
+          Activity
+          <select
+            className="field mt-1 h-9 w-full text-sm"
+            value={form.activityId}
+            onChange={(e) => patch({ activityId: e.target.value })}
+          >
+            <option value="">None (course hub only)</option>
+            {data.activities.map((activity) => (
+              <option key={activity.id} value={activity.id}>
+                {activity.name}
+                {activity.status !== "active" ? " (hidden)" : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block text-xs">
           Question pool
           <select
             className="field mt-1 h-9 w-full text-sm"
@@ -475,6 +536,38 @@ function ModeEditor({
           max={100}
           onChange={(questionCount) => patch({ questionCount })}
         />
+        {challenge.kind === "arena" ? (
+          <>
+            <NumField
+              label="Segments"
+              value={form.segmentCount}
+              min={1}
+              max={12}
+              onChange={(segmentCount) => patch({ segmentCount })}
+            />
+            <NumField
+              label="Questions per segment"
+              value={form.questionsPerSegment}
+              min={1}
+              max={20}
+              onChange={(questionsPerSegment) => patch({ questionsPerSegment })}
+            />
+            <NumField
+              label="Marks for a correct answer"
+              value={form.correctMarks}
+              min={0}
+              max={20}
+              onChange={(correctMarks) => patch({ correctMarks })}
+            />
+            <NumField
+              label="Marks deducted for a wrong answer"
+              value={form.wrongMarks}
+              min={0}
+              max={20}
+              onChange={(wrongMarks) => patch({ wrongMarks })}
+            />
+          </>
+        ) : null}
         <NumField
           label="Session timer (minutes, 0 = none)"
           value={form.durationMinutes}
@@ -831,10 +924,25 @@ function TournamentPanel({ data }: { data: AdminPlayData }) {
   const queryClient = useQueryClient();
   const createT = useServerFn(createPlayTournament);
   const startT = useServerFn(startPlayTournament);
+  const saveActivity = useServerFn(savePlayActivity);
+  const removeActivity = useServerFn(deletePlayActivity);
+  const createArena = useServerFn(createLiveArena);
+  const removeArena = useServerFn(deleteLiveArena);
   const onDone = () => void queryClient.invalidateQueries({ queryKey: ["admin-play"] });
   const [tName, setTName] = useState("Company Cup");
   const [size, setSize] = useState<4 | 8 | 16 | 32>(8);
   const [poolId, setPoolId] = useState(data.pools[0]?.id ?? "");
+  const [activityName, setActivityName] = useState("");
+  const [arenaName, setArenaName] = useState("Live Arena");
+  const [arenaActivityId, setArenaActivityId] = useState(data.activities[0]?.id ?? "");
+  const [arenaPoolId, setArenaPoolId] = useState(data.pools[0]?.id ?? "");
+  const [segmentCount, setSegmentCount] = useState(3);
+  const [questionsPerSegment, setQuestionsPerSegment] = useState(4);
+  const [perQuestionSeconds, setPerQuestionSeconds] = useState(30);
+  const [correctMarks, setCorrectMarks] = useState(2);
+  const [wrongMarks, setWrongMarks] = useState(1);
+  const [shareArenaId, setShareArenaId] = useState<string | null>(null);
+
   const createMut = useMutation({
     mutationFn: () =>
       createT({
@@ -854,72 +962,306 @@ function TournamentPanel({ data }: { data: AdminPlayData }) {
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Start failed"),
   });
+  const activityMut = useMutation({
+    mutationFn: () => saveActivity({ data: { name: activityName } }),
+    onSuccess: () => {
+      toast.success("Activity saved");
+      setActivityName("");
+      onDone();
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not save activity"),
+  });
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => removeActivity({ data: { id } }),
+    onSuccess: () => {
+      toast.success("Activity removed");
+      onDone();
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not delete"),
+  });
+  const arenaMut = useMutation({
+    mutationFn: () =>
+      createArena({
+        data: {
+          name: arenaName,
+          activityId: arenaActivityId,
+          poolId: arenaPoolId,
+          segmentCount,
+          questionsPerSegment,
+          perQuestionSeconds,
+          correctMarks,
+          wrongMarks,
+        },
+      }),
+    onSuccess: () => {
+      toast.success("Live Arena lobby is open");
+      onDone();
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not create arena"),
+  });
+  const deleteArenaMut = useMutation({
+    mutationFn: (arenaId: string) => removeArena({ data: { arenaId } }),
+    onSuccess: () => {
+      toast.success("Event deleted");
+      setShareArenaId(null);
+      onDone();
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not delete"),
+  });
 
   return (
-    <AdminPanel
-      title="Knockout tournaments"
-      description="Enrolment opens when you create a bracket. Start when the field is full enough."
-    >
-      <div className="flex flex-wrap gap-2">
-        <input
-          className="field h-9 text-sm"
-          value={tName}
-          onChange={(e) => setTName(e.target.value)}
-        />
-        <select
-          className="field h-9 text-sm"
-          value={size}
-          onChange={(e) => setSize(Number(e.target.value) as 4 | 8 | 16 | 32)}
-        >
-          <option value={4}>4</option>
-          <option value={8}>8</option>
-          <option value={16}>16</option>
-          <option value={32}>32</option>
-        </select>
-        <select
-          className="field h-9 text-sm"
-          value={poolId}
-          onChange={(e) => setPoolId(e.target.value)}
-        >
-          <option value="">Default play pool</option>
-          {data.pools.map((pool) => (
-            <option key={pool.id} value={pool.id}>
-              {pool.courseName} · {pool.name}
-            </option>
-          ))}
-        </select>
+    <div className="space-y-5">
+      <AdminPanel
+        title="Activities"
+        description="Activities are Play hub segments alongside courses. Map modes to an activity so participants can find them there."
+      >
+        <div className="flex flex-wrap gap-2">
+          <input
+            className="field h-9 min-w-[12rem] text-sm"
+            placeholder="Team quiz night"
+            value={activityName}
+            onChange={(e) => setActivityName(e.target.value)}
+          />
+          <button
+            type="button"
+            disabled={activityMut.isPending || activityName.trim().length < 2}
+            onClick={() => activityMut.mutate()}
+            className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground disabled:opacity-60"
+          >
+            Add activity
+          </button>
+        </div>
+        {data.activities.length === 0 ? (
+          <div className="mt-3">
+            <AdminEmpty
+              title="No activities"
+              body="Create an activity, then map Live Arena or other modes to it."
+            />
+          </div>
+        ) : (
+          <ul className="mt-3 space-y-2 text-sm">
+            {data.activities.map((row) => (
+              <li
+                key={row.id}
+                className="flex items-center justify-between rounded-md border border-border px-3 py-2"
+              >
+                <span>
+                  {row.name}
+                  <span className="ml-2 text-xs text-muted-foreground">{row.status}</span>
+                </span>
+                <button
+                  type="button"
+                  className="text-xs text-destructive"
+                  onClick={() => deleteMut.mutate(row.id)}
+                >
+                  Delete
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </AdminPanel>
+
+      <AdminPanel
+        title="Live Arena"
+        description="Hosted team quiz: pick an activity, a pool, segments × questions, a per-question timer, and +/− marks. Teams join by name. You reveal each key."
+      >
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <input
+            className="field h-9 text-sm"
+            value={arenaName}
+            onChange={(e) => setArenaName(e.target.value)}
+          />
+          <select
+            className="field h-9 text-sm"
+            value={arenaActivityId}
+            onChange={(e) => setArenaActivityId(e.target.value)}
+          >
+            <option value="">Select activity</option>
+            {data.activities.map((activity) => (
+              <option key={activity.id} value={activity.id}>
+                {activity.name}
+              </option>
+            ))}
+          </select>
+          <select
+            className="field h-9 text-sm"
+            value={arenaPoolId}
+            onChange={(e) => setArenaPoolId(e.target.value)}
+          >
+            <option value="">Select pool</option>
+            {data.pools.map((pool) => (
+              <option key={pool.id} value={pool.id}>
+                {pool.courseName} · {pool.name} ({pool.questionCount})
+              </option>
+            ))}
+          </select>
+          <NumField
+            label="Segments"
+            value={segmentCount}
+            min={1}
+            max={12}
+            onChange={setSegmentCount}
+          />
+          <NumField
+            label="Questions per segment"
+            value={questionsPerSegment}
+            min={1}
+            max={20}
+            onChange={setQuestionsPerSegment}
+          />
+          <NumField
+            label="Seconds per question"
+            value={perQuestionSeconds}
+            min={5}
+            max={600}
+            onChange={setPerQuestionSeconds}
+          />
+          <NumField
+            label="Correct marks"
+            value={correctMarks}
+            min={0}
+            max={20}
+            onChange={setCorrectMarks}
+          />
+          <NumField
+            label="Wrong marks (deducted)"
+            value={wrongMarks}
+            min={0}
+            max={20}
+            onChange={setWrongMarks}
+          />
+        </div>
         <button
           type="button"
-          onClick={() => createMut.mutate()}
-          className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground"
+          disabled={arenaMut.isPending || !arenaActivityId || !arenaPoolId}
+          onClick={() => arenaMut.mutate()}
+          className="mt-3 rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground disabled:opacity-60"
         >
-          Create
+          {arenaMut.isPending ? "Opening…" : "Open lobby"}
         </button>
-      </div>
-      {data.tournaments.length === 0 ? (
-        <div className="mt-3">
-          <AdminEmpty title="No tournaments" body="Create a knockout and bind it to a pool." />
+        {data.arenas.length === 0 ? (
+          <div className="mt-3">
+            <AdminEmpty
+              title="No arenas"
+              body="Open a lobby after you have an activity and a pool."
+            />
+          </div>
+        ) : (
+          <ul className="mt-3 space-y-2 text-sm">
+            {data.arenas.map((row) => (
+              <li key={row.id} className="rounded-md border border-border px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span>
+                    {row.name} · {row.status} · {row.segment_count}×{row.questions_per_segment}
+                  </span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      className="text-xs text-accent"
+                      onClick={() => setShareArenaId(shareArenaId === row.id ? null : row.id)}
+                    >
+                      {shareArenaId === row.id ? "Hide QR" : "QR / link"}
+                    </button>
+                    <Link
+                      to="/admin/play/arena/$arenaId"
+                      params={{ arenaId: row.id }}
+                      className="text-xs text-accent"
+                    >
+                      Host
+                    </Link>
+                    <button
+                      type="button"
+                      className="text-xs text-destructive"
+                      disabled={deleteArenaMut.isPending}
+                      onClick={() => {
+                        if (window.confirm(`Delete “${row.name}”?`)) deleteArenaMut.mutate(row.id);
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+                {shareArenaId === row.id ? (
+                  <div className="mt-3">
+                    <ArenaShareCard arenaId={row.id} arenaName={row.name} compact />
+                  </div>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </AdminPanel>
+
+      <AdminPanel
+        title="Knockout tournaments"
+        description="Enrolment opens when you create a bracket. Start when the field is full enough."
+      >
+        <div className="flex flex-wrap gap-2">
+          <input
+            className="field h-9 text-sm"
+            value={tName}
+            onChange={(e) => setTName(e.target.value)}
+          />
+          <select
+            className="field h-9 text-sm"
+            value={size}
+            onChange={(e) => setSize(Number(e.target.value) as 4 | 8 | 16 | 32)}
+          >
+            <option value={4}>4</option>
+            <option value={8}>8</option>
+            <option value={16}>16</option>
+            <option value={32}>32</option>
+          </select>
+          <select
+            className="field h-9 text-sm"
+            value={poolId}
+            onChange={(e) => setPoolId(e.target.value)}
+          >
+            <option value="">Default play pool</option>
+            {data.pools.map((pool) => (
+              <option key={pool.id} value={pool.id}>
+                {pool.courseName} · {pool.name}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => createMut.mutate()}
+            className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground"
+          >
+            Create
+          </button>
         </div>
-      ) : (
-        <ul className="mt-3 space-y-2 text-sm">
-          {data.tournaments.map((t) => (
-            <li
-              key={t.id}
-              className="flex items-center justify-between rounded-md border border-border px-3 py-2"
-            >
-              <span>
-                {t.name} · {t.size} · {t.status}
-              </span>
-              {t.status === "open" ? (
-                <button type="button" className="text-accent" onClick={() => startMut.mutate(t.id)}>
-                  Start bracket
-                </button>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      )}
-    </AdminPanel>
+        {data.tournaments.length === 0 ? (
+          <div className="mt-3">
+            <AdminEmpty title="No tournaments" body="Create a knockout and bind it to a pool." />
+          </div>
+        ) : (
+          <ul className="mt-3 space-y-2 text-sm">
+            {data.tournaments.map((t) => (
+              <li
+                key={t.id}
+                className="flex items-center justify-between rounded-md border border-border px-3 py-2"
+              >
+                <span>
+                  {t.name} · {t.size} · {t.status}
+                </span>
+                {t.status === "open" ? (
+                  <button
+                    type="button"
+                    className="text-accent"
+                    onClick={() => startMut.mutate(t.id)}
+                  >
+                    Start bracket
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </AdminPanel>
+    </div>
   );
 }
 
@@ -928,6 +1270,7 @@ function formFromChallenge(row: AdminPlayChallenge): ChallengeForm {
     name: row.name,
     status: row.status,
     courseId: row.courseId ?? "",
+    activityId: row.activityId ?? "",
     poolId: row.poolId ?? "",
     allTopics: !row.allowedTopics?.length,
     allowedTopics: row.allowedTopics ?? [],
@@ -940,6 +1283,10 @@ function formFromChallenge(row: AdminPlayChallenge): ChallengeForm {
     xpPoints: row.rules.xpPoints,
     reward: row.rules.reward,
     perItem: row.rules.perItem,
+    segmentCount: row.segmentCount ?? 3,
+    questionsPerSegment: row.questionsPerSegment ?? 4,
+    correctMarks: row.correctMarks ?? 2,
+    wrongMarks: row.wrongMarks ?? 1,
   };
 }
 
@@ -963,10 +1310,13 @@ function topicsForSource(pools: AdminPlayPool[], courseId: string | null, poolId
 function sourceLabel(row: AdminPlayChallenge, data: AdminPlayData) {
   const pool = data.pools.find((p) => p.id === row.poolId);
   const course = data.courses.find((c) => c.id === row.courseId);
-  if (pool) return `${pool.courseName} · ${pool.name}`;
-  if (course) return `${course.name} · any pool`;
-  if (row.allowedTopics?.length) return `${row.allowedTopics.length} topics`;
-  return "Largest available pool";
+  const activity = data.activities.find((a) => a.id === row.activityId);
+  const parts = [
+    activity ? `Activity · ${activity.name}` : null,
+    pool ? `${pool.courseName} · ${pool.name}` : course ? `${course.name} · any pool` : null,
+    !pool && !course && row.allowedTopics?.length ? `${row.allowedTopics.length} topics` : null,
+  ].filter(Boolean);
+  return parts.length ? parts.join(" · ") : "Largest available pool";
 }
 
 function NumField({

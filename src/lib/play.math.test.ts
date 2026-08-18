@@ -69,6 +69,13 @@ describe("defaultRulesFor", () => {
     assert.equal(rules.durationSeconds, 600);
     assert.equal(rules.xpPoints, 100);
   });
+
+  it("gives Live Arena a per-question timer", () => {
+    const rules = defaultRulesFor("arena");
+    assert.equal(rules.questionCount, 12);
+    assert.equal(rules.perQuestionSeconds, 30);
+    assert.equal(rules.xpCode, "arena_challenge");
+  });
 });
 
 describe("mergePlayRules", () => {

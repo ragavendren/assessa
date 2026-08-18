@@ -7,6 +7,7 @@ import {
   ResultCount,
   StatusPill,
 } from "@/components/admin/AdminPageUi";
+import { OverviewNav } from "@/components/admin/OverviewNav";
 import { ListToolbar, listViewClass, useListViewMode } from "@/components/ListToolbar";
 import { PodiumMedal } from "@/components/PodiumMedal";
 import { EmptyState, Meter, PageLoader, StatTile } from "@/components/platform";
@@ -76,6 +77,7 @@ function AdminPerformancePage() {
     return (
       <div>
         <AdminNav />
+        <OverviewNav />
         <PageLoader label="Loading performance…" />
       </div>
     );
@@ -84,6 +86,7 @@ function AdminPerformancePage() {
     return (
       <div>
         <AdminNav />
+        <OverviewNav />
         <AdminAccessDenied />
       </div>
     );
@@ -92,8 +95,9 @@ function AdminPerformancePage() {
   return (
     <div className="space-y-5">
       <AdminNav />
+      <OverviewNav />
       <AdminPageHeader
-        eyebrow="Analytics"
+        eyebrow="Overview"
         title="Assessment performance"
         summary="See who opted in, who finished, and the best submitted score per participant. Admin accounts are excluded from leaderboards."
         help={{

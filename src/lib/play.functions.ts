@@ -337,6 +337,10 @@ const playRulesSchema = z.object({
   xpPoints: z.number().int().min(0).max(500),
   reward: z.boolean(),
   perItem: z.boolean(),
+  segmentCount: z.number().int().min(1).max(12).optional(),
+  questionsPerSegment: z.number().int().min(1).max(20).optional(),
+  correctMarks: z.number().int().min(0).max(20).optional(),
+  wrongMarks: z.number().int().min(0).max(20).optional(),
 });
 
 export const savePlayChallenge = createServerFn({ method: "POST" })
@@ -349,6 +353,7 @@ export const savePlayChallenge = createServerFn({ method: "POST" })
         name: z.string().trim().min(2).max(120),
         status: z.enum(["active", "inactive"]),
         courseId: uuid.nullable(),
+        activityId: uuid.nullable(),
         poolId: uuid.nullable(),
         allowedTopics: z.array(z.string().trim().min(1).max(80)).max(80).nullable(),
         rules: playRulesSchema,
@@ -362,6 +367,7 @@ export const savePlayChallenge = createServerFn({ method: "POST" })
       name: data.name,
       status: data.status,
       courseId: data.courseId,
+      activityId: data.activityId,
       poolId: data.poolId,
       allowedTopics: data.allowedTopics,
       rules: {
@@ -374,6 +380,10 @@ export const savePlayChallenge = createServerFn({ method: "POST" })
         xpPoints: data.rules.xpPoints,
         reward: data.rules.reward,
         perItem: data.rules.perItem,
+        segmentCount: data.rules.segmentCount ?? null,
+        questionsPerSegment: data.rules.questionsPerSegment ?? null,
+        correctMarks: data.rules.correctMarks ?? null,
+        wrongMarks: data.rules.wrongMarks ?? null,
       },
       ...(data.id ? { id: data.id } : {}),
     });
@@ -405,4 +415,145 @@ export const setEscapeStatus = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const { adminSetEscapeStatus } = await import("@/lib/play.server");
     return adminSetEscapeStatus(context.userId, data.scenarioId, data.status);
+  });
+
+export const savePlayActivity = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) =>
+    z
+      .object({
+        id: uuid.optional(),
+        name: z.string().trim().min(2).max(80),
+        status: z.enum(["active", "inactive"]).optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ context, data }) => {
+    const { adminUpsertActivity } = await import("@/lib/play.arena.server");
+    return adminUpsertActivity(context.userId, {
+      name: data.name,
+      ...(data.id ? { id: data.id } : {}),
+      ...(data.status ? { status: data.status } : {}),
+    });
+  });
+
+export const deletePlayActivity = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) => z.object({ id: uuid }).parse(input))
+  .handler(async ({ context, data }) => {
+    const { adminDeleteActivity } = await import("@/lib/play.arena.server");
+    return adminDeleteActivity(context.userId, data.id);
+  });
+
+export const createLiveArena = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) =>
+    z
+      .object({
+        name: z.string().trim().min(2).max(120),
+        activityId: uuid,
+        poolId: uuid,
+        courseId: uuid.nullable().optional(),
+        segmentCount: z.number().int().min(1).max(12),
+        questionsPerSegment: z.number().int().min(1).max(20),
+        perQuestionSeconds: z.number().int().min(5).max(600),
+        correctMarks: z.number().int().min(0).max(20),
+        wrongMarks: z.number().int().min(0).max(20),
+      })
+      .parse(input),
+  )
+  .handler(async ({ context, data }) => {
+    const { adminCreateArena } = await import("@/lib/play.arena.server");
+    return adminCreateArena(context.userId, {
+      name: data.name,
+      activityId: data.activityId,
+      poolId: data.poolId,
+      courseId: data.courseId ?? null,
+      segmentCount: data.segmentCount,
+      questionsPerSegment: data.questionsPerSegment,
+      perQuestionSeconds: data.perQuestionSeconds,
+      correctMarks: data.correctMarks,
+      wrongMarks: data.wrongMarks,
+    });
+  });
+
+export const listLiveArenas = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) =>
+    z.object({ activityId: uuid.nullable().optional() }).parse(input ?? {}),
+  )
+  .handler(async ({ data }) => {
+    const { listOpenArenas } = await import("@/lib/play.arena.server");
+    return listOpenArenas(data?.activityId ?? null);
+  });
+
+export const joinLiveArena = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) =>
+    z
+      .object({
+        arenaId: uuid,
+        teamName: z.string().trim().min(2).max(40).optional(),
+        teamId: uuid.optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ context, data }) => {
+    const { joinArena } = await import("@/lib/play.arena.server");
+    return joinArena(context.userId, {
+      arenaId: data.arenaId,
+      ...(data.teamName ? { teamName: data.teamName } : {}),
+      ...(data.teamId ? { teamId: data.teamId } : {}),
+    });
+  });
+
+export const getArenaPlayer = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) => z.object({ arenaId: uuid }).parse(input))
+  .handler(async ({ context, data }) => {
+    const { getArenaPlayerState } = await import("@/lib/play.arena.server");
+    return getArenaPlayerState(context.userId, data.arenaId);
+  });
+
+export const submitArenaAnswer = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) =>
+    z
+      .object({ arenaId: uuid, answer: z.array(z.number().int().min(0).max(20)).max(8) })
+      .parse(input),
+  )
+  .handler(async ({ context, data }) => {
+    const { submitArenaAnswer: submit } = await import("@/lib/play.arena.server");
+    return submit(context.userId, { arenaId: data.arenaId, answer: data.answer });
+  });
+
+export const getArenaHost = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) => z.object({ arenaId: uuid }).parse(input))
+  .handler(async ({ context, data }) => {
+    const { getArenaHostState } = await import("@/lib/play.arena.server");
+    return getArenaHostState(context.userId, data.arenaId);
+  });
+
+export const runArenaAction = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) =>
+    z
+      .object({
+        arenaId: uuid,
+        action: z.enum(["start", "lock", "reveal", "next", "finish"]),
+      })
+      .parse(input),
+  )
+  .handler(async ({ context, data }) => {
+    const { adminArenaAction } = await import("@/lib/play.arena.server");
+    return adminArenaAction(context.userId, data);
+  });
+
+export const deleteLiveArena = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) => z.object({ arenaId: uuid }).parse(input))
+  .handler(async ({ context, data }) => {
+    const { adminDeleteArena } = await import("@/lib/play.arena.server");
+    return adminDeleteArena(context.userId, data.arenaId);
   });

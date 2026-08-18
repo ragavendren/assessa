@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" role="img" aria-label="Pizza slice">
+  <rect width="800" height="450" rx="28" fill="#F6EFE4"/>
+  <path d="M400 70l210 280H190z" fill="#F4D06F" stroke="#C45C26" stroke-width="10" stroke-linejoin="round"/>
+  <path d="M400 110l160 220H240z" fill="#E24B4A"/>
+  <circle cx="360" cy="220" r="18" fill="#6B8F4E"/>
+  <circle cx="430" cy="250" r="16" fill="#6B8F4E"/>
+  <circle cx="390" cy="300" r="14" fill="#6B8F4E"/>
+  <circle cx="455" cy="200" r="12" fill="#FFF8EE"/>
+  <circle cx="330" cy="270" r="12" fill="#FFF8EE"/>
+  <text x="400" y="430" text-anchor="middle" font-family="Georgia, serif" font-size="22" fill="#2A2420">Friday lunch</text>
+</svg>

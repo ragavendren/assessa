@@ -29,14 +29,23 @@ type StatusFilter = "all" | "unread" | "read";
 function notificationHref(kind: string | null | undefined): string | null {
   if (kind === "exam_launched" || kind === "invitation") return "/exams";
   if (kind === "badge") return "/achievements";
-  if (kind === "play_launched") return "/play";
   if (kind === "play_battle") return "/play/battle";
+  if (kind === "play_escape") return "/play/escape";
+  if (kind === "play_flash") return "/play/flash";
+  if (kind === "play_topics") return "/play/topics";
+  if (kind === "play_team") return "/play/team";
+  if (kind === "play_arena") return "/play/arena";
+  if (kind?.startsWith("play_")) return "/play";
   return null;
 }
 
 function kindLabel(kind: string | null | undefined) {
   if (kind === "exam_launched") return "New assessment";
   if (kind === "play_launched") return "Play";
+  if (kind === "play_mode") return "Play mode";
+  if (kind === "play_escape") return "Escape room";
+  if (kind === "play_tournament") return "Tournament";
+  if (kind === "play_arena") return "Live Arena";
   if (kind === "play_battle") return "Battle";
   if (!kind) return "Info";
   return kind.replaceAll("_", " ");

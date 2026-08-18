@@ -13,6 +13,7 @@ export type ReusePolicy = Database["public"]["Enums"]["question_reuse_policy"];
 
 export type GeneratedQuestion = {
   prompt: string;
+  image_url: string | null;
   options: string[];
   correct_index: number;
   correct_indexes: number[];
@@ -215,7 +216,7 @@ export async function previewOrSelectQuestions(
   const { data: poolRows, error: poolError } = await supabase
     .from("pool_questions")
     .select(
-      "id, prompt, options, correct_index, correct_indexes, multi_select, explanation, topic, subtopic, difficulty, status",
+      "id, prompt, image_url, options, correct_index, correct_indexes, multi_select, explanation, topic, subtopic, difficulty, status",
     )
     .eq("pool_id", args.poolId)
     .eq("status", "active");
@@ -248,6 +249,7 @@ export async function previewOrSelectQuestions(
     const validated = validateClone(row);
     return {
       prompt: row.prompt.trim(),
+      image_url: row.image_url ?? null,
       options: validated.options,
       correct_index: validated.correctIndexes[0] ?? 0,
       correct_indexes: validated.multiSelect
@@ -298,6 +300,7 @@ export async function persistGeneratedQuestions(
     args.result.questions.map((q) => ({
       exam_id: args.examId,
       prompt: q.prompt,
+      image_url: q.image_url,
       options: q.options,
       correct_index: q.correct_index,
       correct_indexes: q.correct_indexes,

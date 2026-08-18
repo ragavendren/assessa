@@ -34,6 +34,7 @@ export type PoolConfigState = {
 
 export type GeneratedClone = {
   prompt: string;
+  image_url: string | null;
   options: string[];
   correct_index: number;
   correct_indexes: number[];

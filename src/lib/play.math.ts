@@ -13,6 +13,7 @@ export const PLAY_KINDS = [
   "team",
   "knockout",
   "escape",
+  "arena",
 ] as const;
 
 export type PlayKind = (typeof PLAY_KINDS)[number];
@@ -33,13 +34,17 @@ export type PlayRules = {
 /** Admin-persisted overlay on top of kind defaults. */
 export type StoredPlayRules = Partial<PlayRules> & {
   allowedTopics?: string[] | null;
+  segmentCount?: number | null;
+  questionsPerSegment?: number | null;
+  correctMarks?: number | null;
+  wrongMarks?: number | null;
 };
 
 export const PLAY_KIND_GROUPS: Array<{ label: string; kinds: PlayKind[] }> = [
   { label: "Solo", kinds: ["daily", "weekly", "topic"] },
   { label: "Arcade", kinds: ["speed", "survival", "rapid", "marathon", "flash"] },
   { label: "Social", kinds: ["battle", "team"] },
-  { label: "Events", kinds: ["knockout", "escape"] },
+  { label: "Events", kinds: ["knockout", "escape", "arena"] },
 ];
 
 export const PLAY_KIND_META: Record<
@@ -78,6 +83,11 @@ export const PLAY_KIND_META: Record<
   },
   knockout: { label: "Knockout", blurb: "Bracket rounds down to a final.", period: "match" },
   escape: { label: "Escape Room", blurb: "Solve the outage scene by scene.", period: "open" },
+  arena: {
+    label: "Live Arena",
+    blurb: "Teams answer the same timed question. Admin reveals the key.",
+    period: "match",
+  },
 };
 
 export function defaultRulesFor(kind: PlayKind, questionCount?: number): PlayRules {
@@ -203,6 +213,19 @@ export function defaultRulesFor(kind: PlayKind, questionCount?: number): PlayRul
         reward: true,
         perItem: true,
       };
+    case "arena":
+      return {
+        questionCount: 12,
+        durationSeconds: null,
+        perQuestionSeconds: 30,
+        lives: null,
+        timeBonus: false,
+        onePerPeriod: false,
+        xpCode: "arena_challenge",
+        xpPoints: 40,
+        reward: true,
+        perItem: true,
+      };
   }
 }
 
@@ -244,10 +267,20 @@ export function mergePlayRules(
 export function serializePlayRules(
   rules: PlayRules,
   allowedTopics: string[] | null,
+  extras?: Pick<
+    StoredPlayRules,
+    "segmentCount" | "questionsPerSegment" | "correctMarks" | "wrongMarks"
+  >,
 ): StoredPlayRules {
   return {
     ...rules,
     allowedTopics: allowedTopicsOf({ allowedTopics }),
+    ...(extras?.segmentCount != null ? { segmentCount: extras.segmentCount } : {}),
+    ...(extras?.questionsPerSegment != null
+      ? { questionsPerSegment: extras.questionsPerSegment }
+      : {}),
+    ...(extras?.correctMarks != null ? { correctMarks: extras.correctMarks } : {}),
+    ...(extras?.wrongMarks != null ? { wrongMarks: extras.wrongMarks } : {}),
   };
 }
 
@@ -424,6 +457,7 @@ export type PlaySegmentMode = {
   label: string;
   blurb: string;
   poolId: string | null;
+  bindingCourseId: string | null;
   questionCount: number;
   durationSeconds: number | null;
   lives: number | null;
@@ -431,6 +465,9 @@ export type PlaySegmentMode = {
 };
 
 export type PlaySegment = {
+  scope: "course" | "activity";
+  id: string;
+  name: string;
   courseId: string;
   courseName: string;
   poolCount: number;

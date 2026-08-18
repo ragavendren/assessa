@@ -1,3 +1,4 @@
+import { PromptImageField } from "@/components/admin/PromptImageField";
 import { AdminEmpty } from "@/components/admin/AdminPageUi";
 import { HelpTip, Panel } from "@/components/admin/pool/QuestionBankUi";
 import { PageLoader } from "@/components/platform";
@@ -11,6 +12,7 @@ import {
   previewPoolFillCheck,
   upsertPoolQuestion,
 } from "@/lib/pool.functions";
+import { uploadQuestionImages } from "@/lib/question-images";
 import { normalizeTopicKey } from "@/lib/question-selection.math";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -138,6 +140,7 @@ export function PoolWorkspace({
   const queryClient = useQueryClient();
   const confirm = useConfirm();
   const fileRef = useRef<HTMLInputElement>(null);
+  const imageFileRef = useRef<HTMLInputElement>(null);
   const fetchQuestions = useServerFn(listPoolQuestions);
   const fetchFillCheck = useServerFn(previewPoolFillCheck);
   const importCsv = useServerFn(importPoolQuestionsCsv);
@@ -155,6 +158,7 @@ export function PoolWorkspace({
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState({
     prompt: "",
+    imageUrl: "",
     options: ["", "", "", ""],
     correctIndexes: [0],
     multiSelect: false,
@@ -162,6 +166,7 @@ export function PoolWorkspace({
     subtopic: "general",
     difficulty: "medium" as "easy" | "medium" | "hard",
   });
+  const [uploadedImageMap, setUploadedImageMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
     setSearch("");
@@ -218,7 +223,8 @@ export function PoolWorkspace({
   }, [data?.questions]);
 
   const importMutation = useMutation({
-    mutationFn: (csvText: string) => importCsv({ data: { poolId, csvText } }),
+    mutationFn: (payload: { csvText: string; imageMap: Record<string, string> }) =>
+      importCsv({ data: { poolId, csvText: payload.csvText, imageMap: payload.imageMap } }),
     onSuccess: (result) => {
       if (result.imported > 0) {
         toast.success(`Imported ${result.imported} question(s)`);
@@ -250,6 +256,7 @@ export function PoolWorkspace({
         data: {
           poolId,
           prompt: draft.prompt.trim(),
+          image_url: draft.imageUrl.trim(),
           options,
           correct_indexes: indexes,
           multi_select: multiSelect,
@@ -263,6 +270,7 @@ export function PoolWorkspace({
       toast.success("Question added");
       setDraft({
         prompt: "",
+        imageUrl: "",
         options: ["", "", "", ""],
         correctIndexes: [0],
         multiSelect: false,
@@ -319,6 +327,18 @@ export function PoolWorkspace({
     }
   }
 
+  async function uploadPoolImages(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const result = await uploadQuestionImages([...files], `pool-questions/${poolId}`);
+    if (result.uploaded > 0) {
+      setUploadedImageMap((prev) => ({ ...prev, ...result.map }));
+      toast.success(
+        `Uploaded ${result.uploaded} image${result.uploaded === 1 ? "" : "s"} for CSV mapping`,
+      );
+    }
+    if (result.errors[0]) toast.error(result.errors[0]);
+  }
+
   return (
     <div className={cn("min-w-0", expanded && "flex h-full min-h-0 flex-col overflow-hidden")}>
       <div className={cn(expanded ? "mb-2 shrink-0" : "mb-3")}>
@@ -328,8 +348,9 @@ export function PoolWorkspace({
             Import CSV or add questions here. Topics should match blueprint rules.
             <HelpTip label="CSV tips" className="ml-1">
               Correct answers: A–F or 1–6. Multiple letters (A|C) mark a multi-select item (AWS
-              “choose TWO”). Optional question_type=single|multi. Difficulty: easy, medium, or hard.
-              Assessment CSV on New assessment is a different flow.
+              “choose TWO”). Optional question_type=single|multi. Add `image` as a URL, or upload
+              images first and place the filename in the `image` column. Difficulty: easy, medium,
+              or hard. Assessment CSV on New assessment is a different flow.
             </HelpTip>
           </p>
         ) : null}
@@ -345,8 +366,8 @@ export function PoolWorkspace({
         <p className="mr-auto text-xs text-muted-foreground">
           Import CSV
           <HelpTip label="What gets imported" className="ml-1">
-            Prompt, options, answers, topic, subtopic, difficulty, skill, tags, explanation, and
-            marks. Keep the header row from the template.
+            Prompt, optional image, options, answers, topic, subtopic, difficulty, skill, tags,
+            explanation, and marks. Keep the header row from the template.
           </HelpTip>
         </p>
         <button
@@ -363,6 +384,13 @@ export function PoolWorkspace({
           className="inline-flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
         >
           <Upload className="h-3.5 w-3.5" /> {importMutation.isPending ? "Importing…" : "Import"}
+        </button>
+        <button
+          type="button"
+          onClick={() => imageFileRef.current?.click()}
+          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs hover:bg-secondary"
+        >
+          <Upload className="h-3.5 w-3.5" /> Images
         </button>
         {(data?.questions.length ?? 0) > 0 ? (
           <button
@@ -411,8 +439,19 @@ export function PoolWorkspace({
               if (errors.length) {
                 toast.message(`${errors.length} row(s) will be skipped`);
               }
-              importMutation.mutate(text);
+              importMutation.mutate({ csvText: text, imageMap: uploadedImageMap });
             });
+            e.target.value = "";
+          }}
+        />
+        <input
+          ref={imageFileRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            void uploadPoolImages(e.target.files);
             e.target.value = "";
           }}
         />
@@ -470,6 +509,7 @@ export function PoolWorkspace({
               setDraft={setDraft}
               topics={inventory.topics.map((t) => t.topic)}
               pending={addMutation.isPending}
+              poolId={poolId}
               onSubmit={() => addMutation.mutate()}
               onCancel={() => setAdding(false)}
             />
@@ -696,6 +736,7 @@ export function PoolWorkspace({
                   setDraft={setDraft}
                   topics={inventory.topics.map((t) => t.topic)}
                   pending={addMutation.isPending}
+                  poolId={poolId}
                   onSubmit={() => addMutation.mutate()}
                   onCancel={() => setAdding(false)}
                 />
@@ -716,6 +757,7 @@ export function PoolWorkspace({
                     const options = normalizeOptions(q.options);
                     const isMulti = isMultiSelectQuestion(q);
                     const correct = new Set(correctIndexesFor(q));
+                    const imageUrl = (q as { image_url?: string | null }).image_url ?? "";
                     return (
                       <li
                         key={q.id}
@@ -752,6 +794,14 @@ export function PoolWorkspace({
                                 >
                                   {q.prompt}
                                 </p>
+                                {imageUrl ? (
+                                  <img
+                                    src={imageUrl}
+                                    alt="Prompt reference"
+                                    className="mt-2 h-20 w-auto max-w-full rounded-md border border-border object-cover"
+                                    loading="lazy"
+                                  />
+                                ) : null}
                                 <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
                                   <span
                                     className={cn(
@@ -829,6 +879,16 @@ export function PoolWorkspace({
                                 {q.explanation}
                               </p>
                             ) : null}
+                            {imageUrl ? (
+                              <a
+                                href={imageUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex text-[11px] text-accent hover:underline"
+                              >
+                                Open full image
+                              </a>
+                            ) : null}
                           </div>
                         ) : null}
                       </li>
@@ -846,6 +906,7 @@ export function PoolWorkspace({
 
 type QuestionDraft = {
   prompt: string;
+  imageUrl: string;
   options: string[];
   correctIndexes: number[];
   multiSelect: boolean;
@@ -1005,6 +1066,7 @@ function AddQuestionForm({
   setDraft,
   topics,
   pending,
+  poolId,
   onSubmit,
   onCancel,
 }: {
@@ -1012,6 +1074,7 @@ function AddQuestionForm({
   setDraft: Dispatch<SetStateAction<QuestionDraft>>;
   topics: string[];
   pending: boolean;
+  poolId: string;
   onSubmit: () => void;
   onCancel: () => void;
 }) {
@@ -1033,6 +1096,12 @@ function AddQuestionForm({
           maxLength={4000}
         />
       </div>
+      <PromptImageField
+        value={draft.imageUrl}
+        onChange={(imageUrl) => setDraft((d) => ({ ...d, imageUrl }))}
+        folder={`pool-questions/${poolId}`}
+        compact
+      />
       <fieldset className="flex flex-wrap gap-1.5">
         <legend className="mb-1 text-[11px] text-muted-foreground">Answer type</legend>
         {(
@@ -1099,9 +1168,43 @@ function AddQuestionForm({
               }
               required={index < 2}
             />
+            {draft.options.length > 2 ? (
+              <button
+                type="button"
+                onClick={() =>
+                  setDraft((d) => {
+                    if (d.options.length <= 2) return d;
+                    const options = d.options.filter((_, i) => i !== index);
+                    const correctIndexes = d.correctIndexes
+                      .filter((i) => i !== index)
+                      .map((i) => (i > index ? i - 1 : i));
+                    return {
+                      ...d,
+                      options,
+                      correctIndexes: correctIndexes.length ? correctIndexes : [0],
+                    };
+                  })
+                }
+                className="rounded-md p-1 text-muted-foreground hover:bg-secondary"
+                aria-label={`Remove option ${String.fromCharCode(65 + index)}`}
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            ) : null}
           </label>
         ))}
       </div>
+      {draft.options.length < 6 ? (
+        <button
+          type="button"
+          onClick={() =>
+            setDraft((d) => (d.options.length >= 6 ? d : { ...d, options: [...d.options, ""] }))
+          }
+          className="inline-flex items-center gap-1 text-[11px] font-medium text-accent hover:underline"
+        >
+          <Plus className="h-3 w-3" /> Add option {String.fromCharCode(65 + draft.options.length)}
+        </button>
+      ) : null}
       <div className="grid gap-2 sm:grid-cols-3">
         <div>
           <label className="mb-1 block text-[11px] text-muted-foreground">Topic</label>

@@ -1,6 +1,7 @@
 import { AdminNav } from "@/components/AdminNav";
 import { ExamEditor } from "@/components/admin/ExamEditor";
 import { AdminPageHeader } from "@/components/admin/AdminPageUi";
+import { OverviewNav } from "@/components/admin/OverviewNav";
 import { PageLoader } from "@/components/platform";
 import { createExam, listExamCategories } from "@/lib/admin.functions";
 import { useQuery } from "@tanstack/react-query";
@@ -36,8 +37,9 @@ function NewExamPage() {
   return (
     <div>
       <AdminNav />
+      <OverviewNav />
       <AdminPageHeader
-        eyebrow="Content"
+        eyebrow="Overview"
         title="New assessment"
         summary="Set the paper, access, schedule, and questions. A shareable /take/… link is copied when you publish."
         help={{

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" role="img" aria-label="Headphones and laptop">
+  <rect width="800" height="450" rx="28" fill="#F6EFE4"/>
+  <rect x="230" y="210" width="340" height="22" rx="8" fill="#2A2420"/>
+  <rect x="270" y="140" width="260" height="80" rx="12" fill="#3D342C"/>
+  <rect x="286" y="154" width="228" height="52" rx="6" fill="#8EC5E8"/>
+  <path d="M300 118c0-70 200-70 200 0" fill="none" stroke="#C45C26" stroke-width="14" stroke-linecap="round"/>
+  <rect x="274" y="108" width="36" height="54" rx="12" fill="#2A2420"/>
+  <rect x="490" y="108" width="36" height="54" rx="12" fill="#2A2420"/>
+  <rect x="250" y="232" width="300" height="90" rx="16" fill="#E4D4BE"/>
+  <text x="400" y="430" text-anchor="middle" font-family="Georgia, serif" font-size="22" fill="#2A2420">Focus mode</text>
+</svg>

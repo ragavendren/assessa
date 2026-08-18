@@ -1,3 +1,4 @@
+import { PromptImageField } from "@/components/admin/PromptImageField";
 import { QuestionGenerationConfiguration } from "@/components/admin/pool/QuestionGenerationConfiguration";
 import type { PoolConfigState } from "@/components/admin/pool/QuestionGenerationConfiguration";
 import { QuestionSelectionMethod } from "@/components/admin/pool/QuestionSelectionMethod";
@@ -6,7 +7,8 @@ import { DateTimeField, scheduleWindowStatus } from "@/components/ui/date-time-f
 import { EmailChipInput } from "@/components/ui/email-chip-input";
 import { EXAM_MODES, MODE_LABELS } from "@/lib/gamification";
 import { listOrgCatalog } from "@/lib/platform.functions";
-import { downloadQuestionCsvTemplate, parseQuestionsCsv } from "@/lib/questions-csv";
+import { uploadQuestionImages } from "@/lib/question-images";
+import { csvImageUrl, downloadQuestionCsvTemplate, parseQuestionsCsv } from "@/lib/questions-csv";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -18,6 +20,7 @@ import {
   Download,
   Eye,
   FileQuestion,
+  ImagePlus,
   Lightbulb,
   Plus,
   Send,
@@ -25,11 +28,12 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 export type QuestionForm = {
   prompt: string;
+  imageUrl?: string;
   options: string[];
   correctIndexes: number[];
   multiSelect: boolean;
@@ -88,6 +92,7 @@ export type ExamSubmitPayload = {
   reuse_last_n?: number | null;
   questions: Array<{
     prompt: string;
+    image_url?: string | null;
     options: string[];
     correct_index: number;
     correct_indexes: number[];
@@ -112,6 +117,7 @@ const PREVIEW_PAGE_SIZE = 5;
 export function blankQuestion(): QuestionForm {
   return {
     prompt: "",
+    imageUrl: "",
     options: ["", "", "", ""],
     correctIndexes: [0],
     multiSelect: false,
@@ -181,6 +187,7 @@ export function examToEditorValues(exam: {
   reuse_last_n?: number | null;
   questions: Array<{
     prompt: string;
+    image_url?: string | null;
     options: string[];
     correct_indexes: number[];
     multi_select: boolean;
@@ -216,6 +223,7 @@ export function examToEditorValues(exam: {
       exam.questions.length > 0
         ? exam.questions.map((q) => ({
             prompt: q.prompt,
+            imageUrl: q.image_url ?? "",
             options: q.options.length >= 4 ? q.options : [...q.options, "", "", "", ""].slice(0, 4),
             correctIndexes: q.correct_indexes,
             multiSelect: q.multi_select,
@@ -258,6 +266,7 @@ function buildPayload(values: ExamEditorValues): ExamSubmitPayload {
         .sort((a, b) => a - b);
       return {
         prompt: q.prompt.trim(),
+        image_url: q.imageUrl?.trim() || null,
         options,
         correct_index: correctIndexes[0] ?? 0,
         correct_indexes: q.multiSelect ? correctIndexes : [correctIndexes[0] ?? 0],
@@ -303,6 +312,9 @@ export function ExamEditor({
   const [showInviteField, setShowInviteField] = useState(
     () => Boolean(initial?.invitations?.trim()) || initial?.access === "private",
   );
+  const [csvImageMap, setCsvImageMap] = useState<Record<string, string>>({});
+  const csvImageRef = useRef<HTMLInputElement>(null);
+  const imageFolder = examId ? `exam-questions/${examId}` : "exam-questions/new";
 
   const fetchCatalog = useServerFn(listOrgCatalog);
   const { data: orgCatalog } = useQuery({
@@ -370,6 +382,30 @@ export function ExamEditor({
           ? q.correctIndexes.filter((value) => value !== optionIndex)
           : [...q.correctIndexes, optionIndex];
         return { ...q, correctIndexes: next.length ? next : [optionIndex] };
+      }),
+    }));
+  }
+
+  function addOption(questionIndex: number) {
+    setValues((current) => ({
+      ...current,
+      questions: current.questions.map((q, i) => {
+        if (i !== questionIndex || q.options.length >= 6) return q;
+        return { ...q, options: [...q.options, ""] };
+      }),
+    }));
+  }
+
+  function removeOption(questionIndex: number, optionIndex: number) {
+    setValues((current) => ({
+      ...current,
+      questions: current.questions.map((q, i) => {
+        if (i !== questionIndex || q.options.length <= 2) return q;
+        const options = q.options.filter((_, idx) => idx !== optionIndex);
+        const correctIndexes = q.correctIndexes
+          .filter((idx) => idx !== optionIndex)
+          .map((idx) => (idx > optionIndex ? idx - 1 : idx));
+        return { ...q, options, correctIndexes: correctIndexes.length ? correctIndexes : [0] };
       }),
     }));
   }
@@ -507,6 +543,7 @@ export function ExamEditor({
       patch({
         questions: parsed.map((q) => ({
           prompt: q.prompt,
+          imageUrl: csvImageUrl(q.imageRef, csvImageMap),
           options: q.options.length >= 4 ? q.options : [...q.options, "", ""].slice(0, 4),
           correctIndexes: q.correctIndexes,
           multiSelect: q.multiSelect,
@@ -517,6 +554,18 @@ export function ExamEditor({
       toast.success(`Imported ${parsed.length} question(s)`);
     };
     reader.readAsText(file);
+  }
+
+  async function onCsvImages(files: FileList | null) {
+    if (!files?.length) return;
+    const result = await uploadQuestionImages([...files], imageFolder);
+    if (result.uploaded > 0) {
+      setCsvImageMap((prev) => ({ ...prev, ...result.map }));
+      toast.success(
+        `Uploaded ${result.uploaded} image${result.uploaded === 1 ? "" : "s"} — put the filename in the CSV image column`,
+      );
+    }
+    if (result.errors[0]) toast.error(result.errors[0]);
   }
 
   function addCategoryFromDraft() {
@@ -967,6 +1016,7 @@ export function ExamEditor({
                       patch({
                         questions: questions.map((q) => ({
                           prompt: q.prompt,
+                          imageUrl: q.image_url ?? "",
                           options:
                             q.options.length >= 4
                               ? q.options
@@ -994,7 +1044,8 @@ export function ExamEditor({
                 <>
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <p className="text-hairline text-muted-foreground">
-                      Questions ({values.questions.length}) · tags are subtopics
+                      Questions ({values.questions.length}) · tags are subtopics · optional prompt
+                      images
                     </p>
                     <div className="flex flex-wrap gap-2">
                       <button
@@ -1017,6 +1068,24 @@ export function ExamEditor({
                           }}
                         />
                       </label>
+                      <button
+                        type="button"
+                        onClick={() => csvImageRef.current?.click()}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-secondary"
+                      >
+                        <ImagePlus className="h-3.5 w-3.5" /> Images
+                      </button>
+                      <input
+                        ref={csvImageRef}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="hidden"
+                        onChange={(e) => {
+                          void onCsvImages(e.target.files);
+                          e.currentTarget.value = "";
+                        }}
+                      />
                       <button
                         type="button"
                         onClick={() => patch({ questions: [...values.questions, blankQuestion()] })}
@@ -1061,6 +1130,12 @@ export function ExamEditor({
                         ) : null}
                       </div>
 
+                      <PromptImageField
+                        value={question.imageUrl ?? ""}
+                        onChange={(imageUrl) => patchQuestion(index, { imageUrl })}
+                        folder={imageFolder}
+                      />
+
                       <label className="inline-flex items-center gap-2 text-xs">
                         <input
                           type="checkbox"
@@ -1101,9 +1176,29 @@ export function ExamEditor({
                               required={optionIndex < 2}
                               maxLength={1000}
                             />
+                            {question.options.length > 2 ? (
+                              <button
+                                type="button"
+                                onClick={() => removeOption(index, optionIndex)}
+                                className="rounded-md p-1.5 text-muted-foreground hover:bg-secondary"
+                                aria-label={`Remove option ${String.fromCharCode(65 + optionIndex)}`}
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            ) : null}
                           </label>
                         ))}
                       </div>
+                      {question.options.length < 6 ? (
+                        <button
+                          type="button"
+                          onClick={() => addOption(index)}
+                          className="inline-flex items-center gap-1.5 text-xs font-medium text-accent hover:underline"
+                        >
+                          <Plus className="h-3.5 w-3.5" /> Add option{" "}
+                          {String.fromCharCode(65 + question.options.length)}
+                        </button>
+                      ) : null}
 
                       <div className="space-y-2">
                         <p className="text-xs text-muted-foreground">Subtopic tag</p>
@@ -1316,6 +1411,13 @@ export function ExamEditor({
                             <h3 className="mt-2 text-base font-medium leading-snug sm:text-lg">
                               {question.prompt}
                             </h3>
+                            {question.imageUrl ? (
+                              <img
+                                src={question.imageUrl}
+                                alt=""
+                                className="mt-3 max-h-56 w-full max-w-xl rounded-lg border border-border object-contain"
+                              />
+                            ) : null}
                           </div>
                           <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-success/35 bg-success/15 px-2.5 py-1 text-xs font-semibold text-success">
                             <Check className="h-3.5 w-3.5" aria-hidden />

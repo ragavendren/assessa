@@ -133,7 +133,6 @@ function PlaySessionPage() {
     const hit = crossedSpeedAlert(prev, pct);
     if (!hit) return;
     setSpeedAlert({ title: hit.title, body: hit.body });
-    toast.warning(hit.title, { description: hit.body, duration: 3200 });
     if (speedAlertTimer.current) window.clearTimeout(speedAlertTimer.current);
     speedAlertTimer.current = window.setTimeout(() => setSpeedAlert(null), 3200);
   }, [remaining, data?.session.kind, data?.session.rules.durationSeconds]);
@@ -282,7 +281,7 @@ function PlaySessionPage() {
       {isSurvival && survivalBeat === "life" ? (
         <SurvivalLifeLostBanner
           livesLeft={data.session.livesLeft ?? 0}
-          explanation={feedback?.explanation}
+          {...(feedback?.explanation ? { explanation: feedback.explanation } : {})}
           onContinue={continueSurvival}
         />
       ) : isSurvival && survivalBeat === "hit" ? (
@@ -307,6 +306,14 @@ function PlaySessionPage() {
             {question.multiSelect ? "Select all that apply" : "Choose one"}
           </p>
           <h2 className="mt-2 text-lg font-semibold leading-snug">{question.prompt}</h2>
+          {question.imageUrl ? (
+            <img
+              src={question.imageUrl}
+              alt="Question prompt reference"
+              className="mt-3 w-full max-w-2xl rounded-md border border-border object-contain"
+              loading="lazy"
+            />
+          ) : null}
           <PlayOptions
             options={question.options}
             multiSelect={question.multiSelect}

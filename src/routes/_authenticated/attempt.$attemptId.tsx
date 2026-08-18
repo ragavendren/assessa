@@ -311,6 +311,14 @@ function AttemptRunner() {
               >
                 {question.prompt}
               </h2>
+              {question.imageUrl ? (
+                <img
+                  src={question.imageUrl}
+                  alt="Question prompt reference"
+                  className="mt-4 w-full max-w-2xl rounded-lg border border-border object-contain"
+                  loading="lazy"
+                />
+              ) : null}
 
               <div
                 className="mt-7 space-y-3"

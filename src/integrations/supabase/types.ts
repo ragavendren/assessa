@@ -374,6 +374,7 @@ export type Database = {
           id: string;
           pool_id: string;
           prompt: string;
+          image_url: string | null;
           options: Json;
           correct_index: number;
           correct_indexes: number[];
@@ -393,6 +394,7 @@ export type Database = {
           id?: string;
           pool_id: string;
           prompt: string;
+          image_url?: string | null;
           options?: Json;
           correct_index?: number;
           correct_indexes?: number[];
@@ -412,6 +414,7 @@ export type Database = {
           id?: string;
           pool_id?: string;
           prompt?: string;
+          image_url?: string | null;
           options?: Json;
           correct_index?: number;
           correct_indexes?: number[];
@@ -449,6 +452,7 @@ export type Database = {
           kind: string;
           name: string;
           course_id: string | null;
+          activity_id: string | null;
           pool_id: string | null;
           topic: string | null;
           rules: Json;
@@ -461,6 +465,7 @@ export type Database = {
           kind: string;
           name: string;
           course_id?: string | null;
+          activity_id?: string | null;
           pool_id?: string | null;
           topic?: string | null;
           rules?: Json;
@@ -473,6 +478,7 @@ export type Database = {
           kind?: string;
           name?: string;
           course_id?: string | null;
+          activity_id?: string | null;
           pool_id?: string | null;
           topic?: string | null;
           rules?: Json;
@@ -778,6 +784,216 @@ export type Database = {
           status?: string;
           created_by?: string | null;
           created_at?: string;
+        };
+        Relationships: [];
+      };
+      play_activities: {
+        Row: {
+          id: string;
+          name: string;
+          status: Database["public"]["Enums"]["catalog_status"];
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          status?: Database["public"]["Enums"]["catalog_status"];
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          status?: Database["public"]["Enums"]["catalog_status"];
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      play_arenas: {
+        Row: {
+          id: string;
+          name: string;
+          activity_id: string | null;
+          course_id: string | null;
+          pool_id: string | null;
+          status: string;
+          segment_count: number;
+          questions_per_segment: number;
+          per_question_seconds: number;
+          correct_marks: number;
+          wrong_marks: number;
+          current_index: number;
+          question_started_at: string | null;
+          question_ends_at: string | null;
+          winner_team_id: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          activity_id?: string | null;
+          course_id?: string | null;
+          pool_id?: string | null;
+          status?: string;
+          segment_count?: number;
+          questions_per_segment?: number;
+          per_question_seconds?: number;
+          correct_marks?: number;
+          wrong_marks?: number;
+          current_index?: number;
+          question_started_at?: string | null;
+          question_ends_at?: string | null;
+          winner_team_id?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          activity_id?: string | null;
+          course_id?: string | null;
+          pool_id?: string | null;
+          status?: string;
+          segment_count?: number;
+          questions_per_segment?: number;
+          per_question_seconds?: number;
+          correct_marks?: number;
+          wrong_marks?: number;
+          current_index?: number;
+          question_started_at?: string | null;
+          question_ends_at?: string | null;
+          winner_team_id?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      play_arena_questions: {
+        Row: {
+          id: string;
+          arena_id: string;
+          sort_order: number;
+          segment_index: number;
+          prompt: string;
+          image_url: string | null;
+          options: Json;
+          correct_indexes: number[];
+          multi_select: boolean;
+          explanation: string;
+        };
+        Insert: {
+          id?: string;
+          arena_id: string;
+          sort_order: number;
+          segment_index: number;
+          prompt: string;
+          image_url?: string | null;
+          options?: Json;
+          correct_indexes?: number[];
+          multi_select?: boolean;
+          explanation?: string;
+        };
+        Update: {
+          id?: string;
+          arena_id?: string;
+          sort_order?: number;
+          segment_index?: number;
+          prompt?: string;
+          image_url?: string | null;
+          options?: Json;
+          correct_indexes?: number[];
+          multi_select?: boolean;
+          explanation?: string;
+        };
+        Relationships: [];
+      };
+      play_arena_teams: {
+        Row: {
+          id: string;
+          arena_id: string;
+          name: string;
+          created_by: string;
+          score: number;
+          correct_count: number;
+          wrong_count: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          arena_id: string;
+          name: string;
+          created_by: string;
+          score?: number;
+          correct_count?: number;
+          wrong_count?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          arena_id?: string;
+          name?: string;
+          created_by?: string;
+          score?: number;
+          correct_count?: number;
+          wrong_count?: number;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      play_arena_members: {
+        Row: {
+          arena_id: string;
+          team_id: string;
+          user_id: string;
+          joined_at: string;
+        };
+        Insert: {
+          arena_id: string;
+          team_id: string;
+          user_id: string;
+          joined_at?: string;
+        };
+        Update: {
+          arena_id?: string;
+          team_id?: string;
+          user_id?: string;
+          joined_at?: string;
+        };
+        Relationships: [];
+      };
+      play_arena_answers: {
+        Row: {
+          arena_id: string;
+          team_id: string;
+          question_index: number;
+          answer_indexes: number[];
+          submitted_at: string;
+          correct: boolean | null;
+          marks: number;
+        };
+        Insert: {
+          arena_id: string;
+          team_id: string;
+          question_index: number;
+          answer_indexes?: number[];
+          submitted_at?: string;
+          correct?: boolean | null;
+          marks?: number;
+        };
+        Update: {
+          arena_id?: string;
+          team_id?: string;
+          question_index?: number;
+          answer_indexes?: number[];
+          submitted_at?: string;
+          correct?: boolean | null;
+          marks?: number;
         };
         Relationships: [];
       };
@@ -1168,6 +1384,7 @@ export type Database = {
           exam_id: string;
           explanation: string;
           id: string;
+          image_url: string | null;
           options: Json;
           points: number;
           prompt: string;
@@ -1182,6 +1399,7 @@ export type Database = {
           exam_id: string;
           explanation?: string;
           id?: string;
+          image_url?: string | null;
           options?: Json;
           points?: number;
           prompt: string;
@@ -1196,6 +1414,7 @@ export type Database = {
           exam_id?: string;
           explanation?: string;
           id?: string;
+          image_url?: string | null;
           options?: Json;
           points?: number;
           prompt?: string;

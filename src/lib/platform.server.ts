@@ -506,6 +506,7 @@ export async function assertExamAccess(userId: string, exam: ExamRow) {
 export type ServedQuestion = {
   id: string;
   prompt: string;
+  imageUrl: string | null;
   options: string[];
   subtopic: string;
   points: number;
@@ -525,7 +526,9 @@ export async function serveQuestions(questionIds: string[]): Promise<ServedQuest
   if (questionIds.length === 0) return [];
   const { data } = await db
     .from("questions")
-    .select("id, prompt, options, subtopic, points, correct_index, correct_indexes, multi_select")
+    .select(
+      "id, prompt, image_url, options, subtopic, points, correct_index, correct_indexes, multi_select",
+    )
     .in("id", questionIds);
   const byId = new Map((data ?? []).map((q) => [q.id, q]));
   return questionIds
@@ -538,6 +541,7 @@ export async function serveQuestions(questionIds: string[]): Promise<ServedQuest
       return {
         id: q!.id,
         prompt: q!.prompt,
+        imageUrl: (q as { image_url?: string | null }).image_url ?? null,
         options: (q!.options as string[]) ?? [],
         subtopic: q!.subtopic,
         points: q!.points,
@@ -1060,7 +1064,7 @@ export async function summariseResult(
     db
       .from("questions")
       .select(
-        "id, prompt, options, correct_index, correct_indexes, multi_select, explanation, subtopic",
+        "id, prompt, image_url, options, correct_index, correct_indexes, multi_select, explanation, subtopic",
       )
       .in("id", attempt.question_ids),
     getXpTotal(userId),
@@ -1085,6 +1089,7 @@ export async function summariseResult(
           return {
             id: q!.id,
             prompt: q!.prompt,
+            imageUrl: (q as { image_url?: string | null }).image_url ?? null,
             options: (q!.options as string[]) ?? [],
             correctIndex: correctIndexes[0] ?? q!.correct_index,
             correctIndexes,
