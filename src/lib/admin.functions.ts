@@ -656,24 +656,13 @@ export const upsertBadge = createServerFn({ method: "POST" })
           .max(60),
         name: z.string().trim().min(2).max(80),
         description: z.string().trim().max(240).default(""),
-        icon: z.string().trim().min(1).max(32),
+        icon: z.string().trim().min(1).max(64),
         category: z.string().trim().max(40).default("custom"),
         track: z.enum(["beginner", "intermediate", "expertise", "elite"]).default("intermediate"),
-        condition_type: z.enum([
-          "pass_count",
-          "attempt_count",
-          "single_score",
-          "average_over",
-          "pass_streak",
-          "fast_high_score",
-          "improvement",
-          "comeback",
-          "topic_average",
-          "top_rank",
-        ]),
-        condition_value: z.number().min(0).max(1000),
+        condition_type: z.string().trim().min(1).max(60),
+        condition_value: z.coerce.number().min(0).max(10000),
         condition_topic: z.string().trim().max(60).optional().or(z.literal("")),
-        xp_reward: z.number().int().min(0).max(2000),
+        xp_reward: z.coerce.number().int().min(0).max(2000),
         active: z.boolean(),
       })
       .parse(input),
@@ -682,9 +671,22 @@ export const upsertBadge = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { requireAdmin } = await import("@/lib/platform.server");
     await requireAdmin(context.userId);
-    const { error } = await supabaseAdmin
-      .from("badges")
-      .upsert({ ...data, condition_topic: data.condition_topic || null }, { onConflict: "code" });
+    const { error } = await supabaseAdmin.from("badges").upsert(
+      {
+        code: data.code,
+        name: data.name,
+        description: data.description,
+        icon: data.icon,
+        category: data.category,
+        track: data.track,
+        condition_type: data.condition_type,
+        condition_value: data.condition_value,
+        condition_topic: data.condition_topic || null,
+        xp_reward: data.xp_reward,
+        active: data.active,
+      },
+      { onConflict: "code" },
+    );
     if (error) throw error;
     return { ok: true };
   });

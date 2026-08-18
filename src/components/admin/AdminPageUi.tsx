@@ -1,31 +1,40 @@
 import { HelpTip } from "@/components/admin/pool/QuestionBankUi";
+import { AssessaIcon } from "@/components/icons";
 import { cn } from "@/lib/utils";
+import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
+export function AdminBackLink({ to, label }: { to: string; label: string }) {
+  return (
+    <Link
+      to={to as never}
+      className="mb-3 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+    >
+      <AssessaIcon name="arrowLeft" className="h-3.5 w-3.5" />
+      {label}
+    </Link>
+  );
+}
+
 export function AdminPageHeader({
-  eyebrow,
   title,
-  summary,
   help,
   action,
+  back,
 }: {
-  eyebrow: string;
   title: string;
-  summary?: string;
   help?: { label: string; body: ReactNode };
   action?: ReactNode;
+  back?: { to: string; label: string };
 }) {
   return (
     <div className="mb-4 flex w-full min-w-0 flex-wrap items-start justify-between gap-3">
-      <div className="min-w-0 max-w-2xl">
-        <p className="text-hairline text-muted-foreground">{eyebrow}</p>
-        <div className="mt-0.5 flex items-center gap-2">
+      <div className="min-w-0">
+        {back ? <AdminBackLink to={back.to} label={back.label} /> : null}
+        <div className="flex items-center gap-2">
           <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
           {help ? <HelpTip label={help.label}>{help.body}</HelpTip> : null}
         </div>
-        {summary ? (
-          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{summary}</p>
-        ) : null}
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}
     </div>

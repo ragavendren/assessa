@@ -5,7 +5,6 @@ import type { TopicAllocation, Shortage } from "@/lib/question-selection.math";
 import {
   checkQuestionAvailability,
   generateExamQuestions,
-  listAssessmentSeries,
   listBlueprints,
   listCourses,
   listQuestionPools,
@@ -74,7 +73,6 @@ export function QuestionGenerationConfiguration({
   const fetchCourses = useServerFn(listCourses);
   const fetchPools = useServerFn(listQuestionPools);
   const fetchBlueprints = useServerFn(listBlueprints);
-  const fetchSeries = useServerFn(listAssessmentSeries);
   const previewDist = useServerFn(previewBlueprintDistribution);
   const checkAvail = useServerFn(checkQuestionAvailability);
   const generate = useServerFn(generateExamQuestions);
@@ -98,28 +96,15 @@ export function QuestionGenerationConfiguration({
     queryFn: () => fetchBlueprints({ data: { courseId: value.courseId ?? undefined } }),
     enabled: Boolean(value.courseId),
   });
-  const { data: seriesData } = useQuery({
-    queryKey: ["admin-series", value.courseId],
-    queryFn: () => fetchSeries({ data: { courseId: value.courseId ?? undefined } }),
-    enabled: Boolean(value.courseId),
-  });
 
   const pools = poolsData?.pools ?? [];
   const blueprints = blueprintsData?.blueprints ?? [];
-  const series = seriesData?.series ?? [];
 
-  useEffect(() => {
-    if (!value.courseId || value.blueprintId) return;
-    const list = blueprintsData?.blueprints ?? [];
-    if (list.length === 0) return;
-    const preferred = list.find((b) => b.is_default) ?? list[0];
-    if (!preferred) return;
-    onChange({
-      ...value,
-      blueprintId: preferred.id,
-      questionCount: preferred.default_total_questions ?? value.questionCount,
-    });
-  }, [blueprintsData, value.courseId, value.blueprintId]); // eslint-disable-line react-hooks/exhaustive-deps -- auto-pick once when course blueprints load
+  function resolveBlueprintId(): string | null {
+    if (value.blueprintId) return value.blueprintId;
+    if (blueprints.length === 0) return null;
+    return blueprints[Math.floor(Math.random() * blueprints.length)]!.id;
+  }
 
   useEffect(() => {
     if (!value.blueprintId || value.questionCount < 1) {
@@ -138,17 +123,25 @@ export function QuestionGenerationConfiguration({
   }, [previewDist, value.blueprintId, value.questionCount]);
 
   const ready = useMemo(
-    () => Boolean(value.courseId && value.poolId && value.blueprintId && value.questionCount >= 1),
-    [value],
+    () =>
+      Boolean(
+        value.courseId &&
+        value.poolId &&
+        value.questionCount >= 1 &&
+        (value.blueprintId || blueprints.length > 0),
+      ),
+    [value, blueprints.length],
   );
 
   const generateMutation = useMutation({
     mutationFn: async (opts: { persist: boolean; allowUsed: boolean }) => {
+      const blueprintId = resolveBlueprintId();
+      if (!blueprintId) throw new Error("Add a blueprint to this course, or pick one");
       const payload = {
         examId: examId ?? undefined,
         courseId: value.courseId!,
         poolId: value.poolId!,
-        blueprintId: value.blueprintId!,
+        blueprintId,
         seriesId: value.seriesId,
         questionCount: value.questionCount,
         reusePolicy: value.reusePolicy,
@@ -177,19 +170,22 @@ export function QuestionGenerationConfiguration({
   });
 
   const availabilityMutation = useMutation({
-    mutationFn: () =>
-      checkAvail({
+    mutationFn: () => {
+      const blueprintId = resolveBlueprintId();
+      if (!blueprintId) throw new Error("Add a blueprint to this course, or pick one");
+      return checkAvail({
         data: {
           courseId: value.courseId!,
           poolId: value.poolId!,
-          blueprintId: value.blueprintId!,
+          blueprintId,
           seriesId: value.seriesId,
           questionCount: value.questionCount,
           reusePolicy: value.reusePolicy,
           reuseLastN: value.reuseLastN,
           allowPreviouslyUsed,
         },
-      }),
+      });
+    },
     onSuccess: (result) => {
       setShortages(result.shortages);
       if (result.available) toast.success("Pool can fill this blueprint");
@@ -242,7 +238,7 @@ export function QuestionGenerationConfiguration({
           </select>
         </label>
         <label className="block text-sm">
-          <span className="mb-1 block text-muted-foreground">Blueprint</span>
+          <span className="mb-1 block text-muted-foreground">Blueprint (optional)</span>
           <select
             className="field w-full"
             value={value.blueprintId ?? ""}
@@ -257,37 +253,10 @@ export function QuestionGenerationConfiguration({
               });
             }}
           >
-            <option value="">Select blueprint…</option>
+            <option value="">Random selection</option>
             {blueprints.map((b) => (
               <option key={b.id} value={b.id}>
-                {b.name} (v{b.version}){b.is_default ? " · default" : ""}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="block text-sm">
-          <span className="mb-1 block text-muted-foreground">Series (optional)</span>
-          <select
-            className="field w-full"
-            value={value.seriesId ?? ""}
-            disabled={!value.courseId}
-            onChange={(e) => {
-              const id = e.target.value || null;
-              const s = series.find((row) => row.id === id);
-              onChange({
-                ...value,
-                seriesId: id,
-                poolId: s?.question_pool_id ?? value.poolId,
-                blueprintId: s?.blueprint_id ?? value.blueprintId,
-                reusePolicy: s?.reuse_policy ?? value.reusePolicy,
-                reuseLastN: s?.reuse_last_n ?? value.reuseLastN,
-              });
-            }}
-          >
-            <option value="">None</option>
-            {series.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
+                {b.name} (v{b.version})
               </option>
             ))}
           </select>

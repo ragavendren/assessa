@@ -1,40 +1,8 @@
+import { AssessaIcon, playKindIcon } from "@/components/icons";
 import { PLAY_KIND_META, type PlayKind } from "@/lib/play.math";
 import { cn } from "@/lib/utils";
 import { Link } from "@tanstack/react-router";
-import {
-  BookOpen,
-  Calendar,
-  Heart,
-  LandPlot,
-  Layers,
-  Route,
-  Swords,
-  Target,
-  Timer,
-  Trophy,
-  Users,
-  Zap,
-  type LucideIcon,
-} from "lucide-react";
 import type { ReactNode } from "react";
-
-const MODE_ICONS: Partial<Record<PlayKind, LucideIcon>> = {
-  daily: Calendar,
-  weekly: Trophy,
-  topic: Target,
-  speed: Timer,
-  survival: Heart,
-  marathon: Route,
-  flash: Layers,
-  rapid: Zap,
-  battle: Swords,
-  team: Users,
-  arena: LandPlot,
-};
-
-export function playModeIcon(kind: PlayKind) {
-  return MODE_ICONS[kind] ?? BookOpen;
-}
 
 export function PlayModeCard({
   kind,
@@ -64,7 +32,6 @@ export function PlayModeCard({
   footer?: ReactNode;
 }) {
   const meta = PLAY_KIND_META[kind];
-  const Icon = playModeIcon(kind);
   const stats = [
     questionCount ? `${questionCount} Q` : null,
     durationSeconds ? formatShortTime(durationSeconds) : null,
@@ -77,7 +44,7 @@ export function PlayModeCard({
     <>
       <div className="flex items-start gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <Icon className="h-5 w-5" />
+          <AssessaIcon name={playKindIcon(kind)} className="h-5 w-5" />
         </span>
         <div className="min-w-0 flex-1">
           <p className="font-medium">{meta.label}</p>

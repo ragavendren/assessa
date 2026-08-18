@@ -1,3 +1,4 @@
+import { AssessaIcon } from "@/components/icons";
 import { BoardStage, LeaderboardChip, LeaderboardHero } from "@/components/leaderboard/BoardStage";
 import { LeaderboardTabs } from "@/components/play/LeaderboardTabs";
 import { EmptyState, PageLoader } from "@/components/platform";
@@ -8,7 +9,6 @@ import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { ListChecks, Medal, Sparkles, Target, Timer, Trophy, Hash } from "lucide-react";
 import type { ReactNode } from "react";
 import { z } from "zod";
 
@@ -111,12 +111,12 @@ function LeaderboardPage() {
         chips={
           <>
             <LeaderboardChip
-              icon={<Trophy className="h-3.5 w-3.5" />}
+              icon={<AssessaIcon name="trophy" className="h-3.5 w-3.5" />}
               label="Ranked"
               value={rows.length}
             />
             <LeaderboardChip
-              icon={<Sparkles className="h-3.5 w-3.5" />}
+              icon={<AssessaIcon name="sparkles" className="h-3.5 w-3.5" />}
               label="Your place"
               value={data?.myRank ? `#${data.myRank.rank}` : "—"}
             />
@@ -202,7 +202,7 @@ function LeaderboardPage() {
             {data.myRank ? (
               <div className="surface-paper flex items-center gap-3 px-3 py-2.5">
                 <div className="flex h-9 w-9 items-center justify-center rounded-full bg-accent/20 text-accent">
-                  <Medal className="h-4 w-4" />
+                  <AssessaIcon name="medal" className="h-4 w-4" />
                 </div>
                 <div>
                   <p className="text-hairline text-muted-foreground">Your rank</p>
@@ -257,42 +257,42 @@ function AssessmentStatsStrip({
   const items = [
     durationMinutes != null
       ? {
-          icon: <Timer className="h-3.5 w-3.5" />,
+          icon: <AssessaIcon name="timer" className="h-3.5 w-3.5" />,
           label: "Time limit",
           value: `${durationMinutes} min`,
         }
       : null,
     maxAttempts != null
       ? {
-          icon: <Hash className="h-3.5 w-3.5" />,
+          icon: <AssessaIcon name="hash" className="h-3.5 w-3.5" />,
           label: "Max attempts",
           value: String(maxAttempts),
         }
       : null,
     questionCount != null
       ? {
-          icon: <ListChecks className="h-3.5 w-3.5" />,
+          icon: <AssessaIcon name="list" className="h-3.5 w-3.5" />,
           label: "Questions",
           value: String(questionCount),
         }
       : null,
     passMark != null
       ? {
-          icon: <Target className="h-3.5 w-3.5" />,
+          icon: <AssessaIcon name="target" className="h-3.5 w-3.5" />,
           label: "Pass mark",
           value: `${passMark}%`,
         }
       : null,
     mode
       ? {
-          icon: <Sparkles className="h-3.5 w-3.5" />,
+          icon: <AssessaIcon name="sparkles" className="h-3.5 w-3.5" />,
           label: "Mode",
           value: mode in MODE_LABELS ? MODE_LABELS[mode as ExamMode] : mode,
         }
       : null,
     topic
       ? {
-          icon: <Medal className="h-3.5 w-3.5" />,
+          icon: <AssessaIcon name="medal" className="h-3.5 w-3.5" />,
           label: "Topic",
           value: topic,
         }

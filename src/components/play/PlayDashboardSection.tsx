@@ -1,9 +1,8 @@
-import { playModeIcon } from "@/components/play/PlayModeCard";
+import { AssessaIcon, playKindIcon } from "@/components/icons";
 import { PlayLeaderboardPanel } from "@/components/play/PlayLeaderboardPanel";
 import { PLAY_KIND_META, type PlayKind, type PlaySegment } from "@/lib/play.math";
 import { cn } from "@/lib/utils";
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, Flame, Gamepad2, RotateCcw } from "lucide-react";
 
 type PlayHub = {
   menuEnabled: boolean;
@@ -83,12 +82,13 @@ export function PlayDashboardSection({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-700">
-              <Gamepad2 className="h-3.5 w-3.5" />
+              <AssessaIcon name="play" className="h-3.5 w-3.5" />
               Newly launched
             </p>
             <h2 className="mt-1 text-lg font-semibold">Play is live</h2>
             <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-              Short pool games beside your assessments — daily, flash cards, survival, and more.
+              Daily and Weekly are the required Play items when they are enabled. Everything else is
+              optional practice beside your assessments.
             </p>
           </div>
           <Link
@@ -104,7 +104,7 @@ export function PlayDashboardSection({
             className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
           >
             Open Play
-            <ArrowRight className="h-4 w-4" />
+            <AssessaIcon name="arrowRight" className="h-4 w-4" />
           </Link>
         </div>
       </div>
@@ -123,7 +123,7 @@ export function PlayDashboardSection({
                   className="flex items-center justify-between rounded-md px-2 py-2 text-sm hover:bg-secondary"
                 >
                   <span className="inline-flex items-center gap-2">
-                    <RotateCcw className="h-3.5 w-3.5 text-muted-foreground" />
+                    <AssessaIcon name="reset" className="h-3.5 w-3.5 text-muted-foreground" />
                     {PLAY_KIND_META[row.kind]?.label ?? row.kind}
                     {row.topic ? ` · ${row.topic}` : ""}
                   </span>
@@ -144,13 +144,13 @@ export function PlayDashboardSection({
             return (
               <article key={mode.kind} className="surface-paper rounded-xl p-4">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Required today
+                  Required
                 </p>
                 <h3 className="mt-1 font-semibold">{mode.label}</h3>
                 <p className="mt-0.5 text-xs text-muted-foreground">{mode.blurb}</p>
                 {mode.kind === "daily" ? (
                   <p className="mt-2 inline-flex items-center gap-1 text-xs text-amber-700">
-                    <Flame className="h-3.5 w-3.5" />
+                    <AssessaIcon name="flame" className="h-3.5 w-3.5" />
                     {hub.streak.current} day streak
                   </p>
                 ) : null}
@@ -192,12 +192,11 @@ export function PlayDashboardSection({
           </p>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {possible.map(({ courseId: id, mode }) => {
-              const Icon = playModeIcon(mode.kind);
               const link = LINK_MODES[mode.kind];
               const inner = (
                 <>
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <Icon className="h-4 w-4" />
+                    <AssessaIcon name={playKindIcon(mode.kind)} className="h-4 w-4" />
                   </span>
                   <span className="min-w-0">
                     <span className="block text-sm font-medium">{mode.label}</span>

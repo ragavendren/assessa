@@ -155,17 +155,6 @@ export function BadgeBase({
               opacity="0.95"
             />
           </g>
-          <g className="badge-shimmer-sweep-delayed">
-            <rect
-              x="-30"
-              y="8"
-              width="28"
-              height="110"
-              fill={`url(#${ids.shimmer})`}
-              transform="rotate(12 64 64)"
-              opacity="0.55"
-            />
-          </g>
         </g>
       ) : null}
 

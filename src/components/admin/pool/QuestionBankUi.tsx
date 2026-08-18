@@ -1,5 +1,6 @@
+import { AssessaIcon } from "@/components/icons";
 import { cn } from "@/lib/utils";
-import { CircleHelp } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 type HelpTipProps = {
@@ -45,7 +46,7 @@ export function HelpTip({ label, children, className, side = "right" }: HelpTipP
         aria-controls={id}
         onClick={() => setOpen((value) => !value)}
       >
-        <CircleHelp className="h-3.5 w-3.5" aria-hidden />
+        <AssessaIcon name="ask" className="h-3.5 w-3.5" />
       </button>
       {open ? (
         <span
@@ -86,26 +87,30 @@ export function FieldLabel({
 
 export function QuestionBankPageHeader({
   title,
-  summary,
   help,
   action,
+  back,
 }: {
   title: string;
-  summary?: string;
   help?: { label: string; body: ReactNode };
   action?: ReactNode;
+  back?: { to: string; label: string };
 }) {
   return (
     <div className="mb-4 flex w-full min-w-0 flex-wrap items-start justify-between gap-3">
-      <div className="min-w-0 max-w-2xl">
-        <p className="text-hairline text-muted-foreground">Question bank</p>
-        <div className="mt-0.5 flex items-center gap-2">
+      <div className="min-w-0">
+        {back ? (
+          <Link
+            to={back.to as never}
+            className="mb-2 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          >
+            ← {back.label}
+          </Link>
+        ) : null}
+        <div className="flex items-center gap-2">
           <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
           {help ? <HelpTip label={help.label}>{help.body}</HelpTip> : null}
         </div>
-        {summary ? (
-          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{summary}</p>
-        ) : null}
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}
     </div>
@@ -184,7 +189,6 @@ export function Panel({
 
 export const QUESTION_BANK_STEPS = [
   { label: "Courses", hint: "Container for pools & blueprints" },
-  { label: "Pools", hint: "Import reusable question bank" },
-  { label: "Blueprints", hint: "Topic weightage & difficulty mix" },
-  { label: "Series", hint: "Optional reuse policy grouping" },
+  { label: "Pools", hint: "Reusable questions for papers and Play" },
+  { label: "Blueprints", hint: "Optional topic mix for papers" },
 ] as const;

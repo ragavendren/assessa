@@ -6,7 +6,6 @@ import {
   ResultCount,
   StatusPill,
 } from "@/components/admin/AdminPageUi";
-import { UserManagementNav } from "@/components/admin/UserManagementNav";
 import { ListToolbar, listViewClass, useListViewMode } from "@/components/ListToolbar";
 import { EmptyState, Meter, PageLoader, ScorePill, StatTile } from "@/components/platform";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -177,7 +176,6 @@ function AdminUsersPage() {
     return (
       <div>
         <AdminNav />
-        <UserManagementNav />
         <PageLoader label="Loading users…" />
       </div>
     );
@@ -186,7 +184,6 @@ function AdminUsersPage() {
     return (
       <div>
         <AdminNav />
-        <UserManagementNav />
         <AdminAccessDenied />
       </div>
     );
@@ -206,14 +203,11 @@ function AdminUsersPage() {
   return (
     <div>
       <AdminNav />
-      <UserManagementNav />
       <div className="space-y-10">
         <AdminPageHeader
-          eyebrow="User management"
-          title="Users & activity"
-          summary="Find a participant, review their papers, then edit profile, role, or access from the detail panel."
+          title="Users"
           help={{
-            label: "Roles and bans",
+            label: "Users",
             body: "Admins can author assessments. Ban blocks sign-in without deleting history. Delete is permanent.",
           }}
         />

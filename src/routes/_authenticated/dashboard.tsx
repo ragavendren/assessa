@@ -1,3 +1,4 @@
+import { AssessaIcon } from "@/components/icons";
 import { BadgeDriftWall } from "@/components/BadgeDriftWall";
 import { BadgeMark } from "@/components/BadgeMark";
 import { Carousel } from "@/components/Carousel";
@@ -11,6 +12,7 @@ import {
   StatTile,
 } from "@/components/platform";
 import { ScoreTrendChart } from "@/components/ScoreTrendChart";
+import { TourPrompt } from "@/components/help/HelpCenter";
 import { PlayDashboardSection } from "@/components/play/PlayDashboardSection";
 import { getParticipantInsight } from "@/lib/ai.functions";
 import { formatDate } from "@/lib/gamification";
@@ -21,7 +23,6 @@ import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowRight, Award, Flame, Sparkles, Target, Trophy, Zap } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -100,22 +101,13 @@ function Dashboard() {
 
   return (
     <div className="space-y-8">
-      {/* Hero — Assessa Yourself with badge drift */}
+      <TourPrompt />
+      {/* Hero — Assessa Yourself */}
       <header className="animate-dash-rise relative overflow-hidden surface-metal p-6 md:p-7">
-        <BadgeDriftWall badges={earnedBadges} limit={10} />
-        <div
-          className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-amber-400/20 blur-3xl animate-dash-float"
-          aria-hidden
-        />
-        <div
-          className="pointer-events-none absolute -bottom-24 left-[30%] h-44 w-44 rounded-full bg-sky-300/15 blur-3xl animate-dash-float-alt"
-          aria-hidden
-        />
-
-        <div className="relative z-10 flex flex-wrap items-end justify-between gap-5">
-          <div className="min-w-0 max-w-xl">
+        <div className="flex flex-wrap items-end justify-between gap-5 lg:flex-nowrap">
+          <div className="relative z-10 min-w-0 max-w-xl">
             <p className="animate-dash-chip inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-amber-700">
-              <Zap className="h-3.5 w-3.5 animate-dash-flame" />
+              <AssessaIcon name="zap" className="h-3.5 w-3.5 animate-dash-flame" />
               Assessa Yourself
             </p>
             <p className="animate-dash-rise mt-2 text-sm text-muted-foreground" style={delay(40)}>
@@ -129,42 +121,57 @@ function Dashboard() {
             </h1>
             <div className="mt-3 flex flex-wrap gap-2 text-xs">
               <QuestChip
-                icon={<Target className="h-3.5 w-3.5" />}
+                icon={<AssessaIcon name="target" className="h-3.5 w-3.5" />}
                 label={`${data.availableCount} ready`}
                 style={delay(140)}
               />
               <QuestChip
-                icon={<Flame className="h-3.5 w-3.5 animate-dash-flame" />}
+                icon={<AssessaIcon name="flame" className="h-3.5 w-3.5 animate-dash-flame" />}
                 label={`${examStreak?.current ?? 0} exam streak`}
                 style={delay(190)}
               />
               {playOn ? (
                 <QuestChip
-                  icon={<Flame className="h-3.5 w-3.5 text-amber-500 animate-dash-flame" />}
+                  icon={
+                    <AssessaIcon
+                      name="flame"
+                      className="h-3.5 w-3.5 text-amber-500 animate-dash-flame"
+                    />
+                  }
                   label={`${dailyPlayStreak} day streak`}
                   style={delay(220)}
                 />
               ) : null}
               <QuestChip
-                icon={<Award className="h-3.5 w-3.5" />}
+                icon={<AssessaIcon name="award" className="h-3.5 w-3.5" />}
                 label={`${data.badgeCount} badges`}
                 style={delay(240)}
               />
               <QuestChip
-                icon={<Trophy className="h-3.5 w-3.5" />}
+                icon={<AssessaIcon name="trophy" className="h-3.5 w-3.5" />}
                 label={`${passStreak?.current ?? 0} pass streak`}
                 style={delay(290)}
               />
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
+          {earnedBadges.length > 0 ? (
+            <div className="relative hidden min-h-0 min-w-[9rem] flex-1 self-stretch lg:block">
+              <BadgeDriftWall badges={earnedBadges} limit={6} />
+            </div>
+          ) : (
+            <div className="hidden flex-1 lg:block" />
+          )}
+          <div className="relative z-10 flex shrink-0 flex-wrap gap-2">
             <Link
               to="/exams"
               className="animate-dash-pop group inline-flex items-center gap-2 rounded-md border border-amber-200/30 bg-gradient-to-b from-amber-200 to-amber-600 px-4 py-2.5 text-sm font-semibold text-amber-950 shadow-[0_8px_24px_-12px_rgba(251,191,36,0.55)] transition-all duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:from-amber-100 hover:to-amber-500 active:scale-[0.98]"
               style={delay(160)}
             >
               Start assessment
-              <ArrowRight className="h-4 w-4 animate-dash-cta-arrow transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:translate-x-1" />
+              <AssessaIcon
+                name="arrowRight"
+                className="h-4 w-4 animate-dash-cta-arrow transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:translate-x-1"
+              />
             </Link>
             {playOn && (playHub?.segments.length ?? 0) > 0 ? (
               <Link
@@ -314,7 +321,10 @@ function Dashboard() {
                   <span>
                     {exam.questionCount} Q · {exam.duration} min
                   </span>
-                  <ArrowRight className="h-3.5 w-3.5 -translate-x-1 opacity-0 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:translate-x-0 group-hover:opacity-100" />
+                  <AssessaIcon
+                    name="arrowRight"
+                    className="h-3.5 w-3.5 -translate-x-1 opacity-0 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:translate-x-0 group-hover:opacity-100"
+                  />
                 </div>
               </Link>
             ))}
@@ -407,6 +417,7 @@ function Dashboard() {
                   icon={badge.icon}
                   code={"code" in badge ? (badge.code ?? null) : null}
                   name={badge.name}
+                  track={"track" in badge ? badge.track : undefined}
                   size="lg"
                 />
                 <p className="line-clamp-2 text-xs font-medium leading-snug">{badge.name}</p>
@@ -445,7 +456,8 @@ function Dashboard() {
                 disabled={insightMutation.isPending}
                 className="inline-flex items-center gap-1 text-xs font-medium text-accent underline-offset-4 hover:underline disabled:opacity-60"
               >
-                <Sparkles
+                <AssessaIcon
+                  name="sparkles"
                   className={cn("h-3.5 w-3.5", insightMutation.isPending && "animate-dash-flame")}
                 />
                 {insightMutation.isPending ? "…" : "Coach"}

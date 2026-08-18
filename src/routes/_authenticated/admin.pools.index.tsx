@@ -1,5 +1,4 @@
 import { AdminNav } from "@/components/AdminNav";
-import { QuestionBankNav } from "@/components/admin/QuestionBankNav";
 import { FieldLabel, Panel } from "@/components/admin/pool/QuestionBankUi";
 import { PoolWorkspace } from "@/components/admin/pool/PoolWorkspace";
 import { AdminEmpty, StatusPill } from "@/components/admin/AdminPageUi";
@@ -146,7 +145,6 @@ function AdminPoolsPage() {
     <div className="-mb-6 flex h-[calc(2*(100dvh-5.5rem))] min-h-[calc(2*(100dvh-5.5rem))] flex-col">
       <div className="shrink-0 [&_nav]:mb-2">
         <AdminNav />
-        <QuestionBankNav />
         <div className="mb-2 flex w-full min-w-0 flex-wrap items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
             <h2 className="text-base font-semibold tracking-tight">Question pools</h2>

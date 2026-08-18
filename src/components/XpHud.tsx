@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import { onXpGain } from "@/lib/xp-fly";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Sparkles } from "lucide-react";
+import { AssessaIcon } from "@/components/icons";
 import { useEffect, useRef, useState } from "react";
 
 type Flyer = {
@@ -93,7 +93,7 @@ export function XpHud() {
           )}
           aria-label={`${shown.toLocaleString()} XP`}
         >
-          <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+          <AssessaIcon name="sparkles" className="h-3.5 w-3.5 text-amber-500" />
           <span>{shown.toLocaleString()}</span>
           <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
             XP

@@ -8,8 +8,10 @@ import {
   ResultCount,
   StatusPill,
 } from "@/components/admin/AdminPageUi";
-import { EngagementNav } from "@/components/admin/EngagementNav";
+import { BadgeIcon } from "@/components/badges";
+import { AssessaIcon } from "@/components/icons";
 import { PageLoader, StatTile } from "@/components/platform";
+import { SlideOver } from "@/components/ui/slide-over";
 import { BADGE_ICON_CATALOG, resolveBadgeIcon } from "@/lib/badge-icons";
 import { listBadgeConfig, updateXpRule, upsertBadge } from "@/lib/admin.functions";
 import { SKILL_TRACK_LABELS, type SkillTrack } from "@/lib/gamification";
@@ -17,7 +19,6 @@ import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { Pencil, Plus, Sparkles, Zap } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -51,6 +52,9 @@ const CONDITIONS = [
   "comeback",
   "topic_average",
   "top_rank",
+  "daily_streak",
+  "weekly_top10",
+  "play_kind",
 ] as const;
 
 type BadgeForm = {
@@ -60,7 +64,7 @@ type BadgeForm = {
   icon: string;
   category: string;
   track: "beginner" | "intermediate" | "expertise" | "elite";
-  condition_type: (typeof CONDITIONS)[number];
+  condition_type: string;
   condition_value: number;
   condition_topic: string;
   xp_reward: number;
@@ -90,6 +94,7 @@ function GamificationAdmin() {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<BadgeForm>(EMPTY);
   const [editingCode, setEditingCode] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
   const [panel, setPanel] = useState<Panel>("badges");
   const [trackFilter, setTrackFilter] = useState<"all" | SkillTrack>("all");
   const [badgeSearch, setBadgeSearch] = useState("");
@@ -106,6 +111,7 @@ function GamificationAdmin() {
       toast.success(editingCode ? "Badge updated" : "Badge created");
       setForm(EMPTY);
       setEditingCode(null);
+      setFormOpen(false);
       queryClient.invalidateQueries({ queryKey: ["badge-config"] });
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Could not save badge"),
@@ -135,11 +141,15 @@ function GamificationAdmin() {
     });
   }, [badgeSearch, data?.badges, trackFilter]);
 
+  const conditionOptions = useMemo(() => {
+    const extra = (data?.badges ?? []).map((badge) => badge.condition_type);
+    return [...new Set([...CONDITIONS, ...extra])];
+  }, [data?.badges]);
+
   if (isPending) {
     return (
       <div>
         <AdminNav />
-        <EngagementNav />
         <PageLoader />
       </div>
     );
@@ -148,7 +158,6 @@ function GamificationAdmin() {
     return (
       <div>
         <AdminNav />
-        <EngagementNav />
         <AdminAccessDenied />
       </div>
     );
@@ -168,31 +177,36 @@ function GamificationAdmin() {
       icon: badge.icon,
       category: badge.category,
       track: (badge.track as BadgeForm["track"]) || "intermediate",
-      condition_type: badge.condition_type as BadgeForm["condition_type"],
-      condition_value: Number(badge.condition_value),
+      condition_type: badge.condition_type,
+      condition_value: Number(badge.condition_value) || 0,
       condition_topic: badge.condition_topic ?? "",
-      xp_reward: badge.xp_reward,
+      xp_reward: Number(badge.xp_reward) || 0,
       active: badge.active,
     });
+    setFormOpen(true);
   }
 
   function startCreate() {
     setEditingCode(null);
     setForm(EMPTY);
     setPanel("badges");
+    setFormOpen(true);
+  }
+
+  function closeForm() {
+    setFormOpen(false);
+    setEditingCode(null);
+    setForm(EMPTY);
   }
 
   return (
     <div className="space-y-5">
       <AdminNav />
-      <EngagementNav />
       <AdminPageHeader
-        eyebrow="Engagement"
-        title="Gamification"
-        summary="Tune XP rules and badges that participants earn across assessments. Changes apply to new awards."
+        title="XP"
         help={{
-          label: "How awards work",
-          body: "XP rules fire when someone starts or finishes a paper. Badges use the condition you set here and only grant while Active.",
+          label: "XP & badges",
+          body: "XP rules fire when someone starts or finishes a paper. Badges use the condition you set and only grant while Active.",
         }}
         action={
           <div className="inline-flex rounded-[var(--radius-md)] border border-border bg-card p-0.5">
@@ -206,7 +220,7 @@ function GamificationAdmin() {
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
-              <Sparkles className="h-3.5 w-3.5" />
+              <AssessaIcon name="achievements" className="h-3.5 w-3.5" />
               Badges
             </button>
             <button
@@ -219,7 +233,7 @@ function GamificationAdmin() {
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
-              <Zap className="h-3.5 w-3.5" />
+              <AssessaIcon name="xp" className="h-3.5 w-3.5" />
               XP rules
             </button>
           </div>
@@ -300,8 +314,8 @@ function GamificationAdmin() {
           </div>
         </AdminPanel>
       ) : (
-        <section className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,19rem)]">
-          <div className="min-w-0 space-y-4">
+        <>
+          <section className="min-w-0 space-y-4">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <input
                 className="field min-w-0 flex-1"
@@ -314,7 +328,7 @@ function GamificationAdmin() {
                 onClick={startCreate}
                 className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
               >
-                <Plus className="h-4 w-4" />
+                <AssessaIcon name="plus" className="h-4 w-4" />
                 New badge
               </button>
             </div>
@@ -337,7 +351,7 @@ function GamificationAdmin() {
               ))}
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {filteredBadges.map((badge) => {
                 const track = (badge.track as SkillTrack) || "intermediate";
                 const selected = editingCode === badge.code;
@@ -351,7 +365,13 @@ function GamificationAdmin() {
                     )}
                   >
                     <div className="flex items-start gap-3">
-                      <BadgeMark icon={badge.icon} code={badge.code} name={badge.name} size="lg" />
+                      <BadgeMark
+                        icon={badge.icon}
+                        code={badge.code}
+                        name={badge.name}
+                        track={track}
+                        size="lg"
+                      />
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="truncate font-medium">{badge.name}</p>
@@ -375,7 +395,7 @@ function GamificationAdmin() {
                       onClick={() => loadBadge(badge)}
                       className="mt-3 inline-flex w-fit items-center gap-1.5 rounded-md border border-input px-2.5 py-1.5 text-xs font-medium hover:bg-secondary"
                     >
-                      <Pencil className="h-3.5 w-3.5" />
+                      <AssessaIcon name="pencil" className="h-3.5 w-3.5" />
                       Edit
                     </button>
                   </article>
@@ -390,32 +410,39 @@ function GamificationAdmin() {
                 </div>
               ) : null}
             </div>
-          </div>
+          </section>
 
-          <aside className="min-w-0 max-w-full lg:sticky lg:top-20 lg:self-start">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <p className="text-hairline text-muted-foreground">
-                {editingCode ? `Editing · ${editingCode}` : "Create badge"}
-              </p>
-              {editingCode ? (
-                <button
-                  type="button"
-                  onClick={startCreate}
-                  className="text-xs text-accent underline-offset-4 hover:underline"
-                >
-                  Clear form
-                </button>
-              ) : null}
-            </div>
+          <SlideOver
+            open={formOpen}
+            onClose={closeForm}
+            title={editingCode ? "Edit badge" : "New badge"}
+            description={
+              editingCode
+                ? `Update ${editingCode}. The code stays the same so existing awards stay linked.`
+                : "Give it a unique code, a skill track, and the condition that awards it."
+            }
+            size="lg"
+          >
             <form
               onSubmit={(event) => {
                 event.preventDefault();
-                badgeMutation.mutate(form);
+                badgeMutation.mutate({
+                  ...form,
+                  code: form.code.trim().toLowerCase(),
+                  condition_value: Number(form.condition_value) || 0,
+                  xp_reward: Number(form.xp_reward) || 0,
+                });
               }}
-              className="surface-paper space-y-3 p-5"
+              className="space-y-3"
             >
               <div className="flex items-center gap-3 rounded-[var(--radius-md)] border border-border bg-secondary/40 px-3 py-3">
-                <BadgeMark icon={form.icon} code={form.code} name={form.name} size="xl" />
+                <BadgeMark
+                  icon={form.icon}
+                  code={form.code}
+                  name={form.name}
+                  track={form.track}
+                  size="xl"
+                />
                 <div className="min-w-0">
                   <p className="truncate font-display text-lg">{form.name || "Badge name"}</p>
                   <p className="truncate text-xs text-muted-foreground">
@@ -477,7 +504,9 @@ function GamificationAdmin() {
                               : "border-border bg-card text-muted-foreground hover:bg-secondary hover:text-foreground",
                           )}
                         >
-                          <item.Icon className="h-4 w-4" />
+                          <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
+                            <BadgeIcon glyph={item.id} fill="currentColor" />
+                          </svg>
                           <span className="sr-only">{item.label}</span>
                         </button>
                       );
@@ -489,7 +518,7 @@ function GamificationAdmin() {
                       className="field mt-1"
                       value={form.icon}
                       onChange={(e) => setForm({ ...form, icon: e.target.value })}
-                      maxLength={32}
+                      maxLength={64}
                       placeholder="Catalog key or emoji"
                       aria-label="Icon key or emoji"
                     />
@@ -543,11 +572,11 @@ function GamificationAdmin() {
                     onChange={(e) =>
                       setForm({
                         ...form,
-                        condition_type: e.target.value as BadgeForm["condition_type"],
+                        condition_type: e.target.value,
                       })
                     }
                   >
-                    {CONDITIONS.map((value) => (
+                    {conditionOptions.map((value) => (
                       <option key={value} value={value}>
                         {value.replace(/_/g, " ")}
                       </option>
@@ -601,8 +630,8 @@ function GamificationAdmin() {
                     : "Create badge"}
               </button>
             </form>
-          </aside>
-        </section>
+          </SlideOver>
+        </>
       )}
     </div>
   );

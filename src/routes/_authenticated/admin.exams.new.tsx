@@ -1,7 +1,6 @@
 import { AdminNav } from "@/components/AdminNav";
 import { ExamEditor } from "@/components/admin/ExamEditor";
 import { AdminPageHeader } from "@/components/admin/AdminPageUi";
-import { OverviewNav } from "@/components/admin/OverviewNav";
 import { PageLoader } from "@/components/platform";
 import { createExam, listExamCategories } from "@/lib/admin.functions";
 import { useQuery } from "@tanstack/react-query";
@@ -37,14 +36,12 @@ function NewExamPage() {
   return (
     <div>
       <AdminNav />
-      <OverviewNav />
       <AdminPageHeader
-        eyebrow="Overview"
         title="New assessment"
-        summary="Set the paper, access, schedule, and questions. A shareable /take/… link is copied when you publish."
+        back={{ to: "/admin/exams", label: "Assessments" }}
         help={{
-          label: "Authoring path",
-          body: "Upload a CSV or generate from a question pool and blueprint. Preview matches what participants see on results.",
+          label: "Authoring",
+          body: "Upload a CSV or generate from a course pool. Blueprint is optional — leave it on Random selection to pick a mix.",
         }}
       />
       {isPending ? (
@@ -56,7 +53,7 @@ function NewExamPage() {
           onSubmit={async (payload) => submit({ data: payload })}
           onSuccess={(examId) => {
             void navigator.clipboard.writeText(`${window.location.origin}/take/${examId}`);
-            navigate({ to: "/admin" });
+            navigate({ to: "/admin/exams" });
           }}
         />
       )}

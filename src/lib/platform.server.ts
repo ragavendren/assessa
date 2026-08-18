@@ -1141,6 +1141,7 @@ export async function summariseResult(
       name: b.name,
       icon: b.icon,
       description: b.description,
+      track: b.track,
       xp: b.xp_reward,
     })),
   };

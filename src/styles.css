@@ -830,32 +830,6 @@
   }
 }
 
-@keyframes badge-drift-left {
-  from {
-    transform: translate3d(0, 0, 0);
-  }
-  to {
-    transform: translate3d(-50%, 0, 0);
-  }
-}
-
-@keyframes badge-drift-right {
-  from {
-    transform: translate3d(-50%, 0, 0);
-  }
-  to {
-    transform: translate3d(0, 0, 0);
-  }
-}
-
-@utility animate-badge-drift-left {
-  animation: badge-drift-left 42s linear infinite;
-}
-
-@utility animate-badge-drift-right {
-  animation: badge-drift-right 48s linear infinite;
-}
-
 @utility backface-hidden {
   backface-visibility: hidden;
 }
@@ -1299,9 +1273,7 @@
   .animate-dash-flame,
   .animate-dash-progress,
   .animate-dash-cta-arrow,
-  .animate-dash-shimmer,
-  .animate-badge-drift-left,
-  .animate-badge-drift-right {
+  .animate-dash-shimmer {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;

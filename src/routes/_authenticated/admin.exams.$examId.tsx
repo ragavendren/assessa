@@ -1,7 +1,6 @@
 import { AdminNav } from "@/components/AdminNav";
 import { ExamEditor, examToEditorValues } from "@/components/admin/ExamEditor";
 import { AdminPageHeader } from "@/components/admin/AdminPageUi";
-import { OverviewNav } from "@/components/admin/OverviewNav";
 import { PageLoader } from "@/components/platform";
 import { getExamForEdit, updateExam } from "@/lib/admin.functions";
 import { useQuery } from "@tanstack/react-query";
@@ -45,14 +44,12 @@ function EditExamPage() {
   return (
     <div>
       <AdminNav />
-      <OverviewNav />
       <AdminPageHeader
-        eyebrow="Overview"
         title="Edit assessment"
-        summary="Update details, questions, and publish state. Saving keeps existing attempt history."
+        back={{ to: "/admin/exams", label: "Assessments" }}
         help={{
-          label: "What you can change",
-          body: "Access, schedule, and the question set can all be edited. Regenerating from a pool replaces cloned questions only.",
+          label: "Editing",
+          body: "Access, schedule, and questions can change. Regenerating from a pool replaces cloned questions only.",
         }}
       />
       {isPending ? (
@@ -79,7 +76,7 @@ function EditExamPage() {
               },
             })
           }
-          onSuccess={() => navigate({ to: "/admin" })}
+          onSuccess={() => navigate({ to: "/admin/exams" })}
         />
       )}
     </div>

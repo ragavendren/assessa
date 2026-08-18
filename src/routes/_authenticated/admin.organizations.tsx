@@ -6,7 +6,6 @@ import {
   ResultCount,
   StatusPill,
 } from "@/components/admin/AdminPageUi";
-import { UserManagementNav } from "@/components/admin/UserManagementNav";
 import { PageLoader } from "@/components/platform";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
@@ -125,14 +124,11 @@ function AdminOrganizationsPage() {
   return (
     <div>
       <AdminNav />
-      <UserManagementNav />
       <AdminPageHeader
-        eyebrow="User management"
         title="Organisations"
-        summary="Participants pick an organisation, then a team / group at signup. Names must match assessment access and leaderboard filters."
         help={{
-          label: "Why this matters",
-          body: "Organisation and group access on assessments match these names exactly. Keep spelling consistent.",
+          label: "Organisations",
+          body: "Participants pick organisation then team at signup. Names must match assessment access exactly.",
         }}
       />
 

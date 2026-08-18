@@ -188,11 +188,13 @@ export const getDashboard = createServerFn({ method: "POST" })
           name: string;
           icon: string;
           description?: string;
+          track?: string;
         } | null;
         return {
           code: badge?.code,
           name: badge?.name ?? "Badge",
           icon: badge?.icon ?? "trophy",
+          track: badge?.track ?? "intermediate",
           description: badge?.description ?? "",
           earnedAt: b.earned_at,
         };
@@ -203,11 +205,13 @@ export const getDashboard = createServerFn({ method: "POST" })
           icon: string;
           description?: string;
           code?: string;
+          track?: string;
         } | null;
         return {
           code: badge?.code ?? badge?.name ?? "badge",
           name: badge?.name ?? "Badge",
           icon: badge?.icon ?? "trophy",
+          track: badge?.track ?? "intermediate",
           description: badge?.description ?? "",
           earnedAt: b.earned_at,
         };

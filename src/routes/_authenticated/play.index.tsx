@@ -1,3 +1,5 @@
+import { HelpTextLink } from "@/components/help/HelpCenter";
+import { AssessaIcon } from "@/components/icons";
 import { PageLoader } from "@/components/platform";
 import { PlayLeaderboardPanel } from "@/components/play/PlayLeaderboardPanel";
 import { PlayModeCard } from "@/components/play/PlayModeCard";
@@ -7,7 +9,6 @@ import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { BookOpen, Flame, GraduationCap, Puzzle, Swords, Trophy } from "lucide-react";
 import { useMemo } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -87,7 +88,7 @@ function PlayHub() {
   if (data.menuEnabled === false) {
     return (
       <div className="mx-auto max-w-lg space-y-4 py-12 text-center">
-        <BookOpen className="mx-auto h-10 w-10 text-muted-foreground" />
+        <AssessaIcon name="play" className="mx-auto h-10 w-10 text-muted-foreground" />
         <h1 className="font-display text-2xl">Play is turned off</h1>
         <p className="text-sm text-muted-foreground">
           An admin has disabled the Play menu. Individual modes can still be configured in Play
@@ -100,7 +101,7 @@ function PlayHub() {
   if (segments.length === 0) {
     return (
       <div className="mx-auto max-w-lg space-y-4 py-12 text-center">
-        <BookOpen className="mx-auto h-10 w-10 text-muted-foreground" />
+        <AssessaIcon name="play" className="mx-auto h-10 w-10 text-muted-foreground" />
         <h1 className="font-display text-2xl">Play is not configured yet</h1>
         <p className="text-sm text-muted-foreground">
           An admin needs to enable play modes, attach pools to a course, or map modes to an activity
@@ -117,7 +118,8 @@ function PlayHub() {
           <p className="text-xs uppercase tracking-wide text-muted-foreground">Play</p>
           <h1 className="font-display text-2xl">Challenge yourself</h1>
           <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-            Games from your question pools. Pick a course or an activity, then a mode.
+            Games from your question pools. Daily and Weekly are required when they are on; other
+            modes are optional practice. <HelpTextLink>Ask Assessa</HelpTextLink> for the full loop.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -127,12 +129,12 @@ function PlayHub() {
               search={{ courseId: selected.id, kind: boardKind }}
               className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-sm font-medium hover:bg-secondary"
             >
-              <Trophy className="h-4 w-4 text-amber-500" />
+              <AssessaIcon name="trophy" className="h-4 w-4 text-amber-500" />
               Leaderboard
             </Link>
           ) : null}
           <p className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1.5 text-sm">
-            <Flame className="h-4 w-4 text-amber-500" />
+            <AssessaIcon name="flame" className="h-4 w-4 text-amber-500" />
             {data.streak.current} day streak
           </p>
         </div>
@@ -156,7 +158,7 @@ function PlayHub() {
                     : "border-border hover:bg-secondary",
                 )}
               >
-                <GraduationCap className="h-4 w-4 shrink-0" />
+                <AssessaIcon name="courses" className="h-4 w-4 shrink-0" />
                 {segment.name}
                 <span className="text-xs text-muted-foreground">({segment.modes.length})</span>
               </button>
@@ -183,7 +185,7 @@ function PlayHub() {
                     : "border-border hover:bg-secondary",
                 )}
               >
-                <Puzzle className="h-4 w-4 shrink-0" />
+                <AssessaIcon name="escape" className="h-4 w-4 shrink-0" />
                 {segment.name}
                 <span className="text-xs text-muted-foreground">({segment.modes.length})</span>
               </button>
@@ -196,7 +198,7 @@ function PlayHub() {
         <section className="surface-paper rounded-xl p-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="flex items-center gap-2 text-sm font-semibold">
-              <Trophy className="h-4 w-4 text-amber-500" />
+              <AssessaIcon name="trophy" className="h-4 w-4 text-amber-500" />
               Leaderboard · {PLAY_KIND_META[boardKind].label} · {selected.name}
             </h2>
             <Link
@@ -406,7 +408,10 @@ function SegmentPanel({
                       {...(link.params ? { params: link.params } : {})}
                       footer={
                         mode.kind === "battle" ? (
-                          <Swords className="mt-3 h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                          <AssessaIcon
+                            name="swords"
+                            className="mt-3 h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+                          />
                         ) : undefined
                       }
                     />

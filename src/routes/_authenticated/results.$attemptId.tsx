@@ -229,6 +229,7 @@ function ResultPage() {
                   icon={badge.icon}
                   code={badge.code}
                   name={badge.name}
+                  track={badge.track}
                   size="lg"
                   className="animate-medal-pop"
                 />

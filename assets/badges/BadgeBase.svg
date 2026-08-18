@@ -4,10 +4,10 @@
   Production UI uses React: src/components/badges/BadgeBase.tsx
 
   Track fills:
-    Beginner      #34d399 ’ #059669
-    Intermediate  #60a5fa ’ #2563eb
-    Expertise     #c084fc ’ #7c3aed
-    Elite         #fbbf24 ’ #ea580c
+    Beginner      #34d399 ï¿½ #059669
+    Intermediate  #60a5fa ï¿½ #2563eb
+    Expertise     #c084fc ï¿½ #7c3aed
+    Elite         #fbbf24 ï¿½ #ea580c
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Badge base">
   <defs>
@@ -46,5 +46,5 @@
     <path d="M40 34l1.1 2.4 2.6.3-2 1.7.6 2.5-2.3-1.4-2.3 1.4.6-2.5-2-1.7 2.6-.3L40 34z"/>
     <path d="M88 34l1.1 2.4 2.6.3-2 1.7.6 2.5-2.3-1.4-2.3 1.4.6-2.5-2-1.7 2.6-.3L88 34z"/>
   </g>
-  <!-- Centre glyph slot: place a 24×24 icon at translate(40 40) scale(2) -->
+  <!-- Centre glyph slot: place a 24ï¿½24 icon at translate(40 40) scale(2) -->
 </svg>

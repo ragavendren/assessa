@@ -1,3 +1,4 @@
+import { AssessaIcon } from "@/components/icons";
 import { BoardStage, LeaderboardChip, LeaderboardHero } from "@/components/leaderboard/BoardStage";
 import { LeaderboardTabs } from "@/components/play/LeaderboardTabs";
 import { EmptyState, PageLoader } from "@/components/platform";
@@ -8,7 +9,6 @@ import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { GraduationCap, Sparkles, Trophy } from "lucide-react";
 import { z } from "zod";
 
 export const Route = createFileRoute("/_authenticated/play/leaderboard")({
@@ -123,12 +123,12 @@ function PlayLeaderboardPage() {
         chips={
           <>
             <LeaderboardChip
-              icon={<Trophy className="h-3.5 w-3.5" />}
+              icon={<AssessaIcon name="trophy" className="h-3.5 w-3.5" />}
               label="Ranked"
               value={rows.length}
             />
             <LeaderboardChip
-              icon={<Sparkles className="h-3.5 w-3.5" />}
+              icon={<AssessaIcon name="sparkles" className="h-3.5 w-3.5" />}
               label="Your place"
               value={myRank ? `#${myRank}` : "—"}
             />
@@ -162,7 +162,7 @@ function PlayLeaderboardPage() {
                   : "border-border hover:bg-secondary",
               )}
             >
-              <GraduationCap className="h-3.5 w-3.5" />
+              <AssessaIcon name="courses" className="h-3.5 w-3.5" />
               {s.courseName}
             </button>
           ))}

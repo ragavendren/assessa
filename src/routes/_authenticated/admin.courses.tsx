@@ -1,5 +1,4 @@
 import { AdminNav } from "@/components/AdminNav";
-import { QuestionBankNav } from "@/components/admin/QuestionBankNav";
 import { FieldLabel, Panel, QuestionBankPageHeader } from "@/components/admin/pool/QuestionBankUi";
 import { AdminEmpty, StatusPill } from "@/components/admin/AdminPageUi";
 import { PageLoader } from "@/components/platform";
@@ -49,18 +48,11 @@ function AdminCoursesPage() {
   return (
     <div>
       <AdminNav />
-      <QuestionBankNav />
       <QuestionBankPageHeader
         title="Courses"
-        summary="A course is the top-level container for question pools, blueprints, and series. Assessment category/topic on exams stays separate for access and mastery."
         help={{
-          label: "What is a course?",
-          body: (
-            <span>
-              Create one course per subject or certification track (for example “AWS Associate”).
-              You will attach pools and blueprints to it next.
-            </span>
-          ),
+          label: "Courses",
+          body: "One course per subject track. Pools and blueprints sit under it. Assessments and Play both bind to a course — papers stay separate from Play games.",
         }}
       />
       {isPending || !data ? (

@@ -1,5 +1,4 @@
 import { AdminNav } from "@/components/AdminNav";
-import { QuestionBankNav } from "@/components/admin/QuestionBankNav";
 import { FieldLabel, Panel, QuestionBankPageHeader } from "@/components/admin/pool/QuestionBankUi";
 import { AdminEmpty } from "@/components/admin/AdminPageUi";
 import { PageLoader } from "@/components/platform";
@@ -366,18 +365,12 @@ function AdminSeriesPage() {
   return (
     <div>
       <AdminNav />
-      <QuestionBankNav />
       <QuestionBankPageHeader
-        title="Assessment series"
-        summary="Optional. Pick a series from the list to edit; create opens in a dialog."
+        title="Series"
+        back={{ to: "/admin/exams", label: "Assessments" }}
         help={{
-          label: "Do you need series?",
-          body: (
-            <span>
-              Use series for weekly quizzes or cohort tracks with controlled reuse. Skip it for
-              one-off assessments — pick pool and blueprint on the exam directly.
-            </span>
-          ),
+          label: "Series",
+          body: "Optional track for related papers. Most assessments only need a course, pool, and optional blueprint.",
         }}
         action={
           <div className="flex flex-wrap gap-2">

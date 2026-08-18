@@ -208,6 +208,7 @@ function Achievements() {
                           icon={badge.icon}
                           code={badge.code}
                           name={badge.name}
+                          track={badgeTrack}
                           earned={Boolean(badge.earnedAt)}
                           size="md"
                           {...(badge.earnedAt ? { className: "animate-medal-pop" } : {})}
@@ -279,6 +280,7 @@ function BadgeCard({ badge, index }: { badge: BadgeItem; index: number }) {
           icon={badge.icon}
           code={badge.code}
           name={badge.name}
+          track={badgeTrack}
           earned={earned}
           size="xl"
           className={cn(

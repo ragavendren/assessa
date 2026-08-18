@@ -1,6 +1,5 @@
 import { AdminNav } from "@/components/AdminNav";
 import { AdminAccessDenied, AdminPageHeader } from "@/components/admin/AdminPageUi";
-import { EngagementNav } from "@/components/admin/EngagementNav";
 import { ArenaScoreboard } from "@/components/play/ArenaScoreboard";
 import { ArenaShareCard } from "@/components/play/ArenaShareCard";
 import { PageLoader } from "@/components/platform";
@@ -8,7 +7,7 @@ import { isLastQuestionOfSegment } from "@/lib/play.arena";
 import { deleteLiveArena, getArenaHost, runArenaAction } from "@/lib/play.functions";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -66,7 +65,6 @@ function ArenaHostPage() {
     return (
       <div>
         <AdminNav />
-        <EngagementNav />
         <PageLoader />
       </div>
     );
@@ -75,7 +73,6 @@ function ArenaHostPage() {
     return (
       <div>
         <AdminNav />
-        <EngagementNav />
         <AdminAccessDenied />
       </div>
     );
@@ -89,17 +86,15 @@ function ArenaHostPage() {
   return (
     <div className="space-y-6">
       <AdminNav />
-      <EngagementNav />
       <AdminPageHeader
-        eyebrow="Play"
         title={arena.name}
-        summary="Share the join QR, run the room, then reveal each key. Segment winners and the overall board go out with the reveal."
+        back={{ to: "/admin/play", label: "Play" }}
+        help={{
+          label: "Host controls",
+          body: "Share the join QR, lock answers, then reveal. Segment winners post with the last question of each segment.",
+        }}
       />
       <p className="text-sm">
-        <Link to="/admin/play" className="text-accent underline">
-          Play control
-        </Link>
-        <span className="mx-2 text-muted-foreground">·</span>
         <span className="capitalize">{arena.status}</span>
         {remaining != null ? <span className="ml-2 tabular-nums">{remaining}s</span> : null}
         <span className="ml-2 text-muted-foreground">

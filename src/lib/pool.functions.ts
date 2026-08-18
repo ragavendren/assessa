@@ -548,9 +548,7 @@ export const upsertBlueprint = createServerFn({ method: "POST" })
       .maybeSingle();
     if (courseError) throw new Error(courseError.message);
     if (!course) {
-      throw new Error(
-        "Selected course was not found. Create a course under Question bank → Courses.",
-      );
+      throw new Error("Selected course was not found. Create a course under Admin → Courses.");
     }
 
     if (data.isDefault) {

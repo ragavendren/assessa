@@ -1,3 +1,4 @@
+import { AssessaIcon } from "@/components/icons";
 import { LeaderboardChip, LeaderboardHero } from "@/components/leaderboard/BoardStage";
 import { ListToolbar, listViewClass, useListViewMode } from "@/components/ListToolbar";
 import { EmptyState, Meter, PageLoader, ScorePill } from "@/components/platform";
@@ -7,7 +8,6 @@ import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { CirclePlay, Clock3, ListChecks, Trophy } from "lucide-react";
 import { useMemo, useState } from "react";
 
 export const Route = createFileRoute("/_authenticated/exams/")({
@@ -93,22 +93,22 @@ function MyExams() {
         chips={
           <>
             <LeaderboardChip
-              icon={<CirclePlay className="h-3.5 w-3.5" />}
+              icon={<AssessaIcon name="play" className="h-3.5 w-3.5" />}
               label="Ready now"
               value={ready}
             />
             <LeaderboardChip
-              icon={<Clock3 className="h-3.5 w-3.5" />}
+              icon={<AssessaIcon name="timer" className="h-3.5 w-3.5" />}
               label="In progress"
               value={counts.in_progress}
             />
             <LeaderboardChip
-              icon={<Trophy className="h-3.5 w-3.5" />}
+              icon={<AssessaIcon name="trophy" className="h-3.5 w-3.5" />}
               label="Completed"
               value={counts.completed}
             />
             <LeaderboardChip
-              icon={<ListChecks className="h-3.5 w-3.5" />}
+              icon={<AssessaIcon name="list" className="h-3.5 w-3.5" />}
               label="All papers"
               value={counts.all}
             />

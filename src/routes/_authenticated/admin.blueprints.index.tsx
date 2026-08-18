@@ -1,5 +1,4 @@
 import { AdminNav } from "@/components/AdminNav";
-import { QuestionBankNav } from "@/components/admin/QuestionBankNav";
 import { BlueprintEditor } from "@/components/admin/pool/BlueprintEditor";
 import { Panel, QuestionBankPageHeader } from "@/components/admin/pool/QuestionBankUi";
 import { AdminEmpty, StatusPill } from "@/components/admin/AdminPageUi";
@@ -105,18 +104,11 @@ function AdminBlueprintsPage() {
   return (
     <div>
       <AdminNav />
-      <QuestionBankNav />
       <QuestionBankPageHeader
         title="Blueprints"
-        summary="Select a blueprint from the list to edit rules. Create opens in a dialog."
         help={{
-          label: "Blueprint rules",
-          body: (
-            <span>
-              Topic weightage must total 100%, and each rule’s Easy/Medium/Hard mix must also total
-              100%.
-            </span>
-          ),
+          label: "Blueprints",
+          body: "Optional topic weightage (must total 100%) and Easy/Medium/Hard mix per rule. On a new paper, Random selection picks a blueprint for you.",
         }}
         action={
           courseCount > 0 ? (
@@ -150,16 +142,6 @@ function AdminBlueprintsPage() {
           <Panel
             title="Your blueprints"
             description={`${blueprints.length} blueprint${blueprints.length === 1 ? "" : "s"}`}
-            action={
-              blueprints.length > 0 ? (
-                <Link
-                  to="/admin/series"
-                  className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-                >
-                  Series <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
-              ) : null
-            }
           >
             {blueprints.length === 0 ? (
               <div>
