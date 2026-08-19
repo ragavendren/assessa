@@ -16,7 +16,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowRight, PanelLeftClose, PanelLeftOpen, Plus, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -94,10 +94,10 @@ function AdminPoolsPage() {
     });
   }
 
-  function closeCreate() {
+  const closeCreate = useCallback(() => {
     setCreateOpen(false);
     setName("");
-  }
+  }, []);
 
   async function handleDeletePool(pool: PoolRow) {
     const ok = await confirm({
@@ -422,6 +422,7 @@ function AdminPoolsPage() {
               onChange={(e) => setName(e.target.value)}
               required
               autoFocus
+              autoComplete="off"
             />
           </div>
           <div className="flex flex-wrap justify-end gap-2 pt-2">

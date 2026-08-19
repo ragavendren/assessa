@@ -1,4 +1,4 @@
-import { uploadQuestionImages } from "@/lib/question-images";
+import { IMAGE_FILE_ACCEPT, imageMapFromUrl, uploadQuestionImages } from "@/lib/question-images";
 import { ImagePlus, Trash2, Upload } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
@@ -49,7 +49,7 @@ export function PromptImageField({
           className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-secondary disabled:opacity-60"
         >
           {value ? <Upload className="h-3.5 w-3.5" /> : <ImagePlus className="h-3.5 w-3.5" />}
-          {busy ? "Uploading…" : value ? "Replace image" : "Upload image"}
+          {busy ? "Uploading…" : value ? "Replace file" : "Upload file"}
         </button>
         {value ? (
           <button
@@ -63,7 +63,7 @@ export function PromptImageField({
         <input
           ref={fileRef}
           type="file"
-          accept="image/*"
+          accept={IMAGE_FILE_ACCEPT}
           className="hidden"
           onChange={(e) => {
             void onPick(e.target.files);
@@ -75,9 +75,56 @@ export function PromptImageField({
         className="field h-8 w-full text-xs"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="Or paste an image URL"
-        maxLength={2048}
+        placeholder="Or paste an image URL (https://… .png .jpg .webp .avif)"
+        maxLength={4096}
       />
+    </div>
+  );
+}
+
+/** Paste a public image URL into a CSV filename map. */
+export function ImageUrlPaste({
+  onApply,
+  compact = false,
+}: {
+  onApply: (map: Record<string, string>) => void;
+  compact?: boolean;
+}) {
+  const [draft, setDraft] = useState("");
+
+  function apply() {
+    const map = imageMapFromUrl(draft);
+    if (!map) {
+      toast.error("Paste a full http(s) image URL");
+      return;
+    }
+    onApply(map);
+    setDraft("");
+    toast.success("Image URL added");
+  }
+
+  return (
+    <div className={compact ? "flex min-w-[14rem] flex-1 gap-1" : "flex gap-1"}>
+      <input
+        className="field h-8 min-w-0 flex-1 text-xs"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            apply();
+          }
+        }}
+        placeholder="Paste image URL"
+        maxLength={4096}
+      />
+      <button
+        type="button"
+        onClick={apply}
+        className="shrink-0 rounded-md border border-input px-2 py-1 text-xs hover:bg-secondary"
+      >
+        Add URL
+      </button>
     </div>
   );
 }

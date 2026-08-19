@@ -1,11 +1,27 @@
-import { supabase } from "@/integrations/supabase/client";
+import { imageMapFromUrl, resolveImageRef } from "./question-image-ref.ts";
+import { mimeFromFileName, uploadQuestionImageFiles } from "./question-images.functions.ts";
 
-export { resolveImageRef } from "./question-image-ref.ts";
+export { imageMapFromUrl, resolveImageRef } from "./question-image-ref.ts";
 
-const BUCKET = "question-bank-images";
+const IMAGE_EXT = /\.(avif|png|jpe?g|gif|webp|svg|heic|heif|bmp)$/i;
 
-function safeFileName(name: string) {
-  return name.replace(/[^a-zA-Z0-9._-]/g, "_");
+export const IMAGE_FILE_ACCEPT = "image/*,.avif,.heic,.heif,image/avif,image/webp";
+
+export function isImageFile(file: File): boolean {
+  return file.type.startsWith("image/") || IMAGE_EXT.test(file.name);
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result ?? "");
+      const comma = result.indexOf(",");
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("Could not read image"));
+    reader.readAsDataURL(file);
+  });
 }
 
 /** Upload prompt images to the public question-bank bucket and map filename → URL. */
@@ -13,27 +29,24 @@ export async function uploadQuestionImages(
   files: File[],
   folder: string,
 ): Promise<{ map: Record<string, string>; uploaded: number; errors: string[] }> {
-  const images = files.filter((file) => file.type.startsWith("image/"));
+  const images = files.filter(isImageFile);
   if (images.length === 0) {
-    return { map: {}, uploaded: 0, errors: ["Select image files only."] };
-  }
-  const map: Record<string, string> = {};
-  const errors: string[] = [];
-  let uploaded = 0;
-
-  for (const file of images) {
-    const path = `${folder.replace(/\/+$/, "")}/${Date.now()}-${safeFileName(file.name)}`;
-    const { error } = await supabase.storage.from(BUCKET).upload(path, file, { upsert: true });
-    if (error) {
-      errors.push(`${file.name}: ${error.message}`);
-      continue;
-    }
-    const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-    if (data.publicUrl) {
-      map[file.name.trim().toLowerCase()] = data.publicUrl;
-      uploaded += 1;
-    }
+    return {
+      map: {},
+      uploaded: 0,
+      errors: ["Select image files (PNG, JPG, WEBP, AVIF, GIF, or SVG)."],
+    };
   }
 
-  return { map, uploaded, errors };
+  const payloads = await Promise.all(
+    images.map(async (file) => ({
+      name: file.name,
+      type: file.type || mimeFromFileName(file.name),
+      data: await fileToBase64(file),
+    })),
+  );
+
+  return uploadQuestionImageFiles({
+    data: { folder, files: payloads },
+  });
 }

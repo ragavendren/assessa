@@ -9,6 +9,7 @@ describe("parsePoolQuestionsCsv", () => {
     assert.deepEqual(errors, []);
     assert.equal(questions.length, 2);
     assert.equal(questions[0]?.multiSelect, false);
+    assert.equal(questions[0]?.imageRef, "https://example.com/lambda-architecture.png");
     assert.deepEqual(questions[0]?.correctIndexes, [1]);
     assert.equal(questions[1]?.multiSelect, true);
     assert.deepEqual(questions[1]?.correctIndexes, [0, 2]);
@@ -51,11 +52,11 @@ describe("parseQuestionsCsv", () => {
   it("reads optional image filename or URL from the image column", () => {
     const csv = [
       "prompt,image,option_a,option_b,option_c,option_d,option_e,option_f,correct_answers,multi_select,tag,explanation",
-      "What is shown?,pizza.svg,Taco,Pizza,Salad,Soup,,,B,false,Snacks,Friday classic",
+      "What is shown?,https://cdn.example.com/pizza.avif,Taco,Pizza,Salad,Soup,,,B,false,Snacks,Friday classic",
     ].join("\n");
     const { questions, errors } = parseQuestionsCsv(csv);
     assert.deepEqual(errors, []);
-    assert.equal(questions[0]?.imageRef, "pizza.svg");
+    assert.equal(questions[0]?.imageRef, "https://cdn.example.com/pizza.avif");
     assert.deepEqual(questions[0]?.correctIndexes, [1]);
   });
 });

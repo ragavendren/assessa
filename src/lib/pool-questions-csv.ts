@@ -24,7 +24,7 @@ export function poolQuestionCsvTemplate(): string {
     HEADER,
     [
       "Which service provides serverless compute?",
-      "lambda-architecture.png",
+      "https://example.com/lambda-architecture.png",
       "EC2",
       "Lambda",
       "RDS",

@@ -190,7 +190,7 @@ export const updateExamSettings = createServerFn({ method: "POST" })
 
 const examQuestionSchema = z.object({
   prompt: z.string().trim().min(4).max(4000),
-  image_url: z.string().trim().max(2048).nullable().optional(),
+  image_url: z.string().trim().max(4096).nullable().optional(),
   options: z.array(z.string().trim().min(1).max(1000)).min(2).max(6),
   correct_index: z.number().int().min(0).max(5),
   correct_indexes: z.array(z.number().int().min(0).max(5)).min(1).max(6).optional(),

@@ -1,6 +1,6 @@
-import { useEffect, useId, useRef, type ReactNode } from "react";
 import { AssessaIcon } from "@/components/icons";
 import { cn } from "@/lib/utils";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 
 type ModalProps = {
   open: boolean;
@@ -32,14 +32,24 @@ export function Modal({
   const titleId = useId();
   const descriptionId = useId();
   const closeRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return;
-    closeRef.current?.focus();
+    const root = panelRef.current;
+    const preferred =
+      root?.querySelector<HTMLElement>("[autofocus]") ??
+      root?.querySelector<HTMLElement>(
+        'input:not([type="hidden"]):not([disabled]), textarea:not([disabled]), select:not([disabled])',
+      );
+    (preferred ?? closeRef.current)?.focus();
+
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -49,7 +59,7 @@ export function Modal({
       window.removeEventListener("keydown", onKeyDown);
       document.body.style.overflow = prevOverflow;
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
@@ -62,6 +72,7 @@ export function Modal({
       }}
     >
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

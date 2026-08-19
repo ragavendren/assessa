@@ -1,4 +1,4 @@
-import { PromptImageField } from "@/components/admin/PromptImageField";
+import { ImageUrlPaste, PromptImageField } from "@/components/admin/PromptImageField";
 import { QuestionGenerationConfiguration } from "@/components/admin/pool/QuestionGenerationConfiguration";
 import type { PoolConfigState } from "@/components/admin/pool/QuestionGenerationConfiguration";
 import { QuestionSelectionMethod } from "@/components/admin/pool/QuestionSelectionMethod";
@@ -7,7 +7,7 @@ import { DateTimeField, scheduleWindowStatus } from "@/components/ui/date-time-f
 import { EmailChipInput } from "@/components/ui/email-chip-input";
 import { EXAM_MODES, MODE_LABELS } from "@/lib/gamification";
 import { listOrgCatalog } from "@/lib/platform.functions";
-import { uploadQuestionImages } from "@/lib/question-images";
+import { IMAGE_FILE_ACCEPT, uploadQuestionImages } from "@/lib/question-images";
 import { csvImageUrl, downloadQuestionCsvTemplate, parseQuestionsCsv } from "@/lib/questions-csv";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -1075,10 +1075,14 @@ export function ExamEditor({
                       >
                         <ImagePlus className="h-3.5 w-3.5" /> Images
                       </button>
+                      <ImageUrlPaste
+                        compact
+                        onApply={(map) => setCsvImageMap((prev) => ({ ...prev, ...map }))}
+                      />
                       <input
                         ref={csvImageRef}
                         type="file"
-                        accept="image/*"
+                        accept={IMAGE_FILE_ACCEPT}
                         multiple
                         className="hidden"
                         onChange={(e) => {

@@ -19,7 +19,7 @@ export function questionCsvTemplate(): string {
   return [
     HEADER,
     '"What is 2 + 2?","","1","2","3","4","","","B","false","Arithmetic","Basic addition"',
-    '"Which shape is shown?","triangle.png","Circle","Triangle","Square","Hexagon","","","B","false","Geometry","Match the uploaded image filename"',
+    '"Which shape is shown?","https://example.com/triangle.png","Circle","Triangle","Square","Hexagon","","","B","false","Geometry","Paste a public image URL or match an uploaded filename"',
     '"Select prime numbers","","2","3","4","9","","","A|B","true","Number theory","2 and 3 are prime"',
   ].join("\n");
 }

@@ -265,7 +265,7 @@ export const upsertPoolQuestion = createServerFn({ method: "POST" })
         id: z.string().uuid().optional(),
         poolId: z.string().uuid(),
         prompt: z.string().trim().min(4).max(4000),
-        image_url: z.string().trim().max(2048).optional().default(""),
+        image_url: z.string().trim().max(4096).optional().default(""),
         options: z.array(z.string().trim().min(1).max(1000)).min(2).max(6),
         correct_indexes: z.array(z.number().int().min(0).max(5)).min(1).max(6),
         multi_select: z.boolean().default(false),

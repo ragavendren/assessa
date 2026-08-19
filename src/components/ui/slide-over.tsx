@@ -33,6 +33,9 @@ export function SlideOver({
   const titleId = useId();
   const descriptionId = useId();
   const closeRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   const [rendered, setRendered] = useState(open);
   const [entered, setEntered] = useState(open);
 
@@ -51,11 +54,18 @@ export function SlideOver({
 
   useEffect(() => {
     if (!open) return;
-    closeRef.current?.focus();
+    const root = panelRef.current;
+    const preferred =
+      root?.querySelector<HTMLElement>("[autofocus]") ??
+      root?.querySelector<HTMLElement>(
+        'input:not([type="hidden"]):not([disabled]), textarea:not([disabled]), select:not([disabled])',
+      );
+    if (!preferred) closeRef.current?.focus();
+
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -65,7 +75,7 @@ export function SlideOver({
       window.removeEventListener("keydown", onKeyDown);
       document.body.style.overflow = prevOverflow;
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!rendered) return null;
 
@@ -81,6 +91,7 @@ export function SlideOver({
         onClick={onClose}
       />
       <aside
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

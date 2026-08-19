@@ -1,4 +1,4 @@
-import { PromptImageField } from "@/components/admin/PromptImageField";
+import { PromptImageField, ImageUrlPaste } from "@/components/admin/PromptImageField";
 import { AdminEmpty } from "@/components/admin/AdminPageUi";
 import { HelpTip, Panel } from "@/components/admin/pool/QuestionBankUi";
 import { PageLoader } from "@/components/platform";
@@ -12,7 +12,7 @@ import {
   previewPoolFillCheck,
   upsertPoolQuestion,
 } from "@/lib/pool.functions";
-import { uploadQuestionImages } from "@/lib/question-images";
+import { IMAGE_FILE_ACCEPT, uploadQuestionImages } from "@/lib/question-images";
 import { normalizeTopicKey } from "@/lib/question-selection.math";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -348,9 +348,9 @@ export function PoolWorkspace({
             Import CSV or add questions here. Topics should match blueprint rules.
             <HelpTip label="CSV tips" className="ml-1">
               Correct answers: A–F or 1–6. Multiple letters (A|C) mark a multi-select item (AWS
-              “choose TWO”). Optional question_type=single|multi. Add `image` as a URL, or upload
-              images first and place the filename in the `image` column. Difficulty: easy, medium,
-              or hard. Assessment CSV on New assessment is a different flow.
+              “choose TWO”). Optional question_type=single|multi. Put a full image URL in `image`,
+              or upload/paste images first and place the filename in the `image` column. Difficulty:
+              easy, medium, or hard. Assessment CSV on New assessment is a different flow.
             </HelpTip>
           </p>
         ) : null}
@@ -392,6 +392,10 @@ export function PoolWorkspace({
         >
           <Upload className="h-3.5 w-3.5" /> Images
         </button>
+        <ImageUrlPaste
+          compact
+          onApply={(map) => setUploadedImageMap((prev) => ({ ...prev, ...map }))}
+        />
         {(data?.questions.length ?? 0) > 0 ? (
           <button
             type="button"
@@ -447,7 +451,7 @@ export function PoolWorkspace({
         <input
           ref={imageFileRef}
           type="file"
-          accept="image/*"
+          accept={IMAGE_FILE_ACCEPT}
           multiple
           className="hidden"
           onChange={(e) => {
