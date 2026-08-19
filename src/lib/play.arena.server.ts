@@ -3,12 +3,16 @@
  */
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
-  arenaMarks,
+  arenaQuestionMarks,
   arenaSegmentOf,
+  arenaSpeedBonuses,
   arenaTotalQuestions,
   autoLockIfExpired,
   buildArenaBoard,
+  canPublishArenaSegment,
+  isArenaKeyVisible,
   pickArenaWinner,
+  remainingSecondsAt,
 } from "@/lib/play.arena";
 import { pickWithSeed, sameIndexSet } from "@/lib/play.math";
 import { notifyMany, requireAdmin } from "@/lib/platform.server";
@@ -103,7 +107,40 @@ function arenaBoard(
     status: arena.status,
     questionsPerSegment: arena.questions_per_segment,
     segmentCount: arena.segment_count,
+    publishedThroughSegment: arena.published_through_segment ?? -1,
   });
+}
+
+async function syncTeamTotals(arenaId: string) {
+  const [{ data: teams, error: teamError }, { data: answers, error: answerError }] =
+    await Promise.all([
+      db.from("play_arena_teams").select("id").eq("arena_id", arenaId),
+      db.from("play_arena_answers").select("team_id, marks, correct").eq("arena_id", arenaId),
+    ]);
+  if (teamError) throw new Error(teamError.message);
+  if (answerError) throw new Error(answerError.message);
+  const totals = new Map<string, { score: number; correctCount: number; wrongCount: number }>();
+  for (const team of teams ?? []) {
+    totals.set(team.id, { score: 0, correctCount: 0, wrongCount: 0 });
+  }
+  for (const row of answers ?? []) {
+    const current = totals.get(row.team_id) ?? { score: 0, correctCount: 0, wrongCount: 0 };
+    current.score += row.marks;
+    if (row.correct === true) current.correctCount += 1;
+    if (row.correct === false) current.wrongCount += 1;
+    totals.set(row.team_id, current);
+  }
+  for (const [id, row] of totals) {
+    const { error } = await db
+      .from("play_arena_teams")
+      .update({
+        score: row.score,
+        correct_count: row.correctCount,
+        wrong_count: row.wrongCount,
+      })
+      .eq("id", id);
+    if (error) throw new Error(error.message);
+  }
 }
 
 export async function adminListActivities(userId: string) {
@@ -149,7 +186,7 @@ export async function adminCreateArena(
   userId: string,
   payload: {
     name: string;
-    activityId: string;
+    activityId?: string | null;
     poolId: string;
     courseId?: string | null;
     segmentCount: number;
@@ -157,6 +194,8 @@ export async function adminCreateArena(
     perQuestionSeconds: number;
     correctMarks: number;
     wrongMarks: number;
+    timeBonusMax?: number;
+    earlyLockBonus?: number;
   },
 ) {
   await requireAdmin(userId);
@@ -176,7 +215,7 @@ export async function adminCreateArena(
     .from("play_arenas")
     .insert({
       name: payload.name,
-      activity_id: payload.activityId,
+      activity_id: payload.activityId ?? null,
       course_id: payload.courseId ?? null,
       pool_id: payload.poolId,
       status: "lobby",
@@ -185,6 +224,8 @@ export async function adminCreateArena(
       per_question_seconds: payload.perQuestionSeconds,
       correct_marks: payload.correctMarks,
       wrong_marks: payload.wrongMarks,
+      time_bonus_max: payload.timeBonusMax ?? 0,
+      early_lock_bonus: payload.earlyLockBonus ?? 0,
       created_by: userId,
     })
     .select("*")
@@ -314,17 +355,38 @@ export async function submitArenaAnswer(
   const teamId = await memberTeam(arena.id, userId);
   if (!teamId) throw new Error("Join a team first.");
   const indexes = [...new Set(payload.answer.filter((n) => Number.isInteger(n) && n >= 0))];
-  const { error } = await db.from("play_arena_answers").upsert({
-    arena_id: arena.id,
-    team_id: teamId,
-    question_index: arena.current_index,
-    answer_indexes: indexes,
-    submitted_at: new Date().toISOString(),
-    correct: null,
-    marks: 0,
-  });
+  const now = new Date().toISOString();
+  const { data: existing } = await db
+    .from("play_arena_answers")
+    .select("first_locked_at")
+    .eq("arena_id", arena.id)
+    .eq("team_id", teamId)
+    .eq("question_index", arena.current_index)
+    .maybeSingle();
+  const { error } = existing
+    ? await db
+        .from("play_arena_answers")
+        .update({
+          answer_indexes: indexes,
+          submitted_at: now,
+          correct: null,
+          marks: 0,
+        })
+        .eq("arena_id", arena.id)
+        .eq("team_id", teamId)
+        .eq("question_index", arena.current_index)
+    : await db.from("play_arena_answers").insert({
+        arena_id: arena.id,
+        team_id: teamId,
+        question_index: arena.current_index,
+        answer_indexes: indexes,
+        submitted_at: now,
+        first_locked_at: now,
+        correct: null,
+        marks: 0,
+      });
   if (error) throw new Error(error.message);
-  return { ok: true as const };
+  return { ok: true as const, modified: Boolean(existing) };
 }
 
 export async function getArenaPlayerState(userId: string, arenaId: string) {
@@ -356,7 +418,7 @@ export async function getArenaPlayerState(userId: string, arenaId: string) {
     teamId
       ? db
           .from("play_arena_answers")
-          .select("answer_indexes, correct, marks")
+          .select("answer_indexes, correct, marks, first_locked_at")
           .eq("arena_id", arena.id)
           .eq("team_id", teamId)
           .eq("question_index", arena.current_index)
@@ -366,8 +428,10 @@ export async function getArenaPlayerState(userId: string, arenaId: string) {
 
   const q = (questions ?? [])[arena.current_index] ?? null;
   const revealed = arena.status === "revealed" || arena.status === "complete";
+  const overallVisible = arena.status === "complete";
   const myTeam = (teams ?? []).find((t) => t.id === teamId) ?? null;
   const board = arenaBoard(arena, teams ?? [], answers ?? [], members ?? []);
+  const myRow = myTeam ? board.rows.find((row) => row.id === myTeam.id) : null;
 
   return {
     arena: {
@@ -380,6 +444,7 @@ export async function getArenaPlayerState(userId: string, arenaId: string) {
       currentIndex: arena.current_index,
       questionEndsAt: arena.question_ends_at,
       totalQuestions: questions?.length ?? 0,
+      publishedThroughSegment: arena.published_through_segment ?? -1,
     },
     teams: (teams ?? []).map((t) => ({ id: t.id, name: t.name })),
     myTeam: myTeam
@@ -389,6 +454,7 @@ export async function getArenaPlayerState(userId: string, arenaId: string) {
           score: myTeam.score,
           correctCount: myTeam.correct_count,
           wrongCount: myTeam.wrong_count,
+          rank: overallVisible ? (myRow?.rank ?? null) : null,
         }
       : null,
     question: q
@@ -403,10 +469,32 @@ export async function getArenaPlayerState(userId: string, arenaId: string) {
         }
       : null,
     myAnswer: myAnswer?.answer_indexes ?? [],
-    myResult: revealed && myAnswer ? { correct: myAnswer.correct, marks: myAnswer.marks } : null,
+    myResult:
+      revealed && myAnswer
+        ? {
+            correct: myAnswer.correct,
+            marks: myAnswer.marks,
+            ...arenaSpeedBonuses({
+              correct: Boolean(myAnswer.correct),
+              remainingSeconds: remainingSecondsAt(
+                myAnswer.first_locked_at,
+                arena.question_ends_at,
+              ),
+              durationSeconds: arena.per_question_seconds,
+              timeBonusMax: arena.time_bonus_max ?? 0,
+              earlyLockBonus: arena.early_lock_bonus ?? 0,
+            }),
+          }
+        : null,
     board: {
-      visible: revealed,
-      ...board,
+      overallVisible,
+      segmentVisible: board.publishedSegment != null,
+      publishedSegment: board.publishedSegment,
+      rows: overallVisible ? board.rows : [],
+      segmentRows: board.segmentRows,
+      segmentWinners: board.segmentWinners,
+      currentSegmentWinner: board.currentSegmentWinner,
+      champion: board.champion,
     },
   };
 }
@@ -442,6 +530,14 @@ export async function getArenaHostState(userId: string, arenaId: string) {
   );
   const memberCount = memberCounts(members ?? []);
   const board = arenaBoard(arena, teams ?? [], answers ?? [], members ?? []);
+  const showKey = isArenaKeyVisible(arena.status);
+  const publishReady = canPublishArenaSegment({
+    currentIndex: arena.current_index,
+    status: arena.status,
+    questionsPerSegment: arena.questions_per_segment,
+    segmentCount: arena.segment_count,
+    publishedThroughSegment: arena.published_through_segment ?? -1,
+  });
   return {
     arena: {
       id: arena.id,
@@ -455,13 +551,17 @@ export async function getArenaHostState(userId: string, arenaId: string) {
       totalQuestions: questions?.length ?? 0,
       correctMarks: arena.correct_marks,
       wrongMarks: arena.wrong_marks,
+      timeBonusMax: arena.time_bonus_max ?? 0,
+      earlyLockBonus: arena.early_lock_bonus ?? 0,
+      publishedThroughSegment: arena.published_through_segment ?? -1,
+      publishSegmentReady: publishReady,
     },
     question: q
       ? {
           prompt: q.prompt,
           imageUrl: q.image_url,
           options: parseOptions(q.options),
-          correctIndexes: q.correct_indexes,
+          ...(showKey ? { correctIndexes: q.correct_indexes } : {}),
           multiSelect: q.multi_select,
           segment: q.segment_index,
         }
@@ -476,21 +576,33 @@ export async function getArenaHostState(userId: string, arenaId: string) {
         wrongCount: team.wrong_count,
         members: memberCount.get(team.id) ?? 0,
         submitted: Boolean(ans),
-        answerIndexes: ans?.answer_indexes ?? [],
-        correct: ans?.correct ?? null,
-        marks: ans?.marks ?? 0,
+        answerIndexes: showKey ? (ans?.answer_indexes ?? []) : [],
+        correct: showKey ? (ans?.correct ?? null) : null,
+        marks: showKey ? (ans?.marks ?? 0) : 0,
       };
     }),
     board: {
-      visible: true,
-      ...board,
+      overallVisible: arena.status === "complete",
+      segmentVisible: true,
+      publishedSegment: board.publishedSegment,
+      rows: board.rows,
+      segmentRows: board.segmentRows,
+      segmentWinners: board.allSegmentWinners,
+      currentSegmentWinner: board.allSegmentWinners.find(
+        (row) =>
+          row.segment === arenaSegmentOf(arena.current_index, arena.questions_per_segment).segment,
+      ),
+      champion: board.champion,
     },
   };
 }
 
 export async function adminArenaAction(
   userId: string,
-  payload: { arenaId: string; action: "start" | "lock" | "reveal" | "next" | "finish" },
+  payload: {
+    arenaId: string;
+    action: "start" | "lock" | "reveal" | "next" | "publishSegment" | "finish";
+  },
 ) {
   await requireAdmin(userId);
   const arena = await syncLock(await loadArena(payload.arenaId));
@@ -505,6 +617,13 @@ export async function adminArenaAction(
     if (nextIndex >= (count ?? 0)) throw new Error("No more questions. Finish the arena.");
     if (payload.action === "next" && arena.status !== "revealed") {
       throw new Error("Reveal this question before moving on.");
+    }
+    if (payload.action === "next") {
+      const leaving = arenaSegmentOf(arena.current_index, arena.questions_per_segment).segment;
+      const entering = arenaSegmentOf(nextIndex, arena.questions_per_segment).segment;
+      if (leaving !== entering && (arena.published_through_segment ?? -1) < leaving) {
+        throw new Error("Publish this segment’s results before starting the next segment.");
+      }
     }
     const ends = new Date(now.getTime() + arena.per_question_seconds * 1000).toISOString();
     const { error } = await db
@@ -531,8 +650,8 @@ export async function adminArenaAction(
   }
 
   if (payload.action === "reveal") {
-    if (arena.status !== "locked" && arena.status !== "question") {
-      throw new Error("Lock the question before revealing.");
+    if (arena.status !== "locked") {
+      throw new Error("Lock answers before revealing the key.");
     }
     const { data: question } = await db
       .from("play_arena_questions")
@@ -553,24 +672,31 @@ export async function adminArenaAction(
       const ans = byTeam.get(team.id);
       const answered = Boolean(ans && (ans.answer_indexes?.length ?? 0) > 0);
       const correct = answered ? sameIndexSet(ans!.answer_indexes, key) : false;
-      const marks = arenaMarks(answered, correct, arena.correct_marks, arena.wrong_marks);
+      const graded = arenaQuestionMarks({
+        answered,
+        correct,
+        correctMarks: arena.correct_marks,
+        wrongMarks: arena.wrong_marks,
+        remainingSeconds: remainingSecondsAt(
+          ans?.first_locked_at ?? ans?.submitted_at,
+          arena.question_ends_at,
+        ),
+        durationSeconds: arena.per_question_seconds,
+        timeBonusMax: arena.time_bonus_max ?? 0,
+        earlyLockBonus: arena.early_lock_bonus ?? 0,
+      });
+      const marks = graded.marks;
       if (ans) {
-        await db
+        const { error: gradeError } = await db
           .from("play_arena_answers")
           .update({ correct, marks })
           .eq("arena_id", arena.id)
           .eq("team_id", team.id)
           .eq("question_index", arena.current_index);
+        if (gradeError) throw new Error(gradeError.message);
       }
-      await db
-        .from("play_arena_teams")
-        .update({
-          score: team.score + marks,
-          correct_count: team.correct_count + (correct ? 1 : 0),
-          wrong_count: team.wrong_count + (answered && !correct ? 1 : 0),
-        })
-        .eq("id", team.id);
     }
+    await syncTeamTotals(arena.id);
     const { error } = await db
       .from("play_arenas")
       .update({ status: "revealed", updated_at: now.toISOString() })
@@ -579,7 +705,43 @@ export async function adminArenaAction(
     return { ok: true as const };
   }
 
+  if (payload.action === "publishSegment") {
+    if (
+      !canPublishArenaSegment({
+        currentIndex: arena.current_index,
+        status: arena.status,
+        questionsPerSegment: arena.questions_per_segment,
+        segmentCount: arena.segment_count,
+        publishedThroughSegment: arena.published_through_segment ?? -1,
+      })
+    ) {
+      throw new Error("Finish and reveal the last question of this segment first.");
+    }
+    await syncTeamTotals(arena.id);
+    const segment = arenaSegmentOf(arena.current_index, arena.questions_per_segment).segment;
+    const { error } = await db
+      .from("play_arenas")
+      .update({
+        published_through_segment: segment,
+        updated_at: now.toISOString(),
+      })
+      .eq("id", arena.id);
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
+  }
+
   if (payload.action === "finish") {
+    const { count } = await db
+      .from("play_arena_questions")
+      .select("id", { count: "exact", head: true })
+      .eq("arena_id", arena.id);
+    if (arena.current_index < (count ?? 1) - 1 || arena.status !== "revealed") {
+      throw new Error("Reveal the last question before publishing overall results.");
+    }
+    if ((arena.published_through_segment ?? -1) < arena.segment_count - 1) {
+      throw new Error("Publish every segment’s results before the overall leaderboard.");
+    }
+    await syncTeamTotals(arena.id);
     const { data: teams } = await db
       .from("play_arena_teams")
       .select("id, score, correct_count")
@@ -595,6 +757,7 @@ export async function adminArenaAction(
       .update({
         status: "complete",
         winner_team_id: winner?.id ?? null,
+        published_through_segment: arena.segment_count - 1,
         updated_at: now.toISOString(),
       })
       .eq("id", arena.id);
@@ -603,7 +766,7 @@ export async function adminArenaAction(
       await notifyEveryone({
         kind: "play_arena",
         title: `${arena.name} winner: ${winnerRow.name}`,
-        body: `Final score ${winnerRow.score}. Open Play to see your team's card.`,
+        body: `Final score ${winnerRow.score}. Open Play to see the overall leaderboard.`,
         icon: "🏆",
       });
     }

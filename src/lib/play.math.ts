@@ -85,7 +85,7 @@ export const PLAY_KIND_META: Record<
   escape: { label: "Escape Room", blurb: "Solve the outage scene by scene.", period: "open" },
   arena: {
     label: "Live Arena",
-    blurb: "Teams answer the same timed question. Admin reveals the key.",
+    blurb: "Teams answer the same timed question. Hosts reveal keys and publish results.",
     period: "match",
   },
 };

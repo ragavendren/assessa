@@ -828,6 +828,9 @@ export type Database = {
           question_started_at: string | null;
           question_ends_at: string | null;
           winner_team_id: string | null;
+          published_through_segment: number;
+          time_bonus_max: number;
+          early_lock_bonus: number;
           created_by: string | null;
           created_at: string;
           updated_at: string;
@@ -848,6 +851,9 @@ export type Database = {
           question_started_at?: string | null;
           question_ends_at?: string | null;
           winner_team_id?: string | null;
+          published_through_segment?: number;
+          time_bonus_max?: number;
+          early_lock_bonus?: number;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -868,6 +874,9 @@ export type Database = {
           question_started_at?: string | null;
           question_ends_at?: string | null;
           winner_team_id?: string | null;
+          published_through_segment?: number;
+          time_bonus_max?: number;
+          early_lock_bonus?: number;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -974,6 +983,7 @@ export type Database = {
           question_index: number;
           answer_indexes: number[];
           submitted_at: string;
+          first_locked_at: string | null;
           correct: boolean | null;
           marks: number;
         };
@@ -983,6 +993,7 @@ export type Database = {
           question_index: number;
           answer_indexes?: number[];
           submitted_at?: string;
+          first_locked_at?: string | null;
           correct?: boolean | null;
           marks?: number;
         };
@@ -992,6 +1003,7 @@ export type Database = {
           question_index?: number;
           answer_indexes?: number[];
           submitted_at?: string;
+          first_locked_at?: string | null;
           correct?: boolean | null;
           marks?: number;
         };

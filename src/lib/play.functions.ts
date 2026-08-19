@@ -451,7 +451,7 @@ export const createLiveArena = createServerFn({ method: "POST" })
     z
       .object({
         name: z.string().trim().min(2).max(120),
-        activityId: uuid,
+        activityId: uuid.nullable().optional(),
         poolId: uuid,
         courseId: uuid.nullable().optional(),
         segmentCount: z.number().int().min(1).max(12),
@@ -459,6 +459,8 @@ export const createLiveArena = createServerFn({ method: "POST" })
         perQuestionSeconds: z.number().int().min(5).max(600),
         correctMarks: z.number().int().min(0).max(20),
         wrongMarks: z.number().int().min(0).max(20),
+        timeBonusMax: z.number().int().min(0).max(50).optional(),
+        earlyLockBonus: z.number().int().min(0).max(50).optional(),
       })
       .parse(input),
   )
@@ -466,7 +468,7 @@ export const createLiveArena = createServerFn({ method: "POST" })
     const { adminCreateArena } = await import("@/lib/play.arena.server");
     return adminCreateArena(context.userId, {
       name: data.name,
-      activityId: data.activityId,
+      activityId: data.activityId ?? null,
       poolId: data.poolId,
       courseId: data.courseId ?? null,
       segmentCount: data.segmentCount,
@@ -474,6 +476,8 @@ export const createLiveArena = createServerFn({ method: "POST" })
       perQuestionSeconds: data.perQuestionSeconds,
       correctMarks: data.correctMarks,
       wrongMarks: data.wrongMarks,
+      timeBonusMax: data.timeBonusMax ?? 0,
+      earlyLockBonus: data.earlyLockBonus ?? 0,
     });
   });
 
@@ -541,7 +545,7 @@ export const runArenaAction = createServerFn({ method: "POST" })
     z
       .object({
         arenaId: uuid,
-        action: z.enum(["start", "lock", "reveal", "next", "finish"]),
+        action: z.enum(["start", "lock", "reveal", "next", "publishSegment", "finish"]),
       })
       .parse(input),
   )

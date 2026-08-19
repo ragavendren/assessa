@@ -254,7 +254,7 @@ export function PlayControlPanel({ data }: { data: AdminPlayData }) {
           editingKind === "escape"
             ? "Work through mode, pool, then scenes. A pool is required before you can author rooms."
             : editingKind === "arena"
-              ? "Activity first, then a pool, then open a lobby. Live Arena appears under an activity."
+              ? "Bind a pool, then open a lobby. Players join from Play — no activity is required."
               : editingKind === "knockout"
                 ? "Bind a pool, then create a bracket. Knockout does not use activities — players join from Play."
                 : "Course and activity control where it appears. Pool and topics control the bank."
@@ -293,7 +293,6 @@ export function PlayControlPanel({ data }: { data: AdminPlayData }) {
                 <TournamentPanel
                   data={data}
                   show={{ arena: true }}
-                  defaultActivityId={editing.activityId}
                   defaultPoolId={editing.poolId}
                 />
               ),
@@ -339,7 +338,7 @@ function ModesPanel({
           title={group.label}
           description={
             group.label === "Events"
-              ? "Configure in order. Live Arena needs an activity, then a pool, then a lobby. Escape needs a pool, then scenes. Knockout needs a pool only — no activity; players join from Play."
+              ? "Configure in order. Live Arena needs a pool, then a lobby — players join from Play. Escape needs a pool, then scenes. Knockout needs a pool only."
               : "Turn a mode on for participants, then bind it to a course, an activity, a pool, and a topic mix."
           }
           action={
@@ -430,7 +429,11 @@ function ModeEditor({
   }
 
   const basics = scope === "basics";
-  const showActivity = !basics && challenge.kind !== "knockout" && challenge.kind !== "escape";
+  const showActivity =
+    !basics &&
+    challenge.kind !== "knockout" &&
+    challenge.kind !== "escape" &&
+    challenge.kind !== "arena";
   const showCourse = !basics;
   const showPool = !basics && challenge.kind !== "arena";
   const showArenaRules = !basics && challenge.kind === "arena";
@@ -989,12 +992,10 @@ function TournamentPanel({
   data,
   show = {},
   defaultPoolId,
-  defaultActivityId,
 }: {
   data: AdminPlayData;
   show?: { activities?: boolean; arena?: boolean; knockout?: boolean };
   defaultPoolId?: string | null;
-  defaultActivityId?: string | null;
 }) {
   const queryClient = useQueryClient();
   const createT = useServerFn(createPlayTournament);
@@ -1009,15 +1010,14 @@ function TournamentPanel({
   const [poolId, setPoolId] = useState(defaultPoolId ?? data.pools[0]?.id ?? "");
   const [activityName, setActivityName] = useState("");
   const [arenaName, setArenaName] = useState("Live Arena");
-  const [arenaActivityId, setArenaActivityId] = useState(
-    defaultActivityId ?? data.activities[0]?.id ?? "",
-  );
   const [arenaPoolId, setArenaPoolId] = useState(defaultPoolId ?? data.pools[0]?.id ?? "");
   const [segmentCount, setSegmentCount] = useState(3);
   const [questionsPerSegment, setQuestionsPerSegment] = useState(4);
   const [perQuestionSeconds, setPerQuestionSeconds] = useState(30);
   const [correctMarks, setCorrectMarks] = useState(2);
   const [wrongMarks, setWrongMarks] = useState(1);
+  const [timeBonusMax, setTimeBonusMax] = useState(0);
+  const [earlyLockBonus, setEarlyLockBonus] = useState(0);
   const [shareArenaId, setShareArenaId] = useState<string | null>(null);
 
   const createMut = useMutation({
@@ -1061,13 +1061,14 @@ function TournamentPanel({
       createArena({
         data: {
           name: arenaName,
-          activityId: arenaActivityId,
           poolId: arenaPoolId,
           segmentCount,
           questionsPerSegment,
           perQuestionSeconds,
           correctMarks,
           wrongMarks,
+          timeBonusMax,
+          earlyLockBonus,
         },
       }),
     onSuccess: () => {
@@ -1144,7 +1145,7 @@ function TournamentPanel({
       {show.arena ? (
         <AdminPanel
           title="Live Arena"
-          description="Hosted team quiz: pick an activity, a pool, segments × questions, a per-question timer, and +/− marks. Teams join by name. You reveal each key."
+          description="Hosted team quiz: pick a pool, segments × questions, a per-question timer, +/− marks, and optional time / early-lock bonuses. Teams join from Play. You reveal each key."
         >
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             <input
@@ -1152,18 +1153,6 @@ function TournamentPanel({
               value={arenaName}
               onChange={(e) => setArenaName(e.target.value)}
             />
-            <select
-              className="field h-9 text-sm"
-              value={arenaActivityId}
-              onChange={(e) => setArenaActivityId(e.target.value)}
-            >
-              <option value="">Select activity</option>
-              {data.activities.map((activity) => (
-                <option key={activity.id} value={activity.id}>
-                  {activity.name}
-                </option>
-              ))}
-            </select>
             <select
               className="field h-9 text-sm"
               value={arenaPoolId}
@@ -1211,10 +1200,24 @@ function TournamentPanel({
               max={20}
               onChange={setWrongMarks}
             />
+            <NumField
+              label="Time bonus (max extra)"
+              value={timeBonusMax}
+              min={0}
+              max={50}
+              onChange={setTimeBonusMax}
+            />
+            <NumField
+              label="Early lock-in bonus"
+              value={earlyLockBonus}
+              min={0}
+              max={50}
+              onChange={setEarlyLockBonus}
+            />
           </div>
           <button
             type="button"
-            disabled={arenaMut.isPending || !arenaActivityId || !arenaPoolId}
+            disabled={arenaMut.isPending || !arenaPoolId}
             onClick={() => arenaMut.mutate()}
             className="mt-3 rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground disabled:opacity-60"
           >
@@ -1224,7 +1227,7 @@ function TournamentPanel({
             <div className="mt-3">
               <AdminEmpty
                 title="No arenas"
-                body="Open a lobby after you have an activity and a pool."
+                body="Open a lobby after you have a question pool. Players join from Play."
               />
             </div>
           ) : (
@@ -1402,9 +1405,7 @@ function sourceLabel(row: AdminPlayChallenge, data: AdminPlayData) {
     return pool ? `${pool.courseName} · ${pool.name}` : "Needs a question pool";
   }
   if (row.kind === "arena") {
-    return activity
-      ? `Activity · ${activity.name}${pool ? ` · ${pool.name}` : ""}`
-      : "Needs an activity, then a pool";
+    return pool ? `${pool.courseName} · ${pool.name}` : "Join from Play · no activity needed";
   }
   const parts = [
     activity ? `Activity · ${activity.name}` : null,

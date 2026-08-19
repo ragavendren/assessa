@@ -14,7 +14,6 @@ type StepDef = { id: EventStepId; label: string; hint: string };
 const STEPS: Record<EventKind, StepDef[]> = {
   arena: [
     { id: "mode", label: "Mode", hint: "Name and availability" },
-    { id: "activity", label: "Activity", hint: "Hub the lobby appears under" },
     { id: "pool", label: "Pool", hint: "Questions for the quiz" },
     { id: "lobby", label: "Lobby", hint: "Open a live event" },
   ],
@@ -131,12 +130,11 @@ export function PlayEventSetup({
 
 function unlockMap(kind: EventKind, data: AdminPlayData): Record<EventStepId, boolean> {
   const hasPool = data.pools.length > 0;
-  const hasActivity = data.activities.length > 0;
   return {
     mode: true,
     activity: true,
-    pool: kind === "arena" ? hasActivity : true,
-    lobby: hasActivity && hasPool,
+    pool: true,
+    lobby: hasPool,
     scenes: hasPool,
     // Knockout never needs an activity — players join the open bracket from Play.
     bracket: hasPool,
@@ -149,14 +147,8 @@ function nextUnlocked(steps: StepDef[], index: number, unlocked: Record<EventSte
 }
 
 function lockCopy(kind: EventKind, step: EventStepId, data: AdminPlayData) {
-  if (step === "pool" && kind === "arena" && data.activities.length === 0) {
-    return "Create an activity first. Live Arena sits under an activity in the Play hub.";
-  }
-  if (step === "lobby" && data.activities.length === 0) {
-    return "Create an activity, then come back to open a lobby.";
-  }
   if (step === "lobby" && data.pools.length === 0) {
-    return "Add a question pool before opening a lobby.";
+    return "Add a question pool before opening a lobby. Players join from Play — no activity is required.";
   }
   if (step === "scenes" && data.pools.length === 0) {
     return "Import a question pool so each scene can pull a topic set.";
@@ -189,7 +181,7 @@ export function EventPoolStep({
           ? "Knockout matches draw from this pool. Activities are not required — players join the open bracket from Play."
           : challenge.kind === "escape"
             ? "Each scene picks a topic from this pool."
-            : "The lobby pulls questions from this pool."
+            : "The lobby pulls questions from this pool. Players join from Play — no activity is required."
       }
     >
       {data.pools.length === 0 ? (

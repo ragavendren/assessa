@@ -1,10 +1,10 @@
 import { QuestionPrompt } from "@/components/QuestionPrompt";
 import { AdminNav } from "@/components/AdminNav";
 import { AdminAccessDenied, AdminPageHeader } from "@/components/admin/AdminPageUi";
-import { ArenaScoreboard } from "@/components/play/ArenaScoreboard";
+import { ArenaQuestionTimer, ArenaScoreboard } from "@/components/play/ArenaScoreboard";
 import { ArenaShareCard } from "@/components/play/ArenaShareCard";
 import { PageLoader } from "@/components/platform";
-import { isLastQuestionOfSegment } from "@/lib/play.arena";
+import { isArenaKeyVisible, isLastQuestionOfSegment } from "@/lib/play.arena";
 import { deleteLiveArena, getArenaHost, runArenaAction } from "@/lib/play.functions";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -12,6 +12,8 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+
+type ArenaHostAction = "start" | "lock" | "reveal" | "next" | "publishSegment" | "finish";
 
 export const Route = createFileRoute("/_authenticated/admin/play_/arena/$arenaId")({
   head: () => ({ meta: [{ title: "Host Live Arena — Assessa Admin" }] }),
@@ -48,9 +50,11 @@ function ArenaHostPage() {
   }, [data?.arena.questionEndsAt, data?.arena.status, data?.arena.currentIndex]);
 
   const actionMut = useMutation({
-    mutationFn: (action: "start" | "lock" | "reveal" | "next" | "finish") =>
-      act({ data: { arenaId, action } }),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["arena-host", arenaId] }),
+    mutationFn: (action: ArenaHostAction) => act({ data: { arenaId, action } }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["arena-host", arenaId] });
+      void queryClient.invalidateQueries({ queryKey: ["arena-player", arenaId] });
+    },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Action failed"),
   });
   const deleteMut = useMutation({
@@ -83,6 +87,7 @@ function ArenaHostPage() {
   const lastQuestion = arena.currentIndex >= arena.totalQuestions - 1;
   const lastInSegment = isLastQuestionOfSegment(arena.currentIndex, arena.questionsPerSegment);
   const submitted = teams.filter((t) => t.submitted).length;
+  const showKey = isArenaKeyVisible(arena.status);
 
   return (
     <div className="space-y-6">
@@ -92,17 +97,22 @@ function ArenaHostPage() {
         back={{ to: "/admin/play", label: "Play" }}
         help={{
           label: "Host controls",
-          body: "Share the join QR, lock answers, then reveal. Segment winners post with the last question of each segment.",
+          body: "The timer is visible while a question is open. Answers stay hidden until you lock. Reveal the key, publish that segment’s results, then publish the overall leaderboard after the last segment.",
         }}
       />
       <p className="text-sm">
         <span className="capitalize">{arena.status}</span>
-        {remaining != null ? <span className="ml-2 tabular-nums">{remaining}s</span> : null}
         <span className="ml-2 text-muted-foreground">
           Q {Math.min(arena.currentIndex + 1, arena.totalQuestions)}/{arena.totalQuestions} · +
           {arena.correctMarks}/−{arena.wrongMarks}
+          {arena.timeBonusMax ? ` · time +${arena.timeBonusMax}` : ""}
+          {arena.earlyLockBonus ? ` · early lock +${arena.earlyLockBonus}` : ""}
+          {arena.publishedThroughSegment >= 0
+            ? ` · published through S${arena.publishedThroughSegment + 1}`
+            : ""}
         </span>
       </p>
+      <ArenaQuestionTimer remaining={remaining} status={arena.status} />
 
       <ArenaShareCard arenaId={arena.id} arenaName={arena.name} />
 
@@ -121,23 +131,30 @@ function ArenaHostPage() {
             onClick={() => actionMut.mutate("lock")}
           />
         ) : null}
-        {arena.status === "locked" || arena.status === "question" ? (
+        {arena.status === "locked" ? (
           <HostBtn
-            label="Reveal key & board"
+            label="Reveal answer"
             pending={actionMut.isPending}
             onClick={() => actionMut.mutate("reveal")}
           />
         ) : null}
-        {arena.status === "revealed" && !lastQuestion ? (
+        {arena.publishSegmentReady ? (
+          <HostBtn
+            label={`Publish segment ${(question?.segment ?? 0) + 1} results`}
+            pending={actionMut.isPending}
+            onClick={() => actionMut.mutate("publishSegment")}
+          />
+        ) : null}
+        {arena.status === "revealed" && !lastQuestion && !arena.publishSegmentReady ? (
           <HostBtn
             label={lastInSegment ? "Start next segment" : "Next question"}
             pending={actionMut.isPending}
             onClick={() => actionMut.mutate("next")}
           />
         ) : null}
-        {arena.status === "revealed" ? (
+        {arena.status === "revealed" && lastQuestion && !arena.publishSegmentReady ? (
           <HostBtn
-            label="Finish & announce winner"
+            label="Publish overall results"
             pending={actionMut.isPending}
             onClick={() => actionMut.mutate("finish")}
           />
@@ -176,7 +193,7 @@ function ArenaHostPage() {
                     key={index}
                     className={cn(
                       "rounded-md px-2 py-1",
-                      question.correctIndexes?.includes(index) ? "bg-success/10" : "",
+                      showKey && question.correctIndexes?.includes(index) ? "bg-success/10" : "",
                     )}
                   >
                     {String.fromCharCode(65 + index)}. {option}
@@ -202,7 +219,7 @@ function ArenaHostPage() {
                   )}
                 >
                   {team.name}
-                  {arena.status === "revealed" && team.correct != null
+                  {arena.status === "revealed" && showKey && team.correct != null
                     ? team.correct
                       ? " · correct"
                       : " · wrong"
@@ -216,10 +233,11 @@ function ArenaHostPage() {
         </div>
         <ArenaScoreboard
           rows={board.rows}
-          currentSegmentWinner={board.currentSegmentWinner}
+          currentSegmentWinner={board.currentSegmentWinner ?? null}
           segmentWinners={board.segmentWinners}
           champion={board.champion}
           visible
+          title={board.overallVisible ? "Overall leaderboard" : "Host scoreboard"}
         />
       </div>
     </div>

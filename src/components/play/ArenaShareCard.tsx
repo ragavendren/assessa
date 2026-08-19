@@ -89,8 +89,7 @@ export function ArenaShareCard({
             Invite participants
           </p>
           <p className="text-xs text-muted-foreground">
-            Scan the QR or share the link. Anyone signed in can join a team and see the live
-            scoreboard.
+            Scan the QR or share the link. Anyone signed in can join a team from Play.
           </p>
           <p className="truncate rounded-md bg-secondary px-2 py-1.5 font-mono text-[11px]">
             {url}

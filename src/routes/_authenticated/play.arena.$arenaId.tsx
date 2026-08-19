@@ -1,13 +1,16 @@
 import { QuestionPrompt } from "@/components/QuestionPrompt";
-import { ArenaScoreboard } from "@/components/play/ArenaScoreboard";
+import {
+  ArenaQuestionTimer,
+  ArenaScoreboard,
+  ArenaTeamScoreCard,
+} from "@/components/play/ArenaScoreboard";
 import { PlayOptions } from "@/components/play/PlayOptions";
 import { PageLoader } from "@/components/platform";
 import { getArenaPlayer, joinLiveArena, submitArenaAnswer } from "@/lib/play.functions";
-import { cn } from "@/lib/utils";
+import { sameIndexSet } from "@/lib/play.math";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { Timer } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -57,8 +60,8 @@ function ArenaPlayerPage() {
   });
   const submitMut = useMutation({
     mutationFn: (answer: number[]) => submit({ data: { arenaId, answer } }),
-    onSuccess: () => {
-      toast.success("Answer locked for your team");
+    onSuccess: (result) => {
+      toast.success(result?.modified ? "Locked answer updated" : "Answer locked for your team");
       void queryClient.invalidateQueries({ queryKey: ["arena-player", arenaId] });
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Could not submit"),
@@ -70,7 +73,7 @@ function ArenaPlayerPage() {
     if (data.arena.status === "question")
       return remaining != null ? `${remaining}s left` : "Answer now";
     if (data.arena.status === "locked") return "Answers locked — waiting for reveal";
-    if (data.arena.status === "revealed") return "Key and scoreboard revealed";
+    if (data.arena.status === "revealed") return "Answer revealed — waiting for the host";
     if (data.arena.status === "complete") return "Arena complete";
     return data.arena.status;
   }, [data, remaining]);
@@ -80,6 +83,8 @@ function ArenaPlayerPage() {
   const answering = data.arena.status === "question";
   const revealed = data.arena.status === "revealed" || data.arena.status === "complete";
   const finished = data.arena.status === "complete";
+  const lockedIn = (data.myAnswer?.length ?? 0) > 0;
+  const unchanged = lockedIn && sameIndexSet(pick, data.myAnswer);
 
   return (
     <div className="mx-auto max-w-3xl space-y-5">
@@ -102,12 +107,7 @@ function ArenaPlayerPage() {
         ) : null}
       </header>
 
-      {answering && remaining != null ? (
-        <p className="inline-flex items-center gap-2 rounded-full bg-amber-500/15 px-3 py-1.5 text-sm font-medium text-amber-800 dark:text-amber-200">
-          <Timer className="h-4 w-4" />
-          {remaining}s
-        </p>
-      ) : null}
+      <ArenaQuestionTimer remaining={remaining} status={data.arena.status} />
 
       {!data.myTeam && !finished ? (
         <section className="surface-paper space-y-3 rounded-2xl p-5">
@@ -148,9 +148,14 @@ function ArenaPlayerPage() {
           ) : null}
         </section>
       ) : data.myTeam ? (
-        <p className="rounded-xl bg-secondary px-4 py-2 text-sm">
-          Your team: <span className="font-medium">{data.myTeam.name}</span>
-        </p>
+        <ArenaTeamScoreCard
+          name={data.myTeam.name}
+          score={data.myTeam.score}
+          correctCount={data.myTeam.correctCount}
+          wrongCount={data.myTeam.wrongCount}
+          rank={data.myTeam.rank}
+          lastResult={data.myResult}
+        />
       ) : null}
 
       {data.myTeam &&
@@ -177,22 +182,16 @@ function ArenaPlayerPage() {
           {answering ? (
             <button
               type="button"
-              disabled={submitMut.isPending || pick.length === 0}
+              disabled={submitMut.isPending || pick.length === 0 || unchanged}
               onClick={() => submitMut.mutate(pick)}
               className="mt-4 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-60"
             >
-              {submitMut.isPending ? "Sending…" : "Lock in team answer"}
+              {submitMut.isPending
+                ? "Sending…"
+                : lockedIn
+                  ? "Modify the locked answer"
+                  : "Lock in team answer"}
             </button>
-          ) : null}
-          {data.myResult ? (
-            <p
-              className={cn(
-                "mt-3 text-sm",
-                data.myResult.correct ? "text-success" : "text-muted-foreground",
-              )}
-            >
-              {data.myResult.correct ? "Correct" : "Not correct"} · {data.myResult.marks} marks
-            </p>
           ) : null}
           {revealed && data.question.explanation ? (
             <p className="mt-2 text-xs text-muted-foreground">{data.question.explanation}</p>
@@ -207,14 +206,30 @@ function ArenaPlayerPage() {
       ) : null}
 
       <ArenaScoreboard
-        rows={data.board.visible ? data.board.rows : []}
+        rows={
+          data.board.overallVisible
+            ? data.board.rows
+            : data.board.segmentVisible
+              ? data.board.segmentRows
+              : []
+        }
         highlightId={data.myTeam?.id ?? null}
-        currentSegmentWinner={data.board.visible ? data.board.currentSegmentWinner : null}
+        currentSegmentWinner={data.board.overallVisible ? null : data.board.currentSegmentWinner}
         segmentWinners={data.board.segmentWinners}
         champion={data.board.champion}
-        visible={data.board.visible}
+        visible={data.board.overallVisible || data.board.segmentVisible}
+        showSegmentColumn={!data.board.overallVisible}
+        title={
+          data.board.overallVisible
+            ? "Overall leaderboard"
+            : data.board.publishedSegment != null
+              ? `Segment ${data.board.publishedSegment + 1} results`
+              : "Scoreboard"
+        }
         emptyHint={
-          finished ? "No teams scored." : "The host will reveal the overall board with each key."
+          finished
+            ? "No teams scored."
+            : "The host publishes each segment’s results, then the overall board at the end."
         }
       />
     </div>

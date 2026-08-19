@@ -384,17 +384,14 @@ function SegmentPanel({
               {modes.map((mode) => {
                 const link = LINK_MODES[mode.kind];
                 if (link) {
-                  const search =
-                    mode.kind === "arena" && segment.scope === "activity"
-                      ? { activityId: segment.id }
-                      : link.searchKey
-                        ? {
-                            [link.searchKey]:
-                              segment.scope === "course"
-                                ? segment.id
-                                : (mode.bindingCourseId ?? segment.id),
-                          }
-                        : undefined;
+                  const search = link.searchKey
+                    ? {
+                        [link.searchKey]:
+                          segment.scope === "course"
+                            ? segment.id
+                            : (mode.bindingCourseId ?? segment.id),
+                      }
+                    : undefined;
                   return (
                     <PlayModeCard
                       key={mode.kind}

@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   arenaMarks,
+  arenaSpeedBonuses,
   arenaSegmentOf,
   arenaTotalQuestions,
   buildArenaBoard,
+  canPublishArenaSegment,
   completedArenaSegments,
   pickArenaWinner,
   rankArenaTeams,
@@ -16,6 +18,41 @@ describe("arenaMarks", () => {
     assert.equal(arenaMarks(true, true, 2, 1), 2);
     assert.equal(arenaMarks(true, false, 2, 1), -1);
     assert.equal(arenaMarks(false, false, 2, 1), 0);
+  });
+});
+
+describe("arenaSpeedBonuses", () => {
+  it("scales time bonus by remaining time and grants early lock above half the clock", () => {
+    assert.deepEqual(
+      arenaSpeedBonuses({
+        correct: true,
+        remainingSeconds: 30,
+        durationSeconds: 30,
+        timeBonusMax: 4,
+        earlyLockBonus: 1,
+      }),
+      { timeBonus: 4, earlyLockBonus: 1 },
+    );
+    assert.deepEqual(
+      arenaSpeedBonuses({
+        correct: true,
+        remainingSeconds: 10,
+        durationSeconds: 30,
+        timeBonusMax: 3,
+        earlyLockBonus: 2,
+      }),
+      { timeBonus: 1, earlyLockBonus: 0 },
+    );
+    assert.deepEqual(
+      arenaSpeedBonuses({
+        correct: false,
+        remainingSeconds: 30,
+        durationSeconds: 30,
+        timeBonusMax: 4,
+        earlyLockBonus: 1,
+      }),
+      { timeBonus: 0, earlyLockBonus: 0 },
+    );
   });
 });
 
@@ -53,6 +90,31 @@ describe("rankArenaTeams", () => {
     assert.equal(ranked[0]?.id, "b");
     assert.equal(ranked[0]?.rank, 1);
     assert.equal(ranked[1]?.rank, 2);
+  });
+});
+
+describe("canPublishArenaSegment", () => {
+  it("allows publish only after the last question of an unpublished segment is revealed", () => {
+    assert.equal(
+      canPublishArenaSegment({
+        currentIndex: 3,
+        status: "revealed",
+        questionsPerSegment: 4,
+        segmentCount: 3,
+        publishedThroughSegment: -1,
+      }),
+      true,
+    );
+    assert.equal(
+      canPublishArenaSegment({
+        currentIndex: 2,
+        status: "revealed",
+        questionsPerSegment: 4,
+        segmentCount: 3,
+        publishedThroughSegment: -1,
+      }),
+      false,
+    );
   });
 });
 
@@ -125,9 +187,33 @@ describe("buildArenaBoard", () => {
       status: "complete",
       questionsPerSegment: 4,
       segmentCount: 1,
+      publishedThroughSegment: 0,
     });
     assert.equal(board.champion?.id, "b");
     assert.equal(board.currentSegmentWinner?.id, "b");
     assert.equal(board.rows[0]?.rank, 1);
+  });
+
+  it("keeps unpublished segment standings off the public board", () => {
+    const board = buildArenaBoard({
+      teams: [
+        { id: "a", name: "Alpha", score: 4, correctCount: 2, wrongCount: 0 },
+        { id: "b", name: "Beta", score: 2, correctCount: 1, wrongCount: 1 },
+      ],
+      answers: [
+        { teamId: "a", questionIndex: 0, marks: 2, correct: true },
+        { teamId: "a", questionIndex: 1, marks: 2, correct: true },
+        { teamId: "b", questionIndex: 0, marks: 2, correct: true },
+        { teamId: "b", questionIndex: 1, marks: 0, correct: false },
+      ],
+      currentIndex: 1,
+      status: "revealed",
+      questionsPerSegment: 2,
+      segmentCount: 2,
+      publishedThroughSegment: -1,
+    });
+    assert.equal(board.segmentWinners.length, 0);
+    assert.equal(board.allSegmentWinners[0]?.id, "a");
+    assert.equal(board.segmentRows.length, 0);
   });
 });
