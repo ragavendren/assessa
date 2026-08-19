@@ -1,3 +1,4 @@
+import { QuestionPrompt } from "@/components/QuestionPrompt";
 import { PlayOptions } from "@/components/play/PlayOptions";
 import { BonusRewards } from "@/components/play/BonusRewards";
 import { SurvivalOutcomeHero, survivalSurvived } from "@/components/play/SurvivalOutcome";
@@ -139,11 +140,18 @@ function PlayResultPage() {
                 item.correct ? "text-success" : "text-destructive",
               )}
             >
-              {i + 1}. {item.prompt}
+              {i + 1}. {item.prompt.slice(0, 90)}
+              {item.prompt.length > 90 ? "…" : ""}
               <span className="ml-2 text-xs font-normal text-muted-foreground">
                 {item.correct ? "Correct" : "Missed"}
               </span>
             </summary>
+            <QuestionPrompt
+              prompt={item.prompt}
+              imageUrl={item.imageUrl}
+              level="p"
+              className="mt-3"
+            />
             <PlayOptions
               options={item.options}
               multiSelect={item.multiSelect}

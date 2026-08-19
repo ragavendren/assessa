@@ -1,4 +1,9 @@
-import { ImageUrlPaste, PromptImageField } from "@/components/admin/PromptImageField";
+import {
+  ImageUrlPaste,
+  ImageMapPreview,
+  PromptImageField,
+} from "@/components/admin/PromptImageField";
+import { QuestionPrompt } from "@/components/QuestionPrompt";
 import { QuestionGenerationConfiguration } from "@/components/admin/pool/QuestionGenerationConfiguration";
 import type { PoolConfigState } from "@/components/admin/pool/QuestionGenerationConfiguration";
 import { QuestionSelectionMethod } from "@/components/admin/pool/QuestionSelectionMethod";
@@ -1042,62 +1047,67 @@ export function ExamEditor({
                 </section>
               ) : (
                 <>
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-hairline text-muted-foreground">
-                      Questions ({values.questions.length}) · tags are subtopics · optional prompt
-                      images
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => downloadQuestionCsvTemplate()}
-                        className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-secondary"
-                      >
-                        <Download className="h-3.5 w-3.5" /> CSV template
-                      </button>
-                      <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-secondary">
-                        <Upload className="h-3.5 w-3.5" /> Upload CSV
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-hairline text-muted-foreground">
+                        Questions ({values.questions.length}) · tags are subtopics · optional prompt
+                        images
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => downloadQuestionCsvTemplate()}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-secondary"
+                        >
+                          <Download className="h-3.5 w-3.5" /> CSV template
+                        </button>
+                        <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-secondary">
+                          <Upload className="h-3.5 w-3.5" /> Upload CSV
+                          <input
+                            type="file"
+                            accept=".csv,text/csv"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) onCsvUpload(file);
+                              e.currentTarget.value = "";
+                            }}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => csvImageRef.current?.click()}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-secondary"
+                        >
+                          <ImagePlus className="h-3.5 w-3.5" /> Images
+                        </button>
+                        <ImageUrlPaste
+                          compact
+                          onApply={(map) => setCsvImageMap((prev) => ({ ...prev, ...map }))}
+                        />
                         <input
+                          ref={csvImageRef}
                           type="file"
-                          accept=".csv,text/csv"
+                          accept={IMAGE_FILE_ACCEPT}
+                          multiple
                           className="hidden"
                           onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) onCsvUpload(file);
+                            void onCsvImages(e.target.files);
                             e.currentTarget.value = "";
                           }}
                         />
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => csvImageRef.current?.click()}
-                        className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-secondary"
-                      >
-                        <ImagePlus className="h-3.5 w-3.5" /> Images
-                      </button>
-                      <ImageUrlPaste
-                        compact
-                        onApply={(map) => setCsvImageMap((prev) => ({ ...prev, ...map }))}
-                      />
-                      <input
-                        ref={csvImageRef}
-                        type="file"
-                        accept={IMAGE_FILE_ACCEPT}
-                        multiple
-                        className="hidden"
-                        onChange={(e) => {
-                          void onCsvImages(e.target.files);
-                          e.currentTarget.value = "";
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => patch({ questions: [...values.questions, blankQuestion()] })}
-                        className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-secondary"
-                      >
-                        <Plus className="h-3.5 w-3.5" /> Add question
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            patch({ questions: [...values.questions, blankQuestion()] })
+                          }
+                          className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs font-medium hover:bg-secondary"
+                        >
+                          <Plus className="h-3.5 w-3.5" /> Add question
+                        </button>
+                      </div>
                     </div>
+                    <ImageMapPreview map={csvImageMap} />
                   </div>
 
                   {values.questions.map((question, index) => (
@@ -1407,21 +1417,19 @@ export function ExamEditor({
                       >
                         <header className="flex flex-wrap items-start justify-between gap-3 border-b border-success/20 bg-success/8 px-5 py-4 sm:px-6 sm:py-5">
                           <div className="min-w-0 flex-1 pr-2">
-                            <p className="text-xs text-muted-foreground">
-                              Question {absoluteIndex + 1}
-                              {question.subtopic ? ` · ${question.subtopic}` : ""}
-                              {question.multiSelect ? " · select all that apply" : ""}
-                            </p>
-                            <h3 className="mt-2 text-base font-medium leading-snug sm:text-lg">
-                              {question.prompt}
-                            </h3>
-                            {question.imageUrl ? (
-                              <img
-                                src={question.imageUrl}
-                                alt=""
-                                className="mt-3 max-h-56 w-full max-w-xl rounded-lg border border-border object-contain"
-                              />
-                            ) : null}
+                            <QuestionPrompt
+                              prompt={question.prompt}
+                              imageUrl={question.imageUrl}
+                              level="h3"
+                              showUrl
+                              meta={
+                                <p className="text-xs text-muted-foreground">
+                                  Question {absoluteIndex + 1}
+                                  {question.subtopic ? ` · ${question.subtopic}` : ""}
+                                  {question.multiSelect ? " · select all that apply" : ""}
+                                </p>
+                              }
+                            />
                           </div>
                           <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-success/35 bg-success/15 px-2.5 py-1 text-xs font-semibold text-success">
                             <Check className="h-3.5 w-3.5" aria-hidden />

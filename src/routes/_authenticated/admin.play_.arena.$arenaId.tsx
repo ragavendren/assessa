@@ -1,3 +1,4 @@
+import { QuestionPrompt } from "@/components/QuestionPrompt";
 import { AdminNav } from "@/components/AdminNav";
 import { AdminAccessDenied, AdminPageHeader } from "@/components/admin/AdminPageUi";
 import { ArenaScoreboard } from "@/components/play/ArenaScoreboard";
@@ -162,14 +163,13 @@ function ArenaHostPage() {
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Segment {(question.segment ?? 0) + 1} · submitted {submitted}/{teams.length}
               </p>
-              {question.imageUrl ? (
-                <img
-                  src={question.imageUrl}
-                  alt=""
-                  className="my-3 max-h-48 w-full object-contain"
-                />
-              ) : null}
-              <p className="mt-2 text-sm font-medium">{question.prompt}</p>
+              <QuestionPrompt
+                prompt={question.prompt}
+                imageUrl={question.imageUrl}
+                level="p"
+                showUrl
+                className="mt-2"
+              />
               <ol className="mt-3 list-none space-y-1 text-sm">
                 {question.options.map((option, index) => (
                   <li

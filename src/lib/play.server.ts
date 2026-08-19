@@ -1306,6 +1306,7 @@ export async function summarisePlay(
     return {
       id: q.id,
       prompt: q.prompt,
+      imageUrl: q.image_url ?? null,
       options: Array.isArray(q.options) ? (q.options as string[]) : [],
       correctIndexes: indexes,
       givenIndexes: given,

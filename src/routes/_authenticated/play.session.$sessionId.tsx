@@ -1,4 +1,5 @@
 import { PlayOptions } from "@/components/play/PlayOptions";
+import { QuestionPrompt } from "@/components/QuestionPrompt";
 import { SpeedHud } from "@/components/play/SpeedHud";
 import { RapidHud, SurvivalHud } from "@/components/play/SurvivalHud";
 import { SurvivalHitBanner, SurvivalLifeLostBanner } from "@/components/play/SurvivalOutcome";
@@ -297,23 +298,21 @@ function PlaySessionPage() {
             feedback && feedback.correct && isSurvival && "border border-success/30 bg-success/5",
           )}
         >
-          <p
-            className={cn(
-              "text-xs font-semibold",
-              question.multiSelect ? "text-accent" : "text-muted-foreground",
-            )}
-          >
-            {question.multiSelect ? "Select all that apply" : "Choose one"}
-          </p>
-          <h2 className="mt-2 text-lg font-semibold leading-snug">{question.prompt}</h2>
-          {question.imageUrl ? (
-            <img
-              src={question.imageUrl}
-              alt="Question prompt reference"
-              className="mt-3 w-full max-w-2xl rounded-md border border-border object-contain"
-              loading="lazy"
-            />
-          ) : null}
+          <QuestionPrompt
+            prompt={question.prompt}
+            imageUrl={question.imageUrl}
+            className="mt-2"
+            meta={
+              <p
+                className={cn(
+                  "text-xs font-semibold",
+                  question.multiSelect ? "text-accent" : "text-muted-foreground",
+                )}
+              >
+                {question.multiSelect ? "Select all that apply" : "Choose one"}
+              </p>
+            }
+          />
           <PlayOptions
             options={question.options}
             multiSelect={question.multiSelect}

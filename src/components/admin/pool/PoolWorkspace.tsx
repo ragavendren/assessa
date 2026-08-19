@@ -1,4 +1,9 @@
-import { PromptImageField, ImageUrlPaste } from "@/components/admin/PromptImageField";
+import {
+  PromptImageField,
+  ImageUrlPaste,
+  ImageMapPreview,
+} from "@/components/admin/PromptImageField";
+import { PromptImage } from "@/components/QuestionPrompt";
 import { AdminEmpty } from "@/components/admin/AdminPageUi";
 import { HelpTip, Panel } from "@/components/admin/pool/QuestionBankUi";
 import { PageLoader } from "@/components/platform";
@@ -461,6 +466,8 @@ export function PoolWorkspace({
         />
       </div>
 
+      <ImageMapPreview map={uploadedImageMap} className={cn("mt-2", expanded && "shrink-0")} />
+
       {fillCheck ? (
         <div className={cn(expanded && "shrink-0")}>
           <PoolFillCheckPanel fillCheck={fillCheck} />
@@ -788,7 +795,7 @@ export function PoolWorkspace({
                             }
                             aria-expanded={expanded}
                           >
-                            <div className="flex items-start gap-2">
+                            <div className="flex items-start gap-3">
                               <div className="min-w-0 flex-1">
                                 <p
                                   className={cn(
@@ -799,12 +806,7 @@ export function PoolWorkspace({
                                   {q.prompt}
                                 </p>
                                 {imageUrl ? (
-                                  <img
-                                    src={imageUrl}
-                                    alt="Prompt reference"
-                                    className="mt-2 h-20 w-auto max-w-full rounded-md border border-border object-cover"
-                                    loading="lazy"
-                                  />
+                                  <PromptImage src={imageUrl} compact className="mt-2" alt="" />
                                 ) : null}
                                 <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
                                   <span

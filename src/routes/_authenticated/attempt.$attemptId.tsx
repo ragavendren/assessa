@@ -1,4 +1,5 @@
 import { PageLoader } from "@/components/platform";
+import { QuestionPrompt } from "@/components/QuestionPrompt";
 import { SubmitScoringOverlay } from "@/components/ResultCelebration";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { getAttemptPaper, finishAttempt } from "@/lib/platform.functions";
@@ -283,42 +284,34 @@ function AttemptRunner() {
               className="surface-paper border border-border px-5 py-6 sm:px-7 sm:py-8"
               aria-labelledby={promptId}
             >
-              <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                <span className="rounded-md bg-secondary px-2.5 py-1 text-xs font-semibold tracking-wide text-foreground uppercase">
-                  Question {index + 1} of {questions.length}
-                </span>
-                {question.subtopic ? (
-                  <span className="text-sm font-medium text-muted-foreground">
-                    {question.subtopic}
-                  </span>
-                ) : null}
-                {question.multiSelect ? (
-                  <span className="rounded-md border border-accent/40 bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent-foreground">
-                    Select all that apply
-                  </span>
-                ) : (
-                  <span className="rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground">
-                    Choose one answer
-                  </span>
-                )}
-              </div>
-
-              <h2
-                id={promptId}
-                ref={questionHeadingRef}
-                tabIndex={-1}
-                className="mt-5 scroll-mt-36 text-xl font-semibold leading-snug tracking-tight text-foreground outline-none sm:text-2xl sm:leading-snug"
-              >
-                {question.prompt}
-              </h2>
-              {question.imageUrl ? (
-                <img
-                  src={question.imageUrl}
-                  alt="Question prompt reference"
-                  className="mt-4 w-full max-w-2xl rounded-lg border border-border object-contain"
-                  loading="lazy"
-                />
-              ) : null}
+              <QuestionPrompt
+                prompt={question.prompt}
+                imageUrl={question.imageUrl}
+                titleId={promptId}
+                titleRef={questionHeadingRef}
+                className="mt-5"
+                meta={
+                  <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                    <span className="rounded-md bg-secondary px-2.5 py-1 text-xs font-semibold tracking-wide text-foreground uppercase">
+                      Question {index + 1} of {questions.length}
+                    </span>
+                    {question.subtopic ? (
+                      <span className="text-sm font-medium text-muted-foreground">
+                        {question.subtopic}
+                      </span>
+                    ) : null}
+                    {question.multiSelect ? (
+                      <span className="rounded-md border border-accent/40 bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent-foreground">
+                        Select all that apply
+                      </span>
+                    ) : (
+                      <span className="rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                        Choose one answer
+                      </span>
+                    )}
+                  </div>
+                }
+              />
 
               <div
                 className="mt-7 space-y-3"

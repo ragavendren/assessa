@@ -19,11 +19,15 @@ const MIME_BY_EXT: Record<string, string> = {
 
 export function mimeFromFileName(name: string): string {
   const ext = name.split(".").pop()?.toLowerCase() ?? "";
-  return MIME_BY_EXT[ext] ?? "application/octet-stream";
+  return MIME_BY_EXT[ext] ?? "image/png";
 }
 
-function safeFileName(name: string) {
-  return name.replace(/[^a-zA-Z0-9._-]/g, "_");
+export function safeImageFileName(name: string) {
+  const trimmed = name.trim() || "image.png";
+  const cleaned = trimmed.replace(/[^a-zA-Z0-9._-]/g, "_");
+  return cleaned.toLowerCase().endsWith(".png") || /\.[a-z0-9]+$/i.test(cleaned)
+    ? cleaned
+    : `${cleaned}.png`;
 }
 
 async function adminStorage(userId: string) {
@@ -55,59 +59,35 @@ async function ensureBucket(
   return null;
 }
 
-export const uploadQuestionImageFiles = createServerFn({ method: "POST" })
+export const createQuestionImageUpload = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) =>
     z
       .object({
         folder: z.string().trim().min(1).max(200),
-        files: z
-          .array(
-            z.object({
-              name: z.string().trim().min(1).max(240),
-              type: z.string().trim().max(120).optional().default(""),
-              data: z.string().min(1),
-            }),
-          )
-          .min(1)
-          .max(20),
+        name: z.string().trim().min(1).max(240),
+        type: z.string().trim().max(120).optional().default(""),
       })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
     const admin = await adminStorage(context.userId);
     const bucketError = await ensureBucket(admin);
-    const map: Record<string, string> = {};
-    const errors: string[] = [];
-    let uploaded = 0;
+    if (bucketError) throw new Error(`Could not create image bucket: ${bucketError}`);
+
     const folder = data.folder.replace(/\/+$/, "");
+    const path = `${folder}/${Date.now()}-${safeImageFileName(data.name)}`;
+    const { data: signed, error } = await admin.storage
+      .from(QUESTION_IMAGE_BUCKET)
+      .createSignedUploadUrl(path, { upsert: true });
+    if (error || !signed) throw new Error(error?.message ?? "Could not start image upload");
 
-    if (bucketError) {
-      return {
-        map,
-        uploaded: 0,
-        errors: [`Could not create image bucket: ${bucketError}`],
-      };
-    }
-
-    for (const file of data.files) {
-      const path = `${folder}/${Date.now()}-${safeFileName(file.name)}`;
-      const bytes = Uint8Array.from(atob(file.data), (char) => char.charCodeAt(0));
-      const contentType = file.type || mimeFromFileName(file.name);
-      const { error } = await admin.storage.from(QUESTION_IMAGE_BUCKET).upload(path, bytes, {
-        upsert: true,
-        contentType,
-      });
-      if (error) {
-        errors.push(`${file.name}: ${error.message}`);
-        continue;
-      }
-      const { data: publicUrl } = admin.storage.from(QUESTION_IMAGE_BUCKET).getPublicUrl(path);
-      if (publicUrl.publicUrl) {
-        map[file.name.trim().toLowerCase()] = publicUrl.publicUrl;
-        uploaded += 1;
-      }
-    }
-
-    return { map, uploaded, errors };
+    const { data: publicUrl } = admin.storage.from(QUESTION_IMAGE_BUCKET).getPublicUrl(path);
+    return {
+      bucket: QUESTION_IMAGE_BUCKET,
+      path: signed.path,
+      token: signed.token,
+      publicUrl: publicUrl.publicUrl,
+      contentType: data.type || mimeFromFileName(data.name),
+    };
   });

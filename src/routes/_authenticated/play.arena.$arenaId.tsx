@@ -1,3 +1,4 @@
+import { QuestionPrompt } from "@/components/QuestionPrompt";
 import { ArenaScoreboard } from "@/components/play/ArenaScoreboard";
 import { PlayOptions } from "@/components/play/PlayOptions";
 import { PageLoader } from "@/components/platform";
@@ -157,14 +158,11 @@ function ArenaPlayerPage() {
       (answering || data.arena.status === "locked" || revealed) &&
       !finished ? (
         <section className="surface-paper rounded-2xl p-5">
-          {data.question.imageUrl ? (
-            <img
-              src={data.question.imageUrl}
-              alt=""
-              className="mb-4 max-h-56 w-full rounded-md object-contain"
-            />
-          ) : null}
-          <p className="text-base font-medium">{data.question.prompt}</p>
+          <QuestionPrompt
+            prompt={data.question.prompt}
+            imageUrl={data.question.imageUrl}
+            level="p"
+          />
           <PlayOptions
             options={data.question.options}
             multiSelect={data.question.multiSelect}

@@ -1,3 +1,4 @@
+import { QuestionPrompt } from "@/components/QuestionPrompt";
 import { BadgeMark } from "@/components/BadgeMark";
 import { MasteryBar, PageLoader, ScorePill } from "@/components/platform";
 import { ResultCelebration } from "@/components/ResultCelebration";
@@ -423,20 +424,18 @@ function ReviewCard({
         )}
       >
         <div className="min-w-0 flex-1 pr-2">
-          <p className="text-xs text-muted-foreground">
-            Question {index + 1}
-            {item.subtopic ? ` · ${item.subtopic}` : ""}
-            {item.multiSelect ? " · select all that apply" : ""}
-          </p>
-          <h3 className="mt-2 text-base font-medium leading-snug sm:text-lg">{item.prompt}</h3>
-          {item.imageUrl ? (
-            <img
-              src={item.imageUrl}
-              alt="Question prompt reference"
-              className="mt-3 w-full max-w-xl rounded-md border border-border object-contain"
-              loading="lazy"
-            />
-          ) : null}
+          <QuestionPrompt
+            prompt={item.prompt}
+            imageUrl={item.imageUrl}
+            level="h3"
+            meta={
+              <p className="text-xs text-muted-foreground">
+                Question {index + 1}
+                {item.subtopic ? ` · ${item.subtopic}` : ""}
+                {item.multiSelect ? " · select all that apply" : ""}
+              </p>
+            }
+          />
         </div>
         <StatusBadge status={status} />
       </header>
