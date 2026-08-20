@@ -31,14 +31,22 @@ export const Route = createFileRoute("/_authenticated/play/")({
 });
 
 const LINK_MODES: Partial<
-  Record<PlayKind, { to: string; params?: { tournamentId: string }; searchKey?: "courseId" }>
+  Record<
+    PlayKind,
+    {
+      to: string;
+      params?: { tournamentId: string };
+      searchKey?: "courseId" | "activityId" | "both";
+    }
+  >
 > = {
   topic: { to: "/play/topics", searchKey: "courseId" },
   flash: { to: "/play/flash", searchKey: "courseId" },
   battle: { to: "/play/battle" },
   team: { to: "/play/team" },
-  escape: { to: "/play/escape" },
-  arena: { to: "/play/arena" },
+  escape: { to: "/play/escape", searchKey: "courseId" },
+  arena: { to: "/play/arena", searchKey: "both" },
+  knockout: { to: "/play/knockout", searchKey: "courseId" },
 };
 
 function PlayHub() {
@@ -123,10 +131,13 @@ function PlayHub() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {selected && boardKind && selected.scope === "course" ? (
+          {boardKind ? (
             <Link
               to="/play/leaderboard"
-              search={{ courseId: selected.id, kind: boardKind }}
+              search={{
+                kind: boardKind,
+                ...(selected?.scope === "activity" ? { activityId: selected.id } : {}),
+              }}
               className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-sm font-medium hover:bg-secondary"
             >
               <AssessaIcon name="trophy" className="h-4 w-4 text-amber-500" />
@@ -194,16 +205,20 @@ function PlayHub() {
         </section>
       ) : null}
 
-      {selected && boardKind && selected.scope === "course" ? (
+      {selected && boardKind ? (
         <section className="surface-paper rounded-xl p-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="flex items-center gap-2 text-sm font-semibold">
               <AssessaIcon name="trophy" className="h-4 w-4 text-amber-500" />
-              Leaderboard · {PLAY_KIND_META[boardKind].label} · {selected.name}
+              Leaderboard · {PLAY_KIND_META[boardKind].label}
+              {selected.scope === "activity" ? ` · ${selected.name}` : ""}
             </h2>
             <Link
               to="/play/leaderboard"
-              search={{ courseId: selected.id, kind: boardKind }}
+              search={{
+                kind: boardKind,
+                ...(selected.scope === "activity" ? { activityId: selected.id } : {}),
+              }}
               className="text-xs font-medium text-accent underline"
             >
               Full board
@@ -212,8 +227,9 @@ function PlayHub() {
           <div className="mt-3">
             <PlayLeaderboardPanel
               kind={boardKind}
-              courseId={selected.id}
-              courseName={selected.name}
+              {...(selected.scope === "activity"
+                ? { activityId: selected.id, label: selected.name }
+                : { label: PLAY_KIND_META[boardKind].label })}
             />
           </div>
         </section>
@@ -244,9 +260,7 @@ function PlayHub() {
         </section>
       ) : null}
 
-      {(data.enabled.knockout && data.tournaments[0]) ||
-      data.enabled.escape ||
-      data.arenas.length > 0 ? (
+      {data.enabled.escape || data.enabled.knockout || data.enabled.arena ? (
         <section>
           <h2 className="text-sm font-semibold">Events</h2>
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -256,32 +270,32 @@ function PlayHub() {
                 className="rounded-xl border border-border p-4 hover:bg-secondary"
               >
                 <p className="font-medium">Escape Room</p>
+                <p className="mt-1 text-xs text-muted-foreground">Browse published scenarios</p>
+              </Link>
+            ) : null}
+            {data.enabled.knockout ? (
+              <Link
+                to="/play/knockout"
+                className="rounded-xl border border-border p-4 hover:bg-secondary"
+              >
+                <p className="font-medium">Knockout</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Solve incident scenes scene by scene.
+                  {data.tournaments.length} open bracket
+                  {data.tournaments.length === 1 ? "" : "s"}
                 </p>
               </Link>
             ) : null}
-            {data.enabled.knockout && data.tournaments[0] ? (
+            {data.enabled.arena ? (
               <Link
-                to="/play/tournament/$tournamentId"
-                params={{ tournamentId: data.tournaments[0].id }}
+                to="/play/arena"
                 className="rounded-xl border border-border p-4 hover:bg-secondary"
               >
-                <p className="font-medium">Knockout · {data.tournaments[0].name}</p>
-                <p className="mt-1 text-xs text-muted-foreground">Bracket tournament</p>
+                <p className="font-medium">Live Arena</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {data.arenas.length} lobby{data.arenas.length === 1 ? "" : "ies"} available
+                </p>
               </Link>
             ) : null}
-            {data.arenas.map((arena) => (
-              <Link
-                key={arena.id}
-                to="/play/arena/$arenaId"
-                params={{ arenaId: arena.id }}
-                className="rounded-xl border border-border p-4 hover:bg-secondary"
-              >
-                <p className="font-medium">Live Arena · {arena.name}</p>
-                <p className="mt-1 text-xs capitalize text-muted-foreground">{arena.status}</p>
-              </Link>
-            ))}
           </div>
         </section>
       ) : null}
@@ -384,14 +398,23 @@ function SegmentPanel({
               {modes.map((mode) => {
                 const link = LINK_MODES[mode.kind];
                 if (link) {
-                  const search = link.searchKey
-                    ? {
-                        [link.searchKey]:
-                          segment.scope === "course"
-                            ? segment.id
-                            : (mode.bindingCourseId ?? segment.id),
-                      }
-                    : undefined;
+                  const courseScopeId =
+                    segment.scope === "course" ? segment.id : (mode.bindingCourseId ?? undefined);
+                  const search =
+                    link.searchKey === "courseId" && courseScopeId
+                      ? { courseId: courseScopeId }
+                      : link.searchKey === "both"
+                        ? {
+                            ...(segment.scope === "course"
+                              ? { courseId: segment.id }
+                              : courseScopeId
+                                ? { courseId: courseScopeId }
+                                : {}),
+                            ...(segment.scope === "activity" ? { activityId: segment.id } : {}),
+                          }
+                        : link.searchKey === "activityId" && segment.scope === "activity"
+                          ? { activityId: segment.id }
+                          : undefined;
                   return (
                     <PlayModeCard
                       key={mode.kind}
@@ -401,7 +424,7 @@ function SegmentPanel({
                       durationSeconds={mode.durationSeconds}
                       lives={mode.lives}
                       to={link.to}
-                      {...(search ? { search } : {})}
+                      {...(search && Object.keys(search).length > 0 ? { search } : {})}
                       {...(link.params ? { params: link.params } : {})}
                       footer={
                         mode.kind === "battle" ? (

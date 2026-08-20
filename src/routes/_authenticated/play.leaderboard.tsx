@@ -9,12 +9,13 @@ import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
+import { useMemo } from "react";
 import { z } from "zod";
 
 export const Route = createFileRoute("/_authenticated/play/leaderboard")({
   validateSearch: z.object({
-    courseId: z.string().uuid().optional(),
     kind: z.enum(PLAY_KINDS).optional(),
+    activityId: z.string().uuid().optional(),
     topic: z.string().optional(),
   }),
   head: () => ({ meta: [{ title: "Play leaderboard — Assessa" }] }),
@@ -33,26 +34,39 @@ function PlayLeaderboardPage() {
     queryFn: () => fetchHub(),
   });
 
-  const segments = hub?.segments ?? [];
-  const courseId = search.courseId ?? segments[0]?.courseId ?? null;
-  const segment = segments.find((s) => s.courseId === courseId) ?? segments[0];
+  const activities = useMemo(
+    () => (hub?.segments ?? []).filter((s) => s.scope === "activity"),
+    [hub?.segments],
+  );
+  const enabledKinds = useMemo(() => {
+    const kinds = new Set<PlayKind>();
+    for (const [kind, on] of Object.entries(hub?.enabled ?? {})) {
+      if (on) kinds.add(kind as PlayKind);
+    }
+    for (const segment of hub?.segments ?? []) {
+      for (const mode of segment.modes) kinds.add(mode.kind);
+    }
+    return PLAY_KINDS.filter((kind) => kinds.has(kind));
+  }, [hub]);
+
   const kind =
-    search.kind ??
-    segment?.modes.find((m) => m.kind === "daily")?.kind ??
-    segment?.modes[0]?.kind ??
-    ("daily" as PlayKind);
+    search.kind && enabledKinds.includes(search.kind)
+      ? search.kind
+      : (enabledKinds.find((k) => k === "daily") ?? enabledKinds[0] ?? ("daily" as PlayKind));
+  const activityId = search.activityId ?? null;
+  const activity = activities.find((s) => s.id === activityId) ?? null;
 
   const { data: board, isPending: boardPending } = useQuery({
-    queryKey: ["play-board-full", kind, courseId, search.topic ?? ""],
+    queryKey: ["play-board-full", kind, activityId ?? "all", search.topic ?? ""],
     queryFn: () =>
       fetchBoard({
         data: {
           kind,
-          courseId: courseId!,
+          ...(activityId ? { activityId } : {}),
           ...(search.topic ? { topic: search.topic } : {}),
         },
       }),
-    enabled: Boolean(courseId),
+    enabled: Boolean(kind),
   });
 
   if (hubPending || !hub) return <PageLoader label="Loading leaderboard…" />;
@@ -76,7 +90,7 @@ function PlayLeaderboardPage() {
         />
         <EmptyState
           title="Play leaderboard is off"
-          body="An admin can enable the Play menu in Play control to show course challenge rankings here."
+          body="An admin can enable the Play menu in Play control to show challenge rankings here."
           action={
             <Link to="/leaderboard" className="mt-2 text-sm text-accent underline">
               Open assessment leaderboard
@@ -87,18 +101,18 @@ function PlayLeaderboardPage() {
     );
   }
 
-  if (segments.length === 0) {
+  if (enabledKinds.length === 0) {
     return (
       <div className="space-y-6">
         <LeaderboardHero
           kicker="Play leaderboard"
           title="Rankings"
-          subtitle="Configure play modes and pools for a course to see rankings here."
+          subtitle="Turn on play modes to see rankings here."
           tabs={<LeaderboardTabs active="play" playEnabled tone="banner" />}
         />
         <EmptyState
           title="No play leaderboards yet"
-          body="Configure play modes and pools for a course to see rankings here."
+          body="Enable play modes under Admin → Play so rankings can appear here."
         />
       </div>
     );
@@ -119,7 +133,7 @@ function PlayLeaderboardPage() {
       <LeaderboardHero
         kicker="Play leaderboard"
         title="Rankings"
-        subtitle="Top 3 stand on the metallic podium. The full field sits beside it, raised off the stage — gold, silver and bronze stay highlighted."
+        subtitle="Filter by play mode and activity. Top 3 stand on the podium — gold, silver and bronze stay highlighted."
         chips={
           <>
             <LeaderboardChip
@@ -139,74 +153,85 @@ function PlayLeaderboardPage() {
 
       <section>
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Course
+          Play mode
         </p>
         <div className="flex flex-wrap gap-2">
-          {segments.map((s) => (
+          {enabledKinds.map((modeKind) => (
             <button
-              key={s.courseId}
+              key={modeKind}
               type="button"
               onClick={() =>
-                navigate({
-                  search: (prev) => ({
-                    ...prev,
-                    courseId: s.courseId,
-                    kind: s.modes.some((m) => m.kind === kind) ? kind : s.modes[0]?.kind,
-                  }),
-                })
+                navigate({ search: (prev) => ({ ...prev, kind: modeKind, topic: undefined }) })
               }
               className={cn(
-                "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm",
-                courseId === s.courseId
+                "rounded-full border px-3 py-1.5 text-sm",
+                kind === modeKind
                   ? "border-primary bg-primary/10 text-primary"
                   : "border-border hover:bg-secondary",
               )}
             >
-              <AssessaIcon name="courses" className="h-3.5 w-3.5" />
-              {s.courseName}
+              {PLAY_KIND_META[modeKind].label}
             </button>
           ))}
         </div>
       </section>
 
-      <section>
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Mode
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {(segment?.modes ?? []).map((mode) => (
+      {activities.length > 0 ? (
+        <section>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Activity
+          </p>
+          <div className="flex flex-wrap gap-2">
             <button
-              key={mode.kind}
               type="button"
-              onClick={() =>
-                navigate({ search: (prev) => ({ ...prev, kind: mode.kind, topic: undefined }) })
-              }
+              onClick={() => navigate({ search: (prev) => ({ ...prev, activityId: undefined }) })}
               className={cn(
-                "rounded-full border px-3 py-1.5 text-sm",
-                kind === mode.kind
+                "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm",
+                !activityId
                   ? "border-primary bg-primary/10 text-primary"
                   : "border-border hover:bg-secondary",
               )}
             >
-              {PLAY_KIND_META[mode.kind].label}
+              All activities
             </button>
-          ))}
-        </div>
-      </section>
+            {activities.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => navigate({ search: (prev) => ({ ...prev, activityId: s.id }) })}
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm",
+                  activityId === s.id
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border hover:bg-secondary",
+                )}
+              >
+                <AssessaIcon name="play" className="h-3.5 w-3.5" />
+                {s.name}
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {boardPending ? (
         <PageLoader label="Loading scores…" />
       ) : rows.length === 0 ? (
         <EmptyState
           title="No scores yet"
-          body="Complete a challenge in this course to appear on the board."
+          body={
+            activity
+              ? `Complete ${meta.label} in ${activity.name} to appear on the board.`
+              : `Complete ${meta.label} to appear on the board.`
+          }
         />
       ) : (
         <div className="space-y-4">
           <div>
             <p className="text-hairline text-muted-foreground">Now showing</p>
             <h2 className="font-display text-2xl">
-              {segment?.courseName} · {meta.label}
+              {meta.label}
+              {activity ? ` · ${activity.name}` : ""}
               {search.topic ? ` · ${search.topic}` : ""}
             </h2>
             <p className="mt-1 text-xs text-muted-foreground">

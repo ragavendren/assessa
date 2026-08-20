@@ -173,6 +173,7 @@ export const getPlayBoard = createServerFn({ method: "POST" })
         topic: z.string().trim().max(80).optional().nullable(),
         team: z.boolean().optional(),
         courseId: uuid.optional().nullable(),
+        activityId: uuid.optional().nullable(),
       })
       .parse(input),
   )
@@ -183,6 +184,7 @@ export const getPlayBoard = createServerFn({ method: "POST" })
       ...(data.topic !== undefined ? { topic: data.topic } : {}),
       ...(data.team !== undefined ? { team: data.team } : {}),
       ...(data.courseId !== undefined ? { courseId: data.courseId } : {}),
+      ...(data.activityId !== undefined ? { activityId: data.activityId } : {}),
     });
   });
 
@@ -228,9 +230,22 @@ export const joinBattle = createServerFn({ method: "POST" })
 
 export const getEscapeRooms = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async () => {
+  .validator((input: unknown) =>
+    z.object({ courseId: uuid.nullable().optional() }).parse(input ?? {}),
+  )
+  .handler(async ({ data }) => {
     const { listEscapeScenarios } = await import("@/lib/play.server");
-    return listEscapeScenarios();
+    return listEscapeScenarios({ courseId: data?.courseId ?? null });
+  });
+
+export const listPlayTournaments = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) =>
+    z.object({ courseId: uuid.nullable().optional() }).parse(input ?? {}),
+  )
+  .handler(async ({ data }) => {
+    const { listOpenTournaments } = await import("@/lib/play.server");
+    return listOpenTournaments({ courseId: data?.courseId ?? null });
   });
 
 export const beginEscapeScene = createServerFn({ method: "POST" })
@@ -476,6 +491,8 @@ export const createLiveArena = createServerFn({ method: "POST" })
         teamCount: zWholeOptional(0, 32),
         teamNames: z.array(z.string().trim().min(0).max(40)).max(32).optional(),
         allowOpenTeams: z.boolean().optional(),
+        blueprintId: uuid.nullable().optional(),
+        avoidRepeats: z.boolean().optional(),
       })
       .parse(input),
   )
@@ -486,6 +503,8 @@ export const createLiveArena = createServerFn({ method: "POST" })
       activityId: data.activityId ?? null,
       poolId: data.poolId,
       courseId: data.courseId ?? null,
+      blueprintId: data.blueprintId ?? null,
+      avoidRepeats: data.avoidRepeats !== false,
       segmentCount: data.segmentCount,
       questionsPerSegment: data.questionsPerSegment,
       perQuestionSeconds: data.perQuestionSeconds,
@@ -502,11 +521,19 @@ export const createLiveArena = createServerFn({ method: "POST" })
 export const listLiveArenas = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) =>
-    z.object({ activityId: uuid.nullable().optional() }).parse(input ?? {}),
+    z
+      .object({
+        activityId: uuid.nullable().optional(),
+        courseId: uuid.nullable().optional(),
+      })
+      .parse(input ?? {}),
   )
   .handler(async ({ data }) => {
     const { listOpenArenas } = await import("@/lib/play.arena.server");
-    return listOpenArenas(data?.activityId ?? null);
+    return listOpenArenas({
+      activityId: data?.activityId ?? null,
+      courseId: data?.courseId ?? null,
+    });
   });
 
 export const joinLiveArena = createServerFn({ method: "POST" })
@@ -578,6 +605,65 @@ export const deleteLiveArena = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const { adminDeleteArena } = await import("@/lib/play.arena.server");
     return adminDeleteArena(context.userId, data.arenaId);
+  });
+
+export const setLiveArenaListed = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) => z.object({ arenaId: uuid, listed: z.boolean() }).parse(input))
+  .handler(async ({ context, data }) => {
+    const { adminSetArenaListed } = await import("@/lib/play.arena.server");
+    return adminSetArenaListed(context.userId, data.arenaId, data.listed);
+  });
+
+export const setTournamentListed = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) => z.object({ tournamentId: uuid, listed: z.boolean() }).parse(input))
+  .handler(async ({ context, data }) => {
+    const { adminSetTournamentListed } = await import("@/lib/play.server");
+    return adminSetTournamentListed(context.userId, data.tournamentId, data.listed);
+  });
+
+export const updateLiveArena = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) =>
+    z
+      .object({
+        arenaId: uuid,
+        name: z.string().trim().min(2).max(120),
+        perQuestionSeconds: zWhole(5, 600),
+        correctMarks: zWhole(0, 20),
+        wrongMarks: zWhole(0, 20),
+        timeBonusMax: zWhole(0, 50),
+        earlyLockBonus: zWhole(0, 50),
+        allowOpenTeams: z.boolean(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ context, data }) => {
+    const { adminUpdateArena } = await import("@/lib/play.arena.server");
+    return adminUpdateArena(context.userId, data);
+  });
+
+export const updatePlayTournament = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) =>
+    z
+      .object({
+        tournamentId: uuid,
+        name: z.string().trim().min(2).max(120),
+        size: z.union([z.literal(4), z.literal(8), z.literal(16), z.literal(32)]),
+        poolId: uuid.nullable().optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ context, data }) => {
+    const { adminUpdateTournament } = await import("@/lib/play.server");
+    return adminUpdateTournament(context.userId, {
+      tournamentId: data.tournamentId,
+      name: data.name,
+      size: data.size,
+      ...(data.poolId !== undefined ? { poolId: data.poolId } : {}),
+    });
   });
 
 export const spinArenaParticipant = createServerFn({ method: "POST" })

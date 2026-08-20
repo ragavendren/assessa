@@ -129,13 +129,7 @@ function TopicChallengePage() {
           <section className="surface-paper rounded-xl p-4">
             <h2 className="text-sm font-semibold">Leaderboard · {topic}</h2>
             <div className="mt-3">
-              <PlayLeaderboardPanel
-                kind="topic"
-                courseId={courseId}
-                courseName={data.pools.find((p) => p.id === poolId)?.courseName ?? "Course"}
-                topic={topic}
-                limit={10}
-              />
+              <PlayLeaderboardPanel kind="topic" label={topic} topic={topic} limit={10} />
             </div>
           </section>
         </>

@@ -19,8 +19,9 @@ const LINK_MODES: Partial<Record<PlayKind, { to: string; search?: boolean }>> = 
   flash: { to: "/play/flash", search: true },
   battle: { to: "/play/battle" },
   team: { to: "/play/team" },
-  escape: { to: "/play/escape" },
-  arena: { to: "/play/arena" },
+  escape: { to: "/play/escape", search: true },
+  arena: { to: "/play/arena", search: true },
+  knockout: { to: "/play/knockout", search: true },
 };
 
 const REQUIRED_KINDS: PlayKind[] = ["daily", "weekly"];
@@ -33,6 +34,8 @@ const POSSIBLE_KINDS: PlayKind[] = [
   "marathon",
   "battle",
   "arena",
+  "knockout",
+  "escape",
 ];
 
 export function PlayDashboardSection({
@@ -236,13 +239,13 @@ export function PlayDashboardSection({
         </div>
       ) : null}
 
-      {segment && boardKind && segment.scope === "course" ? (
+      {segment && boardKind && segment.scope === "activity" ? (
         <div className="surface-paper rounded-xl p-4">
           <div className="mb-2 flex items-center justify-between gap-2">
             <p className="text-sm font-semibold">Play leaderboard</p>
             <Link
               to="/play/leaderboard"
-              search={{ courseId: segment.courseId, kind: boardKind }}
+              search={{ activityId: segment.id, kind: boardKind }}
               className="text-xs text-accent underline"
             >
               Full board
@@ -250,8 +253,26 @@ export function PlayDashboardSection({
           </div>
           <PlayLeaderboardPanel
             kind={boardKind}
-            courseId={segment.courseId}
-            courseName={segment.courseName}
+            activityId={segment.id}
+            label={segment.name}
+            limit={4}
+          />
+        </div>
+      ) : boardKind ? (
+        <div className="surface-paper rounded-xl p-4">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold">Play leaderboard</p>
+            <Link
+              to="/play/leaderboard"
+              search={{ kind: boardKind }}
+              className="text-xs text-accent underline"
+            >
+              Full board
+            </Link>
+          </div>
+          <PlayLeaderboardPanel
+            kind={boardKind}
+            label={PLAY_KIND_META[boardKind].label}
             limit={4}
           />
         </div>

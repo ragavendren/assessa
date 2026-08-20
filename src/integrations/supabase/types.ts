@@ -764,6 +764,7 @@ export type Database = {
           size: number;
           pool_id: string | null;
           status: string;
+          listed: boolean;
           created_by: string | null;
           created_at: string;
         };
@@ -773,6 +774,7 @@ export type Database = {
           size?: number;
           pool_id?: string | null;
           status?: string;
+          listed?: boolean;
           created_by?: string | null;
           created_at?: string;
         };
@@ -782,6 +784,7 @@ export type Database = {
           size?: number;
           pool_id?: string | null;
           status?: string;
+          listed?: boolean;
           created_by?: string | null;
           created_at?: string;
         };
@@ -819,6 +822,7 @@ export type Database = {
           course_id: string | null;
           pool_id: string | null;
           status: string;
+          listed: boolean;
           segment_count: number;
           questions_per_segment: number;
           per_question_seconds: number;
@@ -832,6 +836,8 @@ export type Database = {
           time_bonus_max: number;
           early_lock_bonus: number;
           allow_open_teams: boolean;
+          blueprint_id: string | null;
+          avoid_repeats: boolean;
           created_by: string | null;
           created_at: string;
           updated_at: string;
@@ -843,6 +849,7 @@ export type Database = {
           course_id?: string | null;
           pool_id?: string | null;
           status?: string;
+          listed?: boolean;
           segment_count?: number;
           questions_per_segment?: number;
           per_question_seconds?: number;
@@ -856,6 +863,8 @@ export type Database = {
           time_bonus_max?: number;
           early_lock_bonus?: number;
           allow_open_teams?: boolean;
+          blueprint_id?: string | null;
+          avoid_repeats?: boolean;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -867,6 +876,7 @@ export type Database = {
           course_id?: string | null;
           pool_id?: string | null;
           status?: string;
+          listed?: boolean;
           segment_count?: number;
           questions_per_segment?: number;
           per_question_seconds?: number;
@@ -880,6 +890,8 @@ export type Database = {
           time_bonus_max?: number;
           early_lock_bonus?: number;
           allow_open_teams?: boolean;
+          blueprint_id?: string | null;
+          avoid_repeats?: boolean;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -898,6 +910,7 @@ export type Database = {
           correct_indexes: number[];
           multi_select: boolean;
           explanation: string;
+          source_question_id: string | null;
         };
         Insert: {
           id?: string;
@@ -910,6 +923,7 @@ export type Database = {
           correct_indexes?: number[];
           multi_select?: boolean;
           explanation?: string;
+          source_question_id?: string | null;
         };
         Update: {
           id?: string;
@@ -922,6 +936,7 @@ export type Database = {
           correct_indexes?: number[];
           multi_select?: boolean;
           explanation?: string;
+          source_question_id?: string | null;
         };
         Relationships: [];
       };
@@ -989,6 +1004,9 @@ export type Database = {
           first_locked_at: string | null;
           correct: boolean | null;
           marks: number;
+          time_bonus: number;
+          early_lock_bonus: number;
+          lock_latency_ms: number | null;
         };
         Insert: {
           arena_id: string;
@@ -999,6 +1017,9 @@ export type Database = {
           first_locked_at?: string | null;
           correct?: boolean | null;
           marks?: number;
+          time_bonus?: number;
+          early_lock_bonus?: number;
+          lock_latency_ms?: number | null;
         };
         Update: {
           arena_id?: string;
@@ -1009,6 +1030,9 @@ export type Database = {
           first_locked_at?: string | null;
           correct?: boolean | null;
           marks?: number;
+          time_bonus?: number;
+          early_lock_bonus?: number;
+          lock_latency_ms?: number | null;
         };
         Relationships: [];
       };
@@ -1629,6 +1653,16 @@ export type Database = {
           _user_id: string;
         };
         Returns: boolean;
+      };
+      play_arena_lock_answer: {
+        Args: {
+          p_arena_id: string;
+          p_team_id: string;
+          p_question_index: number;
+          p_answer_indexes: number[];
+          p_client_locked_at?: string | null;
+        };
+        Returns: Json;
       };
     };
     Enums: {

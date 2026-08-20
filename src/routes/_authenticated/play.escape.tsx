@@ -1,43 +1,53 @@
+import { PlayLobbyList } from "@/components/play/PlayLobbyList";
 import { PageLoader } from "@/components/platform";
 import { getEscapeRooms } from "@/lib/play.functions";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
+import { useMemo } from "react";
+import { z } from "zod";
 
 export const Route = createFileRoute("/_authenticated/play/escape")({
+  validateSearch: z.object({
+    courseId: z.string().uuid().optional(),
+  }),
   head: () => ({ meta: [{ title: "Escape rooms — Assessa" }] }),
   component: EscapeListPage,
 });
 
 function EscapeListPage() {
+  const { courseId } = Route.useSearch();
   const fetchRooms = useServerFn(getEscapeRooms);
-  const { data, isPending } = useQuery({ queryKey: ["escape-rooms"], queryFn: () => fetchRooms() });
-  if (isPending || !data) return <PageLoader />;
+  const { data, isPending } = useQuery({
+    queryKey: ["escape-rooms", courseId ?? "all"],
+    queryFn: () => fetchRooms({ data: { courseId: courseId ?? null } }),
+  });
+
+  const items = useMemo(() => {
+    if (!data) return [];
+    return data.map((room) => ({
+      id: room.id,
+      title: room.name,
+      meta: `${room.scenes.length} scenes${room.courseName ? ` · ${room.courseName}` : ""}`,
+      statusLabel: "Open",
+      statusTone: "lobby" as const,
+      to: "/play/escape/$scenarioId",
+      params: { scenarioId: room.id },
+    }));
+  }, [data]);
+
+  if (isPending || !data) return <PageLoader label="Loading escape rooms…" />;
+
   return (
-    <div className="space-y-4">
-      <Link to="/play" className="text-xs text-accent underline">
-        Play
-      </Link>
-      <h1 className="font-display text-2xl">Escape rooms</h1>
-      {data.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No scenarios yet.</p>
-      ) : (
-        <ul className="grid gap-3 sm:grid-cols-2">
-          {data.map((room) => (
-            <li key={room.id}>
-              <Link
-                to="/play/escape/$scenarioId"
-                params={{ scenarioId: room.id }}
-                className="block rounded-md border border-border p-4 hover:bg-secondary"
-              >
-                <p className="font-medium">{room.name}</p>
-                <p className="mt-1 line-clamp-3 text-xs text-muted-foreground">{room.intro}</p>
-                <p className="mt-2 text-xs text-muted-foreground">{room.scenes.length} scenes</p>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+    <PlayLobbyList
+      title="Escape rooms"
+      blurb="Pick a published scenario and work through each incident scene."
+      empty={
+        courseId
+          ? "No escape rooms for this course yet."
+          : "No escape scenarios are published right now."
+      }
+      items={items}
+    />
   );
 }

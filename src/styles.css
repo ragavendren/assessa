@@ -937,21 +937,21 @@
 }
 
 .lucky-wheel {
-  transition: transform 4.2s cubic-bezier(0.12, 0.82, 0.08, 1);
+  will-change: transform;
 }
 
 .lucky-pointer {
   position: absolute;
   left: 50%;
-  top: -4px;
+  top: -6px;
   z-index: 2;
   width: 0;
   height: 0;
   transform: translateX(-50%);
-  border-left: 11px solid transparent;
-  border-right: 11px solid transparent;
-  border-top: 20px solid #f59e0b;
-  filter: drop-shadow(0 2px 4px rgb(0 0 0 / 0.4));
+  border-left: 12px solid transparent;
+  border-right: 12px solid transparent;
+  border-top: 22px solid #f59e0b;
+  filter: drop-shadow(0 2px 4px rgb(0 0 0 / 0.45));
 }
 
 .mystery-lid {
@@ -1170,6 +1170,231 @@
   }
 }
 
+@keyframes arena-heart-beat {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  14% {
+    transform: scale(1.22);
+  }
+  28% {
+    transform: scale(1);
+  }
+  42% {
+    transform: scale(1.14);
+  }
+  56% {
+    transform: scale(1);
+  }
+}
+
+@keyframes arena-heart-burst {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+    filter: blur(0);
+  }
+  45% {
+    transform: scale(1.85);
+    opacity: 0.85;
+  }
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+    filter: blur(2px);
+  }
+}
+
+@keyframes arena-heart-particle {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--dx), var(--dy)) scale(0.2);
+    opacity: 0;
+  }
+}
+
+.arena-heart-beat {
+  animation-name: arena-heart-beat;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  transform-origin: center;
+  will-change: transform;
+}
+
+.arena-heart-burst {
+  animation: arena-heart-burst 0.85s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: center;
+}
+
+.arena-heart-burst-particle {
+  animation: arena-heart-particle 0.9s ease-out forwards;
+}
+
+@keyframes arena-guide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes arena-guide-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes arena-guide-shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
+@keyframes arena-guide-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 0.85;
+  }
+}
+
+@keyframes arena-guide-zap {
+  0%,
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+  30% {
+    transform: rotate(-12deg) scale(1.15);
+  }
+  55% {
+    transform: rotate(10deg) scale(1.05);
+  }
+}
+
+@keyframes arena-guide-fab {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-teal-500, #14b8a6) 35%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in oklab, var(--color-teal-500, #14b8a6) 0%, transparent);
+  }
+}
+
+.arena-guide-panel {
+  animation: arena-guide-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.arena-guide-card,
+.arena-guide-step {
+  animation: arena-guide-card-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.arena-guide-shimmer {
+  background: linear-gradient(
+    110deg,
+    transparent 20%,
+    color-mix(in oklab, white 35%, transparent) 45%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  animation: arena-guide-shimmer 2.8s linear infinite;
+  opacity: 0.55;
+}
+
+.arena-guide-pulse {
+  animation: arena-guide-pulse 1.4s ease-in-out infinite;
+}
+
+.arena-guide-zap {
+  animation: arena-guide-zap 1.6s ease-in-out infinite;
+}
+
+.arena-guide-fab {
+  animation: arena-guide-fab 2.4s ease-out infinite;
+}
+
+@keyframes arena-rank-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes arena-rank-drop {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(3px);
+  }
+}
+
+@keyframes arena-medal-glitter {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 0 transparent);
+    transform: scale(1) rotate(0deg);
+  }
+  40% {
+    filter: drop-shadow(0 0 8px currentColor);
+    transform: scale(1.08) rotate(-6deg);
+  }
+  70% {
+    filter: drop-shadow(0 0 4px currentColor);
+    transform: scale(1.04) rotate(4deg);
+  }
+}
+
+.arena-rank-up {
+  animation: arena-rank-bounce 0.9s ease-in-out infinite;
+}
+
+.arena-rank-down {
+  animation: arena-rank-drop 0.9s ease-in-out infinite;
+}
+
+.arena-medal-gold,
+.arena-medal-silver,
+.arena-medal-bronze {
+  animation: arena-medal-glitter 1.8s ease-in-out infinite;
+}
+
+.arena-medal-gold {
+  color: #d97706;
+}
+
+.arena-medal-silver {
+  color: #94a3b8;
+}
+
+.arena-medal-bronze {
+  color: #92400e;
+}
+
 .flash-card {
   position: relative;
   width: 100%;
@@ -1295,7 +1520,22 @@
   .page-loader-core,
   .xp-flyer,
   .xp-chip-pop,
-  .bonus-prize-pop {
+  .bonus-prize-pop,
+  .arena-heart-beat,
+  .arena-heart-burst,
+  .arena-heart-burst-particle,
+  .arena-guide-panel,
+  .arena-guide-card,
+  .arena-guide-step,
+  .arena-guide-shimmer,
+  .arena-guide-pulse,
+  .arena-guide-zap,
+  .arena-guide-fab,
+  .arena-rank-up,
+  .arena-rank-down,
+  .arena-medal-gold,
+  .arena-medal-silver,
+  .arena-medal-bronze {
     animation: none !important;
     transition: none !important;
   }

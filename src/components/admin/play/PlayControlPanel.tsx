@@ -1,5 +1,5 @@
 import { AdminEmpty, AdminPanel, ResultCount, StatusPill } from "@/components/admin/AdminPageUi";
-import { EventPoolStep, PlayEventSetup, isEventKind } from "@/components/admin/play/PlayEventSetup";
+import { PlayEventSetup, isEventKind } from "@/components/admin/play/PlayEventSetup";
 import { AssessaIcon } from "@/components/icons";
 import { ArenaShareCard } from "@/components/play/ArenaShareCard";
 import { StatTile } from "@/components/platform";
@@ -13,8 +13,10 @@ import {
   savePlayActivity,
   savePlayChallenge,
   setEscapeStatus,
+  setLiveArenaListed,
   setPlayKindStatus,
   setPlayMenu,
+  setTournamentListed,
   startPlayTournament,
 } from "@/lib/play.functions";
 import { PLAY_KIND_GROUPS, PLAY_KIND_META, type PlayKind, type PlayRules } from "@/lib/play.math";
@@ -22,7 +24,7 @@ import { cn } from "@/lib/utils";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 export type AdminPlayChallenge = {
@@ -73,21 +75,37 @@ export type AdminPlayData = {
       question_count: number;
     }>;
   }>;
+  arenas: Array<{
+    id: string;
+    name: string;
+    activity_id: string | null;
+    status: string;
+    listed?: boolean | null;
+    segment_count: number;
+    questions_per_segment: number;
+    per_question_seconds?: number | null;
+    correct_marks?: number | null;
+    wrong_marks?: number | null;
+    time_bonus_max?: number | null;
+    early_lock_bonus?: number | null;
+    allow_open_teams?: boolean | null;
+    pool_id?: string | null;
+    created_at: string;
+  }>;
   tournaments: Array<{
     id: string;
     name: string;
     size: number;
     status: string;
     pool_id: string | null;
+    listed?: boolean | null;
   }>;
-  arenas: Array<{
+  blueprints?: Array<{
     id: string;
     name: string;
-    activity_id: string | null;
-    status: string;
-    segment_count: number;
-    questions_per_segment: number;
-    created_at: string;
+    courseId: string;
+    version: number;
+    isDefault: boolean;
   }>;
 };
 
@@ -252,11 +270,11 @@ export function PlayControlPanel({ data }: { data: AdminPlayData }) {
         title={editingKind ? `Configure · ${PLAY_KIND_META[editingKind].label}` : "Configure"}
         description={
           editingKind === "escape"
-            ? "Work through mode, pool, then scenes. A pool is required before you can author rooms."
+            ? "Create or edit scenarios here. Use List to publish and manage the full catalogue."
             : editingKind === "arena"
-              ? "Bind a pool, then open a lobby. Players join from Play — no activity is required."
+              ? "Create a lobby here. Use List to publish, host, and manage all arenas."
               : editingKind === "knockout"
-                ? "Bind a pool, then create a bracket. Knockout does not use activities — players join from Play."
+                ? "Create a bracket here. Use List to publish and manage tournaments."
                 : "Course and activity control where it appears. Pool and topics control the bank."
         }
         size="xl"
@@ -269,39 +287,23 @@ export function PlayControlPanel({ data }: { data: AdminPlayData }) {
             saving={challengeMut.isPending}
             onCancel={() => setEditingKind(null)}
             stepContent={{
-              mode: (
-                <ModeEditor
-                  key={`${editing.kind}-mode`}
-                  challenge={editing}
-                  data={data}
-                  saving={challengeMut.isPending}
-                  scope="basics"
-                  onCancel={() => setEditingKind(null)}
-                  onSave={(payload) => challengeMut.mutate({ data: payload })}
-                />
-              ),
-              activity: <TournamentPanel data={data} show={{ activities: true }} />,
-              pool: (
-                <EventPoolStep
-                  challenge={editing}
-                  data={data}
-                  saving={challengeMut.isPending}
-                  onSave={(payload) => challengeMut.mutate({ data: payload })}
-                />
-              ),
               lobby: (
                 <TournamentPanel
                   data={data}
                   show={{ arena: true }}
                   defaultPoolId={editing.poolId}
+                  showManagedList={false}
                 />
               ),
-              scenes: <EscapePanel data={data} defaultPoolId={editing.poolId} />,
+              scenes: (
+                <EscapePanel data={data} defaultPoolId={editing.poolId} showManagedList={false} />
+              ),
               bracket: (
                 <TournamentPanel
                   data={data}
                   show={{ knockout: true }}
                   defaultPoolId={editing.poolId}
+                  showManagedList={false}
                 />
               ),
             }}
@@ -321,6 +323,14 @@ export function PlayControlPanel({ data }: { data: AdminPlayData }) {
   );
 }
 
+function adminPlayEventListPath(
+  kind: Extract<PlayKind, "arena" | "escape" | "knockout">,
+): "/admin/play/live-arena" | "/admin/play/escape" | "/admin/play/knockout" {
+  if (kind === "arena") return "/admin/play/live-arena";
+  if (kind === "escape") return "/admin/play/escape";
+  return "/admin/play/knockout";
+}
+
 function ModesPanel({
   data,
   onEdit,
@@ -338,8 +348,8 @@ function ModesPanel({
           title={group.label}
           description={
             group.label === "Events"
-              ? "Configure in order. Live Arena needs a pool, then a lobby — players join from Play. Escape needs a pool, then scenes. Knockout needs a pool only."
-              : "Turn a mode on for participants, then bind it to a course, an activity, a pool, and a topic mix."
+              ? "Configure opens a drawer to create. List opens lobbies, scenarios, or brackets with publish controls."
+              : "Turn a mode on for participants, then Configure to bind course, activity, pool, and topics."
           }
           action={
             <ResultCount shown={group.kinds.length} total={group.kinds.length} noun="modes" />
@@ -350,6 +360,13 @@ function ModesPanel({
               const row = data.challenges.find((c) => c.kind === kind);
               if (!row) return null;
               const source = sourceLabel(row, data);
+              const listCount = isEventKind(kind)
+                ? kind === "arena"
+                  ? data.arenas.length
+                  : kind === "escape"
+                    ? data.scenarios.length
+                    : data.tournaments.length
+                : null;
               return (
                 <article key={kind} className="rounded-lg border border-border bg-card p-4">
                   <div className="flex items-start justify-between gap-3">
@@ -372,6 +389,7 @@ function ModesPanel({
                     {row.rules.lives != null ? ` · ${row.rules.lives} lives` : ""}
                     {` · +${row.rules.xpPoints} XP`}
                     {` · ${row.sessions7d} plays`}
+                    {listCount != null ? ` · ${listCount} listed` : ""}
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
@@ -391,6 +409,19 @@ function ModesPanel({
                       <AssessaIcon name="pencil" className="h-3 w-3" />
                       Configure
                     </button>
+                    {isEventKind(kind) ? (
+                      <Link
+                        to={adminPlayEventListPath(kind)}
+                        className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground"
+                      >
+                        <AssessaIcon name="list" className="h-3 w-3" />
+                        {kind === "arena"
+                          ? "List lobbies"
+                          : kind === "escape"
+                            ? "List scenarios"
+                            : "List brackets"}
+                      </Link>
+                    ) : null}
                   </div>
                 </article>
               );
@@ -402,7 +433,7 @@ function ModesPanel({
   );
 }
 
-function ModeEditor({
+export function ModeEditor({
   challenge,
   data,
   saving,
@@ -413,7 +444,7 @@ function ModeEditor({
   challenge: AdminPlayChallenge;
   data: AdminPlayData;
   saving: boolean;
-  onCancel: () => void;
+  onCancel?: () => void;
   onSave: (payload: ChallengeSavePayload) => void;
   scope?: "full" | "basics";
 }) {
@@ -451,7 +482,7 @@ function ModeEditor({
       }
       action={
         <div className="flex gap-2">
-          {basics ? null : (
+          {basics || !onCancel ? null : (
             <button
               type="button"
               onClick={onCancel}
@@ -738,55 +769,40 @@ function ModeEditor({
   );
 }
 
-function EscapePanel({
+export function EscapePanel({
   data,
   defaultPoolId,
+  showManagedList = true,
+  initialScenarioId = null,
+  onSaved,
 }: {
   data: AdminPlayData;
   defaultPoolId?: string | null;
+  /** When false, only the create/edit form is shown (drawer). List pages pass true. */
+  showManagedList?: boolean;
+  initialScenarioId?: string | null;
+  onSaved?: () => void;
 }) {
   const queryClient = useQueryClient();
   const saveEscape = useServerFn(saveEscapeScenario);
   const setEscStatus = useServerFn(setEscapeStatus);
-  const onDone = () => void queryClient.invalidateQueries({ queryKey: ["admin-play"] });
+  const onDone = () => {
+    void queryClient.invalidateQueries({ queryKey: ["admin-play"] });
+    onSaved?.();
+  };
   const emptyScene = (): SceneDraft => ({
     title: "",
     body: "",
     topic: data.pools[0]?.topics[0]?.label ?? "general",
     questionCount: 4,
   });
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(initialScenarioId);
   const [name, setName] = useState("Production Down");
   const [intro, setIntro] = useState("");
   const [poolId, setPoolId] = useState(defaultPoolId ?? data.pools[0]?.id ?? "");
   const [status, setStatus] = useState<"active" | "inactive">("active");
   const [scenes, setScenes] = useState<SceneDraft[]>([emptyScene()]);
-
-  const saveMut = useMutation({
-    mutationFn: () =>
-      saveEscape({
-        data: {
-          ...(editingId ? { id: editingId } : {}),
-          name,
-          intro,
-          poolId: poolId || null,
-          status,
-          scenes: scenes.filter((s) => s.title.trim()),
-        },
-      }),
-    onSuccess: () => {
-      toast.success(editingId ? "Scenario updated" : "Scenario saved");
-      setEditingId(null);
-      onDone();
-    },
-    onError: (err) => toast.error(err instanceof Error ? err.message : "Save failed"),
-  });
-  const statusMut = useMutation({
-    mutationFn: ({ scenarioId, next }: { scenarioId: string; next: "active" | "inactive" }) =>
-      setEscStatus({ data: { scenarioId, status: next } }),
-    onSuccess: onDone,
-    onError: (err) => toast.error(err instanceof Error ? err.message : "Update failed"),
-  });
+  const hydrated = useRef(false);
 
   function loadScenario(id: string) {
     const row = data.scenarios.find((s) => s.id === id);
@@ -808,10 +824,50 @@ function EscapePanel({
     );
   }
 
+  useEffect(() => {
+    if (hydrated.current) return;
+    if (!initialScenarioId) return;
+    hydrated.current = true;
+    loadScenario(initialScenarioId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate once when drawer opens
+  }, [initialScenarioId]);
+
+  const saveMut = useMutation({
+    mutationFn: () =>
+      saveEscape({
+        data: {
+          ...(editingId ? { id: editingId } : {}),
+          name,
+          intro,
+          poolId: poolId || null,
+          status,
+          scenes: scenes.filter((s) => s.title.trim()),
+        },
+      }),
+    onSuccess: () => {
+      toast.success(editingId ? "Scenario updated" : "Scenario saved");
+      onDone();
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Save failed"),
+  });
+  const statusMut = useMutation({
+    mutationFn: ({ scenarioId, next }: { scenarioId: string; next: "active" | "inactive" }) =>
+      setEscStatus({ data: { scenarioId, status: next } }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-play"] });
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Update failed"),
+  });
+
   const topicLabels = topicsForSource(data.pools, null, poolId || null).map((t) => t.label);
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+    <div
+      className={cn(
+        "grid gap-4",
+        showManagedList ? "lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]" : "",
+      )}
+    >
       <AdminPanel
         title={editingId ? "Edit scenario" : "New scenario"}
         description="Each scene pulls a topic set from the bound pool. Order is the participant path."
@@ -847,7 +903,7 @@ function EscapePanel({
                 checked={status === "active"}
                 onChange={(e) => setStatus(e.target.checked ? "active" : "inactive")}
               />
-              Visible to participants
+              Publish to participant list
             </label>
           </div>
           <ul className="space-y-3">
@@ -942,60 +998,73 @@ function EscapePanel({
           </div>
         </div>
       </AdminPanel>
-      <AdminPanel title="Scenarios" description="Inactive rooms stay hidden on /play/escape.">
-        {data.scenarios.length === 0 ? (
-          <AdminEmpty title="No scenarios yet" body="Author a room with ordered scenes." />
-        ) : (
-          <ul className="space-y-2">
-            {data.scenarios.map((row) => (
-              <li
-                key={row.id}
-                className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-sm"
-              >
-                <div className="min-w-0">
-                  <p className="truncate font-medium">{row.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {row.scenes.length} scenes · {row.status}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    className="text-xs text-accent"
-                    onClick={() => loadScenario(row.id)}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    className="text-xs"
-                    onClick={() =>
-                      statusMut.mutate({
-                        scenarioId: row.id,
-                        next: row.status === "active" ? "inactive" : "active",
-                      })
-                    }
-                  >
-                    {row.status === "active" ? "Hide" : "Show"}
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </AdminPanel>
+      {showManagedList ? (
+        <AdminPanel title="Scenarios" description="Inactive rooms stay hidden on /play/escape.">
+          {data.scenarios.length === 0 ? (
+            <AdminEmpty title="No scenarios yet" body="Author a room with ordered scenes." />
+          ) : (
+            <ul className="space-y-2">
+              {data.scenarios.map((row) => (
+                <li
+                  key={row.id}
+                  className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-sm"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{row.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {row.scenes.length} scenes · {row.status}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className="text-xs text-accent"
+                      onClick={() => loadScenario(row.id)}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs"
+                      onClick={() =>
+                        statusMut.mutate({
+                          scenarioId: row.id,
+                          next: row.status === "active" ? "inactive" : "active",
+                        })
+                      }
+                    >
+                      {row.status === "active" ? "Unpublish" : "Publish"}
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </AdminPanel>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          After saving, open{" "}
+          <Link to="/admin/play/escape" className="text-accent underline">
+            List scenarios
+          </Link>{" "}
+          to publish and manage the catalogue.
+        </p>
+      )}
     </div>
   );
 }
 
-function TournamentPanel({
+export function TournamentPanel({
   data,
   show = {},
   defaultPoolId,
+  showManagedList = true,
 }: {
   data: AdminPlayData;
   show?: { activities?: boolean; arena?: boolean; knockout?: boolean };
   defaultPoolId?: string | null;
+  /** When false, only the create form is shown (drawer). List pages pass true. */
+  showManagedList?: boolean;
 }) {
   const queryClient = useQueryClient();
   const createT = useServerFn(createPlayTournament);
@@ -1004,6 +1073,8 @@ function TournamentPanel({
   const removeActivity = useServerFn(deletePlayActivity);
   const createArena = useServerFn(createLiveArena);
   const removeArena = useServerFn(deleteLiveArena);
+  const setArenaListed = useServerFn(setLiveArenaListed);
+  const setTListed = useServerFn(setTournamentListed);
   const onDone = () => void queryClient.invalidateQueries({ queryKey: ["admin-play"] });
   const [tName, setTName] = useState("Company Cup");
   const [size, setSize] = useState<4 | 8 | 16 | 32>(8);
@@ -1018,11 +1089,18 @@ function TournamentPanel({
   const [wrongMarks, setWrongMarks] = useState(1);
   const [timeBonusMax, setTimeBonusMax] = useState(0);
   const [earlyLockBonus, setEarlyLockBonus] = useState(0);
+  const [avoidRepeats, setAvoidRepeats] = useState(true);
+  const [blueprintId, setBlueprintId] = useState("");
   const [precreateTeams, setPrecreateTeams] = useState(false);
   const [teamCount, setTeamCount] = useState(4);
   const [teamNamesText, setTeamNamesText] = useState("");
   const [allowOpenTeams, setAllowOpenTeams] = useState(true);
   const [shareArenaId, setShareArenaId] = useState<string | null>(null);
+
+  const selectedPool = data.pools.find((pool) => pool.id === arenaPoolId);
+  const poolBlueprints = (data.blueprints ?? []).filter(
+    (row) => selectedPool && row.courseId === selectedPool.courseId,
+  );
 
   const createMut = useMutation({
     mutationFn: () =>
@@ -1030,10 +1108,19 @@ function TournamentPanel({
         data: { name: tName, size, ...(poolId ? { poolId } : {}) },
       }),
     onSuccess: () => {
-      toast.success("Tournament created");
+      toast.success("Tournament created — publish it to show on Play");
       onDone();
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Create failed"),
+  });
+  const tournamentListedMut = useMutation({
+    mutationFn: ({ tournamentId, listed }: { tournamentId: string; listed: boolean }) =>
+      setTListed({ data: { tournamentId, listed } }),
+    onSuccess: (_data, vars) => {
+      toast.success(vars.listed ? "Published to Play" : "Unpublished from Play");
+      onDone();
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not update"),
   });
   const startMut = useMutation({
     mutationFn: (tournamentId: string) => startT({ data: { tournamentId } }),
@@ -1070,6 +1157,9 @@ function TournamentPanel({
         data: {
           name: arenaName,
           poolId: arenaPoolId,
+          courseId: selectedPool?.courseId ?? null,
+          blueprintId: blueprintId || null,
+          avoidRepeats,
           segmentCount,
           questionsPerSegment,
           perQuestionSeconds,
@@ -1088,10 +1178,19 @@ function TournamentPanel({
       });
     },
     onSuccess: () => {
-      toast.success("Live Arena lobby is open");
+      toast.success("Lobby created — publish it to show on Play");
       onDone();
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Could not create arena"),
+  });
+  const arenaListedMut = useMutation({
+    mutationFn: ({ arenaId, listed }: { arenaId: string; listed: boolean }) =>
+      setArenaListed({ data: { arenaId, listed } }),
+    onSuccess: (_data, vars) => {
+      toast.success(vars.listed ? "Published to Play" : "Unpublished from Play");
+      onDone();
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not update"),
   });
   const deleteArenaMut = useMutation({
     mutationFn: (arenaId: string) => removeArena({ data: { arenaId } }),
@@ -1161,7 +1260,7 @@ function TournamentPanel({
       {show.arena ? (
         <AdminPanel
           title="Live Arena"
-          description="Hosted team quiz: pick a pool, segments × questions, timer, and marks. Optionally precreate teams. Teams join from Play; you reveal each key."
+          description="Hosted team quiz with ms-precise first-lock scoring. Optionally precreate teams. Undock the scoreboard for a shared screen."
         >
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             <input
@@ -1172,7 +1271,10 @@ function TournamentPanel({
             <select
               className="field h-9 text-sm"
               value={arenaPoolId}
-              onChange={(e) => setArenaPoolId(e.target.value)}
+              onChange={(e) => {
+                setArenaPoolId(e.target.value);
+                setBlueprintId("");
+              }}
             >
               <option value="">Select pool</option>
               {data.pools.map((pool) => (
@@ -1224,14 +1326,53 @@ function TournamentPanel({
               onChange={setTimeBonusMax}
             />
             <NumField
-              label="Early lock-in bonus"
+              label="First-lock bonus (one winner)"
               value={earlyLockBonus}
               min={0}
               max={50}
               onChange={setEarlyLockBonus}
             />
-          </div>
-          <div className="mt-3 space-y-2 rounded-md border border-border p-3">
+            <label className="block text-xs sm:col-span-2">
+              Blueprint (optional — topic mix)
+              <select
+                className="field mt-1 h-9 w-full text-sm"
+                value={blueprintId}
+                onChange={(e) => setBlueprintId(e.target.value)}
+                disabled={!arenaPoolId || poolBlueprints.length === 0}
+              >
+                <option value="">Random from pool</option>
+                {poolBlueprints.map((bp) => (
+                  <option key={bp.id} value={bp.id}>
+                    {bp.name} v{bp.version}
+                    {bp.isDefault ? " · default" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex items-center gap-2 text-xs sm:col-span-2">
+              <input
+                type="checkbox"
+                checked={avoidRepeats}
+                onChange={(e) => setAvoidRepeats(e.target.checked)}
+              />
+              Avoid repeating questions used in prior arenas for this pool
+            </label>
+            <p className="sm:col-span-2 text-xs text-muted-foreground">
+              Stored separately on each answer at reveal: base correct/wrong, time bonus, and
+              first-lock. Leaderboard Time / First columns read those fields — not the combined
+              total. Example first-correct winner:{" "}
+              <span className="font-medium text-foreground">
+                {correctMarks}
+                {timeBonusMax > 0 ? ` + up to ${timeBonusMax} time` : ""}
+                {earlyLockBonus > 0 ? ` + ${earlyLockBonus} first` : ""}
+                {" = "}
+                {correctMarks + earlyLockBonus}
+                {timeBonusMax > 0 ? `–${correctMarks + earlyLockBonus + timeBonusMax}` : ""} pts
+              </span>
+              {earlyLockBonus === 0 && timeBonusMax === 0
+                ? " · Set First-lock / Time above 0 if you want those columns to show values."
+                : ""}
+            </p>
             <label className="flex items-center gap-2 text-xs">
               <input
                 type="checkbox"
@@ -1275,59 +1416,88 @@ function TournamentPanel({
             onClick={() => arenaMut.mutate()}
             className="mt-3 rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground disabled:opacity-60"
           >
-            {arenaMut.isPending ? "Opening…" : "Open lobby"}
+            {arenaMut.isPending ? "Creating…" : "Create lobby"}
           </button>
-          {data.arenas.length === 0 ? (
-            <div className="mt-3">
-              <AdminEmpty
-                title="No arenas"
-                body="Open a lobby after you have a question pool. Players join from Play."
-              />
-            </div>
+          {showManagedList ? (
+            data.arenas.length === 0 ? (
+              <div className="mt-3">
+                <AdminEmpty
+                  title="No arenas"
+                  body="Create a lobby, then publish it so participants see it on Play."
+                />
+              </div>
+            ) : (
+              <ul className="mt-3 space-y-2 text-sm">
+                {data.arenas.map((row) => {
+                  const published = row.listed !== false;
+                  return (
+                    <li key={row.id} className="rounded-md border border-border px-3 py-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="inline-flex flex-wrap items-center gap-2">
+                          <span>
+                            {row.name} · {row.status} · {row.segment_count}×
+                            {row.questions_per_segment}
+                          </span>
+                          <StatusPill tone={published ? "live" : "draft"}>
+                            {published ? "Published" : "Unpublished"}
+                          </StatusPill>
+                        </span>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            className="text-xs text-accent"
+                            disabled={arenaListedMut.isPending}
+                            onClick={() =>
+                              arenaListedMut.mutate({ arenaId: row.id, listed: !published })
+                            }
+                          >
+                            {published ? "Unpublish" : "Publish"}
+                          </button>
+                          <button
+                            type="button"
+                            className="text-xs text-accent"
+                            onClick={() => setShareArenaId(shareArenaId === row.id ? null : row.id)}
+                          >
+                            {shareArenaId === row.id ? "Hide QR" : "QR / link"}
+                          </button>
+                          <Link
+                            to="/admin/play/arena/$arenaId"
+                            params={{ arenaId: row.id }}
+                            className="text-xs text-accent"
+                          >
+                            Host
+                          </Link>
+                          <button
+                            type="button"
+                            className="text-xs text-destructive"
+                            disabled={deleteArenaMut.isPending}
+                            onClick={() => {
+                              if (window.confirm(`Delete “${row.name}”?`))
+                                deleteArenaMut.mutate(row.id);
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                      {shareArenaId === row.id ? (
+                        <div className="mt-3">
+                          <ArenaShareCard arenaId={row.id} arenaName={row.name} compact />
+                        </div>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            )
           ) : (
-            <ul className="mt-3 space-y-2 text-sm">
-              {data.arenas.map((row) => (
-                <li key={row.id} className="rounded-md border border-border px-3 py-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <span>
-                      {row.name} · {row.status} · {row.segment_count}×{row.questions_per_segment}
-                    </span>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        className="text-xs text-accent"
-                        onClick={() => setShareArenaId(shareArenaId === row.id ? null : row.id)}
-                      >
-                        {shareArenaId === row.id ? "Hide QR" : "QR / link"}
-                      </button>
-                      <Link
-                        to="/admin/play/arena/$arenaId"
-                        params={{ arenaId: row.id }}
-                        className="text-xs text-accent"
-                      >
-                        Host
-                      </Link>
-                      <button
-                        type="button"
-                        className="text-xs text-destructive"
-                        disabled={deleteArenaMut.isPending}
-                        onClick={() => {
-                          if (window.confirm(`Delete “${row.name}”?`))
-                            deleteArenaMut.mutate(row.id);
-                        }}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                  {shareArenaId === row.id ? (
-                    <div className="mt-3">
-                      <ArenaShareCard arenaId={row.id} arenaName={row.name} compact />
-                    </div>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
+            <p className="mt-3 text-xs text-muted-foreground">
+              After creating, open{" "}
+              <Link to="/admin/play/live-arena" className="text-accent underline">
+                List lobbies
+              </Link>{" "}
+              to publish, host, and manage arenas.
+            </p>
           )}
         </AdminPanel>
       ) : null}
@@ -1335,7 +1505,7 @@ function TournamentPanel({
       {show.knockout ? (
         <AdminPanel
           title="Knockout tournaments"
-          description="Players join from Play — no activity is required. Enrolment opens when you create a bracket. Start when the field is full enough."
+          description="Create a bracket, then publish it to the participant Knockout list. Start when the field is full enough."
         >
           <div className="flex flex-wrap gap-2">
             <input
@@ -1373,32 +1543,68 @@ function TournamentPanel({
               Create
             </button>
           </div>
-          {data.tournaments.length === 0 ? (
-            <div className="mt-3">
-              <AdminEmpty title="No tournaments" body="Create a knockout and bind it to a pool." />
-            </div>
-          ) : (
-            <ul className="mt-3 space-y-2 text-sm">
-              {data.tournaments.map((t) => (
-                <li
-                  key={t.id}
-                  className="flex items-center justify-between rounded-md border border-border px-3 py-2"
-                >
-                  <span>
-                    {t.name} · {t.size} · {t.status}
-                  </span>
-                  {t.status === "open" ? (
-                    <button
-                      type="button"
-                      className="text-accent"
-                      onClick={() => startMut.mutate(t.id)}
+          {showManagedList ? (
+            data.tournaments.length === 0 ? (
+              <div className="mt-3">
+                <AdminEmpty
+                  title="No tournaments"
+                  body="Create a knockout and bind it to a pool."
+                />
+              </div>
+            ) : (
+              <ul className="mt-3 space-y-2 text-sm">
+                {data.tournaments.map((t) => {
+                  const published = t.listed !== false;
+                  return (
+                    <li
+                      key={t.id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2"
                     >
-                      Start bracket
-                    </button>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
+                      <span className="inline-flex flex-wrap items-center gap-2">
+                        <span>
+                          {t.name} · {t.size} · {t.status}
+                        </span>
+                        <StatusPill tone={published ? "live" : "draft"}>
+                          {published ? "Published" : "Unpublished"}
+                        </StatusPill>
+                      </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          className="text-xs text-accent"
+                          disabled={tournamentListedMut.isPending}
+                          onClick={() =>
+                            tournamentListedMut.mutate({
+                              tournamentId: t.id,
+                              listed: !published,
+                            })
+                          }
+                        >
+                          {published ? "Unpublish" : "Publish"}
+                        </button>
+                        {t.status === "open" ? (
+                          <button
+                            type="button"
+                            className="text-xs text-accent"
+                            onClick={() => startMut.mutate(t.id)}
+                          >
+                            Start bracket
+                          </button>
+                        ) : null}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )
+          ) : (
+            <p className="mt-3 text-xs text-muted-foreground">
+              After creating, open{" "}
+              <Link to="/admin/play/knockout" className="text-accent underline">
+                List brackets
+              </Link>{" "}
+              to publish and manage tournaments.
+            </p>
           )}
         </AdminPanel>
       ) : null}

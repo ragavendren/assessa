@@ -103,6 +103,9 @@ function LuckyWheel({
   const [rotation, setRotation] = useState(0);
   const [spinning, setSpinning] = useState(false);
   const [landed, setLanded] = useState<BonusPrize | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const rotationRef = useRef(0);
+  const rafRef = useRef<number | null>(null);
 
   const paths = useMemo(() => {
     return slices.map((row, i) => {
@@ -114,34 +117,68 @@ function LuckyWheel({
       const x1 = 100 + r * Math.cos(a1);
       const y1 = 100 + r * Math.sin(a1);
       const mid = a0 + (a1 - a0) / 2;
+      const labelR = 62;
       return {
         d: `M 100 100 L ${x0.toFixed(2)} ${y0.toFixed(2)} A ${r} ${r} 0 0 1 ${x1.toFixed(2)} ${y1.toFixed(2)} Z`,
-        labelX: 100 + 58 * Math.cos(mid),
-        labelY: 100 + 58 * Math.sin(mid),
-        rotate: (mid * 180) / Math.PI,
+        labelX: 100 + labelR * Math.cos(mid),
+        labelY: 100 + labelR * Math.sin(mid),
+        // Keep text upright-ish along the radius so names stay readable while spinning.
+        rotate: (mid * 180) / Math.PI + 90,
+        short: shortenWheelLabel(row.label, 11),
+        full: row.label,
         row,
         fill: SLICE_FILL[i % SLICE_FILL.length]!,
       };
     });
   }, [n, slices]);
 
+  function sliceAtRotation(deg: number) {
+    const normalized = ((-deg % 360) + 360) % 360;
+    const index = Math.floor(normalized / slice) % n;
+    return slices[index] ?? slices[0]!;
+  }
+
+  function animateTo(target: number, durationMs: number, onDone: () => void) {
+    if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+    const from = rotationRef.current;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / durationMs);
+      const eased = 1 - Math.pow(1 - t, 3);
+      const value = from + (target - from) * eased;
+      rotationRef.current = value;
+      setRotation(value);
+      setPreview(sliceAtRotation(value).label);
+      if (t < 1) {
+        rafRef.current = requestAnimationFrame(tick);
+      } else {
+        rafRef.current = null;
+        onDone();
+      }
+    };
+    rafRef.current = requestAnimationFrame(tick);
+  }
+
   async function spin() {
     if (spinning || claiming) return;
     setSpinning(true);
+    setLanded(null);
     try {
       const prize = await onSpin();
       const index = Math.max(
         0,
         slices.findIndex((row) => row.code === prize.code),
       );
-      const target = 360 * 7 - (index + 0.5) * slice;
-      setRotation(target);
-      window.setTimeout(() => {
+      const target = rotationRef.current + 360 * 6 + (360 - (index + 0.5) * slice);
+      animateTo(target, 4200, () => {
         setLanded(prize);
+        setPreview(prize.label);
+        setSpinning(false);
         onLanded(prize);
-      }, 4200);
+      });
     } catch {
       setSpinning(false);
+      setPreview(null);
     }
   }
 
@@ -150,8 +187,8 @@ function LuckyWheel({
       <div className="relative">
         <div className="lucky-pointer" aria-hidden />
         <div
-          className="lucky-wheel relative h-[280px] w-[280px] rounded-full"
-          style={{ transform: `rotate(${rotation}deg)` }}
+          className="lucky-wheel relative h-[300px] w-[300px] rounded-full"
+          style={{ transform: `rotate(${rotation}deg)`, transition: "none" }}
         >
           <svg viewBox="0 0 200 200" className="h-full w-full drop-shadow-xl">
             <defs>
@@ -173,6 +210,15 @@ function LuckyWheel({
                 <stop offset="55%" stopColor="#f59e0b" />
                 <stop offset="100%" stopColor="#92400e" />
               </radialGradient>
+              <filter id="wheel-label-shadow" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow
+                  dx="0"
+                  dy="1"
+                  stdDeviation="1.2"
+                  floodColor="#000"
+                  floodOpacity="0.55"
+                />
+              </filter>
             </defs>
             <circle cx="100" cy="100" r="99" fill="#0f172a" />
             {paths.map((path, i) => (
@@ -184,35 +230,72 @@ function LuckyWheel({
                   textAnchor="middle"
                   dominantBaseline="middle"
                   fill="#fff"
-                  fontSize="7.2"
-                  fontWeight="700"
+                  fontSize="8.5"
+                  fontWeight="800"
+                  letterSpacing="0.02em"
+                  filter="url(#wheel-label-shadow)"
                   transform={`rotate(${path.rotate} ${path.labelX} ${path.labelY})`}
                 >
-                  {path.row.label}
+                  {path.short}
                 </text>
               </g>
             ))}
             <circle
               cx="100"
               cy="100"
-              r="18"
+              r="20"
               fill="url(#wheel-hub)"
               stroke="#fef3c7"
               strokeWidth="2"
             />
+            <text
+              x="100"
+              y="100"
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fill="#451a03"
+              fontSize="7"
+              fontWeight="800"
+            >
+              SPIN
+            </text>
           </svg>
         </div>
       </div>
+
+      <div
+        className={cn(
+          "mt-4 min-h-10 rounded-full border px-4 py-2 text-center text-sm font-semibold tabular-nums transition-colors",
+          spinning
+            ? "border-amber-400/50 bg-amber-500/15 text-amber-900 dark:text-amber-100"
+            : landed
+              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200"
+              : "border-border bg-secondary/50 text-muted-foreground",
+        )}
+      >
+        {spinning && preview
+          ? `Passing · ${preview}`
+          : landed
+            ? `Landed · ${landed.label}`
+            : "Prize names stay on the wheel — spin to land one"}
+      </div>
+
       <button
         type="button"
         disabled={spinning || claiming || Boolean(landed)}
         onClick={() => void spin()}
-        className="mt-5 rounded-full bg-amber-500 px-5 py-2 text-sm font-semibold text-amber-950 disabled:opacity-60"
+        className="mt-4 rounded-full bg-amber-500 px-5 py-2 text-sm font-semibold text-amber-950 disabled:opacity-60"
       >
         {spinning && !landed ? "Spinning…" : landed ? "Landed" : "Spin the wheel"}
       </button>
     </div>
   );
+}
+
+function shortenWheelLabel(label: string, max: number) {
+  const trimmed = label.trim();
+  if (trimmed.length <= max) return trimmed;
+  return `${trimmed.slice(0, Math.max(1, max - 1))}…`;
 }
 
 function MysteryBox({

@@ -21,18 +21,22 @@ export function AdminPageHeader({
   help,
   action,
   back,
+  titleExtra,
 }: {
   title: string;
   help?: { label: string; body: ReactNode };
   action?: ReactNode;
   back?: { to: string; label: string };
+  /** Icons / controls rendered beside the title (e.g. play guide). */
+  titleExtra?: ReactNode;
 }) {
   return (
     <div className="mb-4 flex w-full min-w-0 flex-wrap items-start justify-between gap-3">
       <div className="min-w-0">
         {back ? <AdminBackLink to={back.to} label={back.label} /> : null}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
+          {titleExtra}
           {help ? <HelpTip label={help.label}>{help.body}</HelpTip> : null}
         </div>
       </div>

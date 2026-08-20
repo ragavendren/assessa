@@ -11,21 +11,28 @@ export type EventStepId = "mode" | "activity" | "pool" | "lobby" | "scenes" | "b
 
 type StepDef = { id: EventStepId; label: string; hint: string };
 
+/** Event modes: pool is chosen on the lobby/scenario/bracket form — no separate Mode/Pool wizard. */
 const STEPS: Record<EventKind, StepDef[]> = {
   arena: [
-    { id: "mode", label: "Mode", hint: "Name and availability" },
-    { id: "pool", label: "Pool", hint: "Questions for the quiz" },
-    { id: "lobby", label: "Lobby", hint: "Open a live event" },
+    {
+      id: "lobby",
+      label: "Lobby",
+      hint: "Pick a pool and open a live event. Players join from Play.",
+    },
   ],
   escape: [
-    { id: "mode", label: "Mode", hint: "Name and availability" },
-    { id: "pool", label: "Pool", hint: "Topics each scene draws from" },
-    { id: "scenes", label: "Scenes", hint: "Author the room path" },
+    {
+      id: "scenes",
+      label: "Scenes",
+      hint: "Author rooms with a pool on each scenario. Players browse /play/escape.",
+    },
   ],
   knockout: [
-    { id: "mode", label: "Mode", hint: "Name and availability" },
-    { id: "pool", label: "Pool", hint: "Questions for each match" },
-    { id: "bracket", label: "Bracket", hint: "Create a tournament" },
+    {
+      id: "bracket",
+      label: "Bracket",
+      hint: "Create a tournament with its pool. Players browse /play/knockout.",
+    },
   ],
 };
 
@@ -48,6 +55,7 @@ export function PlayEventSetup({
 }) {
   const steps = STEPS[kind];
   const unlocked = useMemo(() => unlockMap(kind, data), [data, kind]);
+  const single = steps.length === 1;
   const firstOpen = Math.max(
     0,
     steps.findIndex((step) => unlocked[step.id]),
@@ -60,32 +68,34 @@ export function PlayEventSetup({
 
   return (
     <div className="space-y-5">
-      <ol className="flex flex-wrap gap-2">
-        {steps.map((step, stepIndex) => {
-          const active = step.id === current.id;
-          const open = unlocked[step.id] === true;
-          return (
-            <li key={step.id}>
-              <button
-                type="button"
-                disabled={!open}
-                onClick={() => setIndex(stepIndex)}
-                className={cn(
-                  "rounded-full px-3 py-1.5 text-xs font-medium",
-                  active && "bg-primary text-primary-foreground",
-                  !active &&
-                    open &&
-                    "border border-border bg-card text-foreground hover:bg-secondary",
-                  !open &&
-                    "cursor-not-allowed border border-border text-muted-foreground opacity-60",
-                )}
-              >
-                {stepIndex + 1}. {step.label}
-              </button>
-            </li>
-          );
-        })}
-      </ol>
+      {!single ? (
+        <ol className="flex flex-wrap gap-2">
+          {steps.map((step, stepIndex) => {
+            const active = step.id === current.id;
+            const open = unlocked[step.id] === true;
+            return (
+              <li key={step.id}>
+                <button
+                  type="button"
+                  disabled={!open}
+                  onClick={() => setIndex(stepIndex)}
+                  className={cn(
+                    "rounded-full px-3 py-1.5 text-xs font-medium",
+                    active && "bg-primary text-primary-foreground",
+                    !active &&
+                      open &&
+                      "border border-border bg-card text-foreground hover:bg-secondary",
+                    !open &&
+                      "cursor-not-allowed border border-border text-muted-foreground opacity-60",
+                  )}
+                >
+                  {stepIndex + 1}. {step.label}
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      ) : null}
 
       <p className="text-sm text-muted-foreground">{current.hint}</p>
 
@@ -103,32 +113,36 @@ export function PlayEventSetup({
         >
           Close
         </button>
-        <div className="flex items-center gap-2">
-          {saving ? <span className="text-xs text-muted-foreground">Saving…</span> : null}
-          <button
-            type="button"
-            disabled={safeIndex === 0}
-            onClick={() => setIndex((value) => Math.max(0, value - 1))}
-            className="rounded-md border border-border px-3 py-1.5 text-xs disabled:opacity-50"
-          >
-            Back
-          </button>
-          <button
-            type="button"
-            disabled={atLast || !nextUnlocked(steps, safeIndex, unlocked)}
-            onClick={() => setIndex((value) => Math.min(steps.length - 1, value + 1))}
-            className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
-          >
-            Continue
-            <AssessaIcon name="arrowRight" className="h-3 w-3" />
-          </button>
-        </div>
+        {!single ? (
+          <div className="flex items-center gap-2">
+            {saving ? <span className="text-xs text-muted-foreground">Saving…</span> : null}
+            <button
+              type="button"
+              disabled={safeIndex === 0}
+              onClick={() => setIndex((value) => Math.max(0, value - 1))}
+              className="rounded-md border border-border px-3 py-1.5 text-xs disabled:opacity-50"
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              disabled={atLast || !nextUnlocked(steps, safeIndex, unlocked)}
+              onClick={() => setIndex((value) => Math.min(steps.length - 1, value + 1))}
+              className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
+            >
+              Continue
+              <AssessaIcon name="arrowRight" className="h-3 w-3" />
+            </button>
+          </div>
+        ) : saving ? (
+          <span className="text-xs text-muted-foreground">Saving…</span>
+        ) : null}
       </div>
     </div>
   );
 }
 
-function unlockMap(kind: EventKind, data: AdminPlayData): Record<EventStepId, boolean> {
+function unlockMap(_kind: EventKind, data: AdminPlayData): Record<EventStepId, boolean> {
   const hasPool = data.pools.length > 0;
   return {
     mode: true,
@@ -136,7 +150,6 @@ function unlockMap(kind: EventKind, data: AdminPlayData): Record<EventStepId, bo
     pool: true,
     lobby: hasPool,
     scenes: hasPool,
-    // Knockout never needs an activity — players join the open bracket from Play.
     bracket: hasPool,
   };
 }
@@ -146,7 +159,7 @@ function nextUnlocked(steps: StepDef[], index: number, unlocked: Record<EventSte
   return Boolean(next && unlocked[next.id]);
 }
 
-function lockCopy(kind: EventKind, step: EventStepId, data: AdminPlayData) {
+function lockCopy(_kind: EventKind, step: EventStepId, data: AdminPlayData) {
   if (step === "lobby" && data.pools.length === 0) {
     return "Add a question pool before opening a lobby. Players join from Play — no activity is required.";
   }
@@ -159,6 +172,7 @@ function lockCopy(kind: EventKind, step: EventStepId, data: AdminPlayData) {
   return "Finish the previous step first.";
 }
 
+/** @deprecated Pool is selected on the lobby/scenario form; kept for non-event editors. */
 export function EventPoolStep({
   challenge,
   data,
@@ -176,13 +190,7 @@ export function EventPoolStep({
   return (
     <AdminPanel
       title="Question pool"
-      description={
-        challenge.kind === "knockout"
-          ? "Knockout matches draw from this pool. Activities are not required — players join the open bracket from Play."
-          : challenge.kind === "escape"
-            ? "Each scene picks a topic from this pool."
-            : "The lobby pulls questions from this pool. Players join from Play — no activity is required."
-      }
+      description="Optional default pool for this mode. Event lobbies pick their own pool when created."
     >
       {data.pools.length === 0 ? (
         <AdminEmpty title="No pools yet" body="Create a pool under Library, then return here." />
@@ -213,17 +221,7 @@ export function EventPoolStep({
                 activityId: challenge.activityId,
                 poolId: poolId || null,
                 allowedTopics: challenge.allowedTopics,
-                rules: {
-                  questionCount: challenge.rules.questionCount,
-                  durationSeconds: challenge.rules.durationSeconds,
-                  perQuestionSeconds: challenge.rules.perQuestionSeconds,
-                  lives: challenge.rules.lives,
-                  timeBonus: challenge.rules.timeBonus,
-                  onePerPeriod: challenge.rules.onePerPeriod,
-                  xpPoints: challenge.rules.xpPoints,
-                  reward: challenge.rules.reward,
-                  perItem: challenge.rules.perItem,
-                },
+                rules: challenge.rules,
               })
             }
             className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground disabled:opacity-60"

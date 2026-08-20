@@ -2,9 +2,14 @@ import { QuestionPrompt } from "@/components/QuestionPrompt";
 import { AdminNav } from "@/components/AdminNav";
 import { AdminAccessDenied, AdminPageHeader } from "@/components/admin/AdminPageUi";
 import { ArenaHostLobbyTools } from "@/components/play/ArenaHostLobbyTools";
-import { ArenaQuestionTimer, ArenaScoreboard } from "@/components/play/ArenaScoreboard";
-import { ArenaShareCard } from "@/components/play/ArenaShareCard";
+import { ArenaPlayGuide } from "@/components/play/ArenaPlayGuide";
+import {
+  ArenaHeartbeatTimer,
+  ArenaLiveLocks,
+  ArenaScoreboard,
+} from "@/components/play/ArenaScoreboard";
 import { PageLoader } from "@/components/platform";
+import { useArenaRealtime } from "@/hooks/use-arena-realtime";
 import { isArenaKeyVisible, isLastQuestionOfSegment } from "@/lib/play.arena";
 import { deleteLiveArena, getArenaHost, runArenaAction } from "@/lib/play.functions";
 import { cn } from "@/lib/utils";
@@ -28,25 +33,25 @@ function ArenaHostPage() {
   const fetchHost = useServerFn(getArenaHost);
   const act = useServerFn(runArenaAction);
   const remove = useServerFn(deleteLiveArena);
+  useArenaRealtime(arenaId);
   const { data, isPending, error } = useQuery({
     queryKey: ["arena-host", arenaId],
     queryFn: () => fetchHost({ data: { arenaId } }),
-    refetchInterval: 1500,
+    refetchInterval: 4000,
     retry: false,
   });
-  const [remaining, setRemaining] = useState<number | null>(null);
+  const [remainingMs, setRemainingMs] = useState<number | null>(null);
+  const [boardTab, setBoardTab] = useState<"overall" | number>("overall");
 
   useEffect(() => {
     if (!data?.arena.questionEndsAt || data.arena.status !== "question") {
-      setRemaining(null);
+      setRemainingMs(null);
       return;
     }
     const tick = () =>
-      setRemaining(
-        Math.max(0, Math.round((Date.parse(data.arena.questionEndsAt!) - Date.now()) / 1000)),
-      );
+      setRemainingMs(Math.max(0, Date.parse(data.arena.questionEndsAt!) - Date.now()));
     tick();
-    const id = window.setInterval(tick, 250);
+    const id = window.setInterval(tick, 100);
     return () => window.clearInterval(id);
   }, [data?.arena.questionEndsAt, data?.arena.status, data?.arena.currentIndex]);
 
@@ -84,21 +89,64 @@ function ArenaHostPage() {
     );
   }
 
-  const { arena, question, teams, board, participants, directory } = data;
+  const { arena, question, teams, board, participants, directory, lockEvents, answerLedger } = data;
   const lastQuestion = arena.currentIndex >= arena.totalQuestions - 1;
   const lastInSegment = isLastQuestionOfSegment(arena.currentIndex, arena.questionsPerSegment);
   const submitted = teams.filter((t) => t.submitted).length;
   const showKey = isArenaKeyVisible(arena.status);
+  const segmentBoards = board.allSegmentBoards ?? [];
+  const activeRows =
+    boardTab === "overall"
+      ? board.rows
+      : (segmentBoards.find((row) => row.segment === boardTab)?.rows ?? []);
+  const activeWinner =
+    boardTab === "overall"
+      ? null
+      : (board.segmentWinners.find((row) => row.segment === boardTab) ?? null);
+  const undockUrl =
+    typeof window !== "undefined"
+      ? `${window.location.origin}/admin/play/scoreboard/${arenaId}`
+      : `/admin/play/scoreboard/${arenaId}`;
+
+  function openScoreboardWindow() {
+    const popup = window.open(
+      undockUrl,
+      `arena-scoreboard-${arenaId}`,
+      "noopener,noreferrer,width=1440,height=900",
+    );
+    if (!popup) {
+      toast.error("Pop-up blocked — allow pop-ups for the undocked scoreboard");
+      return;
+    }
+    popup.focus();
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="relative space-y-6">
       <AdminNav />
       <AdminPageHeader
         title={arena.name}
         back={{ to: "/admin/play", label: "Play" }}
+        action={
+          <ArenaPlayGuide
+            defaultOpen={arena.status === "lobby" || arena.status === "draft"}
+            config={{
+              name: arena.name,
+              segmentCount: arena.segmentCount,
+              questionsPerSegment: arena.questionsPerSegment,
+              totalQuestions: arena.totalQuestions,
+              perQuestionSeconds: arena.perQuestionSeconds,
+              correctMarks: arena.correctMarks,
+              wrongMarks: arena.wrongMarks,
+              timeBonusMax: arena.timeBonusMax,
+              earlyLockBonus: arena.earlyLockBonus,
+            }}
+            share={{ arenaId: arena.id, arenaName: arena.name }}
+          />
+        }
         help={{
           label: "Host controls",
-          body: "The timer is visible while a question is open. Answers stay hidden until you lock. Reveal the key, publish that segment’s results, then publish the overall leaderboard after the last segment.",
+          body: "Open the game guide (book icon, top right) for scoring rules. Use QR beside it to invite. Undock the scoreboard from the table for the audience screen.",
         }}
       />
       <p className="text-sm">
@@ -107,15 +155,12 @@ function ArenaHostPage() {
           Q {Math.min(arena.currentIndex + 1, arena.totalQuestions)}/{arena.totalQuestions} · +
           {arena.correctMarks}/−{arena.wrongMarks}
           {arena.timeBonusMax ? ` · time +${arena.timeBonusMax}` : ""}
-          {arena.earlyLockBonus ? ` · early lock +${arena.earlyLockBonus}` : ""}
+          {arena.earlyLockBonus ? ` · first lock +${arena.earlyLockBonus}` : ""}
           {arena.publishedThroughSegment >= 0
             ? ` · published through S${arena.publishedThroughSegment + 1}`
             : ""}
         </span>
       </p>
-      <ArenaQuestionTimer remaining={remaining} status={arena.status} />
-
-      <ArenaShareCard arenaId={arena.id} arenaName={arena.name} />
 
       {arena.status !== "complete" ? (
         <ArenaHostLobbyTools
@@ -182,13 +227,20 @@ function ArenaHostPage() {
         </button>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+      <div className="space-y-5">
         <div className="space-y-4">
           {question ? (
             <section className="surface-paper rounded-2xl p-5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Segment {(question.segment ?? 0) + 1} · submitted {submitted}/{teams.length}
-              </p>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Segment {(question.segment ?? 0) + 1} · submitted {submitted}/{teams.length}
+                </p>
+                <ArenaHeartbeatTimer
+                  remainingMs={remainingMs}
+                  durationSeconds={arena.perQuestionSeconds}
+                  status={arena.status}
+                />
+              </div>
               <QuestionPrompt
                 prompt={question.prompt}
                 imageUrl={question.imageUrl}
@@ -209,45 +261,73 @@ function ArenaHostPage() {
                   </li>
                 ))}
               </ol>
+              <ArenaLiveLocks events={lockEvents ?? []} status={arena.status} />
             </section>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Lobby open. {teams.length} teams waiting.
+              {arena.status === "complete"
+                ? "Overall results announced. Question play is closed."
+                : arena.status === "lobby" || arena.status === "draft"
+                  ? `Lobby open. ${teams.length} teams waiting — start the first question when ready.`
+                  : "Waiting for the next question."}
             </p>
           )}
-          {teams.length > 0 ? (
-            <ul className="flex flex-wrap gap-2 text-xs">
-              {teams.map((team) => (
-                <li
-                  key={team.id}
+        </div>
+
+        <div className="space-y-3 border-t border-border pt-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Scoreboard
+            </p>
+            <div className="flex flex-wrap gap-2 text-xs">
+              <button
+                type="button"
+                onClick={() => setBoardTab("overall")}
+                className={cn(
+                  "rounded-full px-3 py-1.5",
+                  boardTab === "overall" ? "bg-primary text-primary-foreground" : "bg-secondary",
+                )}
+              >
+                Overall
+              </button>
+              {segmentBoards.map((seg) => (
+                <button
+                  key={seg.segment}
+                  type="button"
+                  onClick={() => setBoardTab(seg.segment)}
                   className={cn(
-                    "rounded-full px-3 py-1",
-                    team.submitted
-                      ? "bg-success/15 text-success"
-                      : "bg-secondary text-muted-foreground",
+                    "rounded-full px-3 py-1.5",
+                    boardTab === seg.segment
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-secondary",
                   )}
                 >
-                  {team.name}
-                  {arena.status === "revealed" && showKey && team.correct != null
-                    ? team.correct
-                      ? " · correct"
-                      : " · wrong"
-                    : team.submitted
-                      ? " · in"
-                      : ""}
-                </li>
+                  S{seg.segment + 1}
+                </button>
               ))}
-            </ul>
-          ) : null}
+            </div>
+          </div>
+          <ArenaScoreboard
+            rows={activeRows}
+            currentSegmentWinner={activeWinner}
+            segmentWinners={board.segmentWinners}
+            champion={boardTab === "overall" ? board.champion : null}
+            visible
+            showSegmentColumn={boardTab === "overall"}
+            showDetailColumns
+            undockMode="undock"
+            onUndock={openScoreboardWindow}
+            answerLedger={answerLedger}
+            ledgerSegment={boardTab === "overall" ? null : boardTab}
+            title={
+              boardTab === "overall"
+                ? board.overallVisible
+                  ? "Overall leaderboard"
+                  : "Cumulative host board"
+                : `Segment ${boardTab + 1}`
+            }
+          />
         </div>
-        <ArenaScoreboard
-          rows={board.rows}
-          currentSegmentWinner={board.currentSegmentWinner ?? null}
-          segmentWinners={board.segmentWinners}
-          champion={board.champion}
-          visible
-          title={board.overallVisible ? "Overall leaderboard" : "Host scoreboard"}
-        />
       </div>
     </div>
   );

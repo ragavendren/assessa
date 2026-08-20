@@ -1,11 +1,13 @@
 import { QuestionPrompt } from "@/components/QuestionPrompt";
+import { ArenaPlayGuide } from "@/components/play/ArenaPlayGuide";
 import {
-  ArenaQuestionTimer,
+  ArenaHeartbeatTimer,
   ArenaScoreboard,
   ArenaTeamScoreCard,
 } from "@/components/play/ArenaScoreboard";
 import { PlayOptions } from "@/components/play/PlayOptions";
 import { PageLoader } from "@/components/platform";
+import { useArenaRealtime } from "@/hooks/use-arena-realtime";
 import { getArenaPlayer, joinLiveArena, submitArenaAnswer } from "@/lib/play.functions";
 import { sameIndexSet } from "@/lib/play.math";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -25,14 +27,15 @@ function ArenaPlayerPage() {
   const fetchState = useServerFn(getArenaPlayer);
   const join = useServerFn(joinLiveArena);
   const submit = useServerFn(submitArenaAnswer);
+  useArenaRealtime(arenaId);
   const { data, isPending } = useQuery({
     queryKey: ["arena-player", arenaId],
     queryFn: () => fetchState({ data: { arenaId } }),
-    refetchInterval: 1500,
+    refetchInterval: 4000,
   });
   const [teamName, setTeamName] = useState("");
   const [pick, setPick] = useState<number[]>([]);
-  const [remaining, setRemaining] = useState<number | null>(null);
+  const [remainingMs, setRemainingMs] = useState<number | null>(null);
 
   useEffect(() => {
     setPick(Array.isArray(data?.myAnswer) ? data.myAnswer : []);
@@ -40,15 +43,13 @@ function ArenaPlayerPage() {
 
   useEffect(() => {
     if (!data?.arena.questionEndsAt || data.arena.status !== "question") {
-      setRemaining(null);
+      setRemainingMs(null);
       return;
     }
     const tick = () =>
-      setRemaining(
-        Math.max(0, Math.round((Date.parse(data.arena.questionEndsAt!) - Date.now()) / 1000)),
-      );
+      setRemainingMs(Math.max(0, Date.parse(data.arena.questionEndsAt!) - Date.now()));
     tick();
-    const id = window.setInterval(tick, 250);
+    const id = window.setInterval(tick, 100);
     return () => window.clearInterval(id);
   }, [data?.arena.questionEndsAt, data?.arena.status, data?.arena.currentIndex]);
 
@@ -71,12 +72,12 @@ function ArenaPlayerPage() {
     if (!data) return "";
     if (data.arena.status === "lobby") return "Lobby — waiting for the host";
     if (data.arena.status === "question")
-      return remaining != null ? `${remaining}s left` : "Answer now";
+      return remainingMs != null ? `${Math.ceil(remainingMs / 1000)}s left` : "Answer now";
     if (data.arena.status === "locked") return "Answers locked — waiting for reveal";
     if (data.arena.status === "revealed") return "Answer revealed — waiting for the host";
     if (data.arena.status === "complete") return "Arena complete";
     return data.arena.status;
-  }, [data, remaining]);
+  }, [data, remainingMs]);
 
   if (isPending || !data) return <PageLoader />;
 
@@ -92,11 +93,27 @@ function ArenaPlayerPage() {
         Live Arena
       </Link>
       <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Live Arena
           </p>
-          <h1 className="font-display text-3xl">{data.arena.name}</h1>
+          <div className="mt-0.5 flex flex-wrap items-start justify-between gap-3">
+            <h1 className="font-display text-3xl">{data.arena.name}</h1>
+            <ArenaPlayGuide
+              defaultOpen={data.arena.status === "lobby"}
+              config={{
+                name: data.arena.name,
+                segmentCount: data.arena.segmentCount,
+                questionsPerSegment: data.arena.questionsPerSegment,
+                totalQuestions: data.arena.totalQuestions,
+                perQuestionSeconds: data.arena.perQuestionSeconds,
+                correctMarks: data.arena.correctMarks,
+                wrongMarks: data.arena.wrongMarks,
+                timeBonusMax: data.arena.timeBonusMax,
+                earlyLockBonus: data.arena.earlyLockBonus,
+              }}
+            />
+          </div>
           <p className="mt-1 text-sm text-muted-foreground">{statusLabel}</p>
         </div>
         {data.question ? (
@@ -106,8 +123,6 @@ function ArenaPlayerPage() {
           </p>
         ) : null}
       </header>
-
-      <ArenaQuestionTimer remaining={remaining} status={data.arena.status} />
 
       {!data.myTeam && !finished ? (
         <section className="surface-paper space-y-3 rounded-2xl p-5">
@@ -169,6 +184,16 @@ function ArenaPlayerPage() {
       (answering || data.arena.status === "locked" || revealed) &&
       !finished ? (
         <section className="surface-paper rounded-2xl p-5">
+          <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Question
+            </p>
+            <ArenaHeartbeatTimer
+              remainingMs={remainingMs}
+              durationSeconds={data.arena.perQuestionSeconds}
+              status={data.arena.status}
+            />
+          </div>
           <QuestionPrompt
             prompt={data.question.prompt}
             imageUrl={data.question.imageUrl}

@@ -677,11 +677,17 @@ export async function listPlayHub(userId: string) {
       .order("created_at", { ascending: false })
       .limit(8),
     db.from("escape_scenarios").select("id, name, intro, status").eq("status", "active"),
-    db.from("play_tournaments").select("id, name, size, status").neq("status", "complete").limit(8),
+    db
+      .from("play_tournaments")
+      .select("id, name, size, status")
+      .eq("listed", true)
+      .neq("status", "complete")
+      .limit(8),
     db.from("play_activities").select("id, name").eq("status", "active").order("name"),
     db
       .from("play_arenas")
       .select("id, name, activity_id, status")
+      .eq("listed", true)
       .in("status", ["lobby", "question", "locked", "revealed"])
       .order("created_at", { ascending: false })
       .limit(12),
@@ -1435,14 +1441,19 @@ export async function listPlayLeaderboard(args: {
   periodKey?: string | null;
   team?: boolean;
   courseId?: string | null;
+  activityId?: string | null;
 }) {
   const period = args.periodKey ?? periodKeyFor(args.kind);
   const { data: challenges } = await db
     .from("challenges")
-    .select("id, course_id")
+    .select("id, course_id, activity_id")
     .eq("kind", args.kind);
   let ids = (challenges ?? []).map((c) => c.id);
-  if (args.courseId) {
+  if (args.activityId) {
+    ids = (challenges ?? [])
+      .filter((row) => row.activity_id === args.activityId)
+      .map((row) => row.id);
+  } else if (args.courseId) {
     ids = challengeIdsForCourse(challenges ?? [], args.courseId);
   }
   if (ids.length === 0) return { period, rows: [] as const };
@@ -1646,16 +1657,44 @@ export async function listCareerReadiness(userId: string) {
   };
 }
 
-export async function listEscapeScenarios(opts?: { all?: boolean }) {
+export async function listEscapeScenarios(opts?: { all?: boolean; courseId?: string | null }) {
   if (!opts?.all && !(await kindEnabled("escape"))) return [];
-  let query = db.from("escape_scenarios").select("*");
+  let query = db.from("escape_scenarios").select("*, courses(name)");
   if (!opts?.all) query = query.eq("status", "active");
+  if (opts?.courseId) query = query.eq("course_id", opts.courseId);
   const { data: scenarios } = await query.order("created_at", { ascending: false });
   const { data: scenes } = await db.from("escape_scenes").select("*").order("sort_order");
-  return (scenarios ?? []).map((s) => ({
-    ...s,
-    scenes: (scenes ?? []).filter((sc) => sc.scenario_id === s.id),
-  }));
+  return (scenarios ?? []).map((s) => {
+    const course = s.courses as unknown as { name: string } | null;
+    const { courses: _courses, ...row } = s as typeof s & { courses?: unknown };
+    return {
+      ...row,
+      courseName: course?.name ?? null,
+      scenes: (scenes ?? []).filter((sc) => sc.scenario_id === s.id),
+    };
+  });
+}
+
+export async function listOpenTournaments(opts?: { courseId?: string | null }) {
+  if (!(await kindEnabled("knockout"))) return { tournaments: [] as const };
+  const query = db
+    .from("play_tournaments")
+    .select("id, name, size, status, pool_id, listed, created_at")
+    .eq("listed", true)
+    .neq("status", "complete")
+    .order("created_at", { ascending: false })
+    .limit(40);
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  let rows = data ?? [];
+  if (opts?.courseId) {
+    const poolIds = (
+      await db.from("question_pools").select("id").eq("course_id", opts.courseId)
+    ).data?.map((p) => p.id);
+    const allow = new Set(poolIds ?? []);
+    rows = rows.filter((row) => row.pool_id && allow.has(row.pool_id));
+  }
+  return { tournaments: rows };
 }
 
 export async function startEscapeScene(userId: string, scenarioId: string, sceneIndex: number) {
@@ -1713,6 +1752,7 @@ export async function adminListPlay(userId: string) {
     scenarios,
     tournaments,
     { data: arenas },
+    { data: blueprints },
   ] = await Promise.all([
     db.from("challenges").select("*").order("kind"),
     db.from("play_sessions").select("kind").gte("started_at", since),
@@ -1723,9 +1763,12 @@ export async function adminListPlay(userId: string) {
     db.from("play_tournaments").select("*").order("created_at", { ascending: false }),
     db
       .from("play_arenas")
-      .select("id, name, activity_id, status, segment_count, questions_per_segment, created_at")
+      .select(
+        "id, name, activity_id, status, listed, segment_count, questions_per_segment, per_question_seconds, correct_marks, wrong_marks, time_bonus_max, early_lock_bonus, allow_open_teams, pool_id, created_at",
+      )
       .order("created_at", { ascending: false })
       .limit(30),
+    db.from("course_blueprints").select("id, name, course_id, version, is_default").order("name"),
   ]);
   const sessionCounts = new Map<string, number>();
   for (const row of sessionRows ?? []) {
@@ -1764,6 +1807,13 @@ export async function adminListPlay(userId: string) {
     scenarios,
     tournaments: tournaments.data ?? [],
     arenas: arenas ?? [],
+    blueprints: (blueprints ?? []).map((row) => ({
+      id: row.id,
+      name: row.name,
+      courseId: row.course_id,
+      version: row.version,
+      isDefault: Boolean(row.is_default),
+    })),
   };
 }
 
@@ -2062,17 +2112,69 @@ export async function adminCreateTournament(
       pool_id: payload.poolId ?? null,
       created_by: userId,
       status: "open",
+      listed: false,
     })
     .select("*")
     .single();
   if (error) throw new Error(error.message);
-  await notifyPlayAudience({
-    kind: "play_tournament",
-    title: `${payload.name} is open`,
-    body: `A ${payload.size}-player knockout is open. Join from Play before it starts.`,
-    icon: "🏆",
-  });
   return data;
+}
+
+export async function adminSetTournamentListed(
+  userId: string,
+  tournamentId: string,
+  listed: boolean,
+) {
+  await requireAdmin(userId);
+  const { data: row, error } = await db
+    .from("play_tournaments")
+    .update({ listed })
+    .eq("id", tournamentId)
+    .select("id, name, size, listed")
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!row) throw new Error("Tournament not found.");
+  if (listed) {
+    await notifyPlayAudience({
+      kind: "play_tournament",
+      title: `${row.name} is open`,
+      body: `A ${row.size}-player knockout is open. Join from Play before it starts.`,
+      icon: "🏆",
+    });
+  }
+  return { ok: true as const, listed: row.listed };
+}
+
+export async function adminUpdateTournament(
+  userId: string,
+  payload: {
+    tournamentId: string;
+    name: string;
+    size: 4 | 8 | 16 | 32;
+    poolId?: string | null;
+  },
+) {
+  await requireAdmin(userId);
+  const { data: existing, error: loadError } = await db
+    .from("play_tournaments")
+    .select("id, status, listed")
+    .eq("id", payload.tournamentId)
+    .maybeSingle();
+  if (loadError) throw new Error(loadError.message);
+  if (!existing) throw new Error("Tournament not found.");
+  if (existing.status === "complete") {
+    throw new Error("Finished brackets cannot be edited.");
+  }
+  const { error } = await db
+    .from("play_tournaments")
+    .update({
+      name: payload.name,
+      size: payload.size,
+      pool_id: payload.poolId ?? null,
+    })
+    .eq("id", payload.tournamentId);
+  if (error) throw new Error(error.message);
+  return { ok: true as const };
 }
 
 export async function joinTournament(userId: string, tournamentId: string) {
@@ -2082,6 +2184,7 @@ export async function joinTournament(userId: string, tournamentId: string) {
     .eq("id", tournamentId)
     .maybeSingle();
   if (!t || t.status !== "open") throw new Error("Tournament is not open.");
+  if (t.listed === false) throw new Error("This tournament is not published yet.");
   const { count } = await db
     .from("play_tournament_entrants")
     .select("user_id", { count: "exact", head: true })

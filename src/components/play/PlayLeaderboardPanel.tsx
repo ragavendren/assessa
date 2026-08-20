@@ -16,33 +16,38 @@ type BoardRow = {
 
 export function PlayLeaderboardPanel({
   kind,
-  courseId,
-  courseName,
+  activityId,
+  label = "Play",
   topic,
   compact,
   limit = 5,
 }: {
   kind: PlayKind;
-  courseId: string;
-  courseName: string;
+  activityId?: string | null;
+  label?: string;
   topic?: string | null;
   compact?: boolean;
   limit?: number;
 }) {
   const fetchBoard = useServerFn(getPlayBoard);
   const { data, isPending } = useQuery({
-    queryKey: ["play-board", kind, courseId, topic ?? ""],
+    queryKey: ["play-board", kind, activityId ?? "all", topic ?? ""],
     queryFn: () =>
       fetchBoard({
         data: {
           kind,
-          courseId,
+          ...(activityId ? { activityId } : {}),
           ...(topic ? { topic } : {}),
         },
       }),
   });
 
   const rows = (data?.rows ?? []) as BoardRow[];
+  const search = {
+    kind,
+    ...(activityId ? { activityId } : {}),
+    ...(topic ? { topic } : {}),
+  };
 
   if (isPending) {
     return (
@@ -56,11 +61,11 @@ export function PlayLeaderboardPanel({
         <p className="text-xs text-muted-foreground">No scores yet — be the first on this board.</p>
         <Link
           to="/play/leaderboard"
-          search={{ courseId, kind, ...(topic ? { topic } : {}) }}
+          search={search}
           className="inline-flex items-center gap-1 text-xs text-accent underline"
         >
           <Trophy className="h-3 w-3" />
-          Open {courseName} board
+          Open {label} board
         </Link>
       </div>
     );
@@ -92,11 +97,11 @@ export function PlayLeaderboardPanel({
       {!compact ? (
         <Link
           to="/play/leaderboard"
-          search={{ courseId, kind, ...(topic ? { topic } : {}) }}
+          search={search}
           className="inline-flex items-center gap-1 text-xs font-medium text-accent underline"
         >
           <Trophy className="h-3 w-3" />
-          Full {courseName} board
+          Full {label} board
         </Link>
       ) : null}
     </div>

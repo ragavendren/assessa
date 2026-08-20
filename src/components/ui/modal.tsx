@@ -10,13 +10,14 @@ type ModalProps = {
   children: ReactNode;
   className?: string;
   /** Wider body for denser forms. */
-  size?: "md" | "lg" | "xl";
+  size?: "md" | "lg" | "xl" | "2xl";
 };
 
 const SIZE_CLASS = {
   md: "max-w-md",
   lg: "max-w-lg",
   xl: "max-w-3xl",
+  "2xl": "max-w-5xl",
 } as const;
 
 /** Lightweight accessible modal — matches confirm-dialog chrome. */
