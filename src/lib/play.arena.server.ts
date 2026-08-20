@@ -196,6 +196,9 @@ export async function adminCreateArena(
     wrongMarks: number;
     timeBonusMax?: number;
     earlyLockBonus?: number;
+    teamCount?: number | null;
+    teamNames?: string[];
+    allowOpenTeams?: boolean;
   },
 ) {
   await requireAdmin(userId);
@@ -211,6 +214,9 @@ export async function adminCreateArena(
     throw new Error(`Need at least ${total} active pool questions for this arena.`);
   }
   const picked = pickWithSeed(eligible, total, `${payload.name}:${Date.now()}`);
+  const teamCount = payload.teamCount != null && payload.teamCount > 0 ? payload.teamCount : 0;
+  if (teamCount > 32) throw new Error("Precreate at most 32 teams.");
+  const allowOpenTeams = payload.allowOpenTeams !== false;
   const { data: arena, error } = await db
     .from("play_arenas")
     .insert({
@@ -226,6 +232,7 @@ export async function adminCreateArena(
       wrong_marks: payload.wrongMarks,
       time_bonus_max: payload.timeBonusMax ?? 0,
       early_lock_bonus: payload.earlyLockBonus ?? 0,
+      allow_open_teams: allowOpenTeams,
       created_by: userId,
     })
     .select("*")
@@ -250,10 +257,26 @@ export async function adminCreateArena(
   const { error: insertQ } = await db.from("play_arena_questions").insert(rows);
   if (insertQ) throw new Error(insertQ.message);
 
+  if (teamCount > 0) {
+    const { defaultTeamNames } = await import("@/lib/presence");
+    const names = defaultTeamNames(teamCount, payload.teamNames);
+    const { error: teamError } = await db.from("play_arena_teams").insert(
+      names.map((name) => ({
+        arena_id: arena.id,
+        name,
+        created_by: userId,
+      })),
+    );
+    if (teamError) throw new Error(teamError.message);
+  }
+
   await notifyEveryone({
     kind: "play_arena",
     title: `${payload.name} lobby is open`,
-    body: "Pick a team name and join Live Arena from Play.",
+    body:
+      teamCount > 0
+        ? "Join a Live Arena team from Play."
+        : "Pick a team name and join Live Arena from Play.",
     icon: "🏟️",
   });
   return { id: arena.id };
@@ -317,6 +340,9 @@ export async function joinArena(
     if (clash) {
       teamId = clash.id;
     } else {
+      if (arena.allow_open_teams === false) {
+        throw new Error("This arena only allows the precreated teams. Join one of those.");
+      }
       const { data: created, error } = await db
         .from("play_arena_teams")
         .insert({ arena_id: arena.id, name, created_by: userId })
@@ -445,6 +471,7 @@ export async function getArenaPlayerState(userId: string, arenaId: string) {
       questionEndsAt: arena.question_ends_at,
       totalQuestions: questions?.length ?? 0,
       publishedThroughSegment: arena.published_through_segment ?? -1,
+      allowOpenTeams: arena.allow_open_teams !== false,
     },
     teams: (teams ?? []).map((t) => ({ id: t.id, name: t.name })),
     myTeam: myTeam
@@ -502,26 +529,64 @@ export async function getArenaPlayerState(userId: string, arenaId: string) {
 export async function getArenaHostState(userId: string, arenaId: string) {
   await requireAdmin(userId);
   const arena = await syncLock(await loadArena(arenaId));
-  const [{ data: questions }, { data: teams }, { data: members }, { data: answers }] =
-    await Promise.all([
-      db
-        .from("play_arena_questions")
-        .select(
-          "sort_order, segment_index, prompt, image_url, options, correct_indexes, multi_select",
-        )
-        .eq("arena_id", arena.id)
-        .order("sort_order"),
-      db
-        .from("play_arena_teams")
-        .select("id, name, score, correct_count, wrong_count")
-        .eq("arena_id", arena.id)
-        .order("score", { ascending: false }),
-      db.from("play_arena_members").select("team_id, user_id").eq("arena_id", arena.id),
-      db
-        .from("play_arena_answers")
-        .select("team_id, question_index, answer_indexes, correct, marks")
-        .eq("arena_id", arena.id),
-    ]);
+  const [
+    { data: questions },
+    { data: teams },
+    { data: members },
+    { data: answers },
+    { data: profiles },
+  ] = await Promise.all([
+    db
+      .from("play_arena_questions")
+      .select(
+        "sort_order, segment_index, prompt, image_url, options, correct_indexes, multi_select",
+      )
+      .eq("arena_id", arena.id)
+      .order("sort_order"),
+    db
+      .from("play_arena_teams")
+      .select("id, name, score, correct_count, wrong_count")
+      .eq("arena_id", arena.id)
+      .order("name"),
+    db.from("play_arena_members").select("team_id, user_id").eq("arena_id", arena.id),
+    db
+      .from("play_arena_answers")
+      .select("team_id, question_index, answer_indexes, correct, marks")
+      .eq("arena_id", arena.id),
+    db.from("profiles").select("id, full_name, email, avatar_id, last_seen_at").order("full_name"),
+  ]);
+  const { isUserOnline, presenceStatus } = await import("@/lib/presence");
+  const profileById = new Map((profiles ?? []).map((row) => [row.id, row]));
+  const teamById = new Map((teams ?? []).map((row) => [row.id, row]));
+  const participants = (members ?? []).map((row) => {
+    const profile = profileById.get(row.user_id);
+    const team = teamById.get(row.team_id);
+    const lastSeenAt = profile?.last_seen_at ?? null;
+    return {
+      userId: row.user_id,
+      name: profile?.full_name || profile?.email || "Participant",
+      email: profile?.email ?? "",
+      avatarId: profile?.avatar_id ?? null,
+      teamId: row.team_id,
+      teamName: team?.name ?? "Team",
+      lastSeenAt,
+      online: isUserOnline(lastSeenAt),
+      presence: presenceStatus(lastSeenAt),
+    };
+  });
+  const directory = (profiles ?? []).map((profile) => {
+    const lastSeenAt = profile.last_seen_at ?? null;
+    return {
+      userId: profile.id,
+      name: profile.full_name || profile.email,
+      email: profile.email,
+      avatarId: profile.avatar_id,
+      lastSeenAt,
+      online: isUserOnline(lastSeenAt),
+      presence: presenceStatus(lastSeenAt),
+      inArena: (members ?? []).some((row) => row.user_id === profile.id),
+    };
+  });
   const q = (questions ?? [])[arena.current_index] ?? null;
   const currentByTeam = new Map(
     (answers ?? [])
@@ -555,7 +620,10 @@ export async function getArenaHostState(userId: string, arenaId: string) {
       earlyLockBonus: arena.early_lock_bonus ?? 0,
       publishedThroughSegment: arena.published_through_segment ?? -1,
       publishSegmentReady: publishReady,
+      allowOpenTeams: arena.allow_open_teams !== false,
     },
+    participants,
+    directory,
     question: q
       ? {
           prompt: q.prompt,
@@ -774,6 +842,130 @@ export async function adminArenaAction(
   }
 
   throw new Error("Unknown action.");
+}
+
+export async function adminArenaSpinPick(
+  userId: string,
+  payload: { arenaId: string; source: "lobby" | "all" },
+) {
+  await requireAdmin(userId);
+  const arena = await loadArena(payload.arenaId);
+  const { data: members } = await db
+    .from("play_arena_members")
+    .select("user_id")
+    .eq("arena_id", arena.id);
+  let userIds = (members ?? []).map((row) => row.user_id);
+  if (payload.source === "all") {
+    const { data: profiles } = await db.from("profiles").select("id");
+    userIds = (profiles ?? []).map((row) => row.id);
+  }
+  if (userIds.length === 0) throw new Error("No participants available to spin.");
+  const { shuffleList } = await import("@/lib/presence");
+  const [pickedId] = shuffleList(userIds);
+  const { data: profile } = await db
+    .from("profiles")
+    .select("id, full_name, email, avatar_id")
+    .eq("id", pickedId!)
+    .maybeSingle();
+  return {
+    userId: pickedId!,
+    name: profile?.full_name || profile?.email || "Participant",
+    email: profile?.email ?? "",
+    avatarId: profile?.avatar_id ?? null,
+  };
+}
+
+export async function adminArenaSplitTeams(
+  userId: string,
+  payload: {
+    arenaId: string;
+    teamCount: number;
+    perTeam?: number | null;
+    source: "lobby" | "all";
+    userIds?: string[];
+  },
+) {
+  await requireAdmin(userId);
+  const arena = await loadArena(payload.arenaId);
+  if (arena.status === "complete") throw new Error("This arena has already finished.");
+  const teamCount = Math.max(1, Math.min(32, Math.floor(payload.teamCount)));
+  const { defaultTeamNames, splitUsersIntoTeams } = await import("@/lib/presence");
+
+  let pool = [...new Set(payload.userIds?.filter(Boolean) ?? [])];
+  if (pool.length === 0) {
+    if (payload.source === "lobby") {
+      const { data: members } = await db
+        .from("play_arena_members")
+        .select("user_id")
+        .eq("arena_id", arena.id);
+      pool = (members ?? []).map((row) => row.user_id);
+    } else {
+      const { data: profiles } = await db.from("profiles").select("id");
+      pool = (profiles ?? []).map((row) => row.id);
+    }
+  }
+  if (pool.length === 0) throw new Error("No users to assign.");
+
+  const { data: existingTeams } = await db
+    .from("play_arena_teams")
+    .select("id, name")
+    .eq("arena_id", arena.id)
+    .order("created_at");
+  const teams = [...(existingTeams ?? [])];
+  while (teams.length < teamCount) {
+    const name = defaultTeamNames(teamCount)[teams.length]!;
+    const { data: created, error } = await db
+      .from("play_arena_teams")
+      .insert({ arena_id: arena.id, name, created_by: userId })
+      .select("id, name")
+      .single();
+    if (error) {
+      const { data: alt, error: altError } = await db
+        .from("play_arena_teams")
+        .insert({
+          arena_id: arena.id,
+          name: `${name} (${teams.length + 1})`,
+          created_by: userId,
+        })
+        .select("id, name")
+        .single();
+      if (altError) throw new Error(altError.message);
+      teams.push(alt);
+    } else {
+      teams.push(created);
+    }
+  }
+  const targetTeams = teams.slice(0, teamCount);
+
+  const buckets = splitUsersIntoTeams(pool, targetTeams.length, payload.perTeam);
+  for (const userIdToMove of pool) {
+    await db
+      .from("play_arena_members")
+      .delete()
+      .eq("arena_id", arena.id)
+      .eq("user_id", userIdToMove);
+  }
+  const rows: Array<{ arena_id: string; team_id: string; user_id: string }> = [];
+  buckets.forEach((bucket, index) => {
+    const team = targetTeams[index];
+    if (!team) return;
+    for (const uid of bucket) {
+      rows.push({ arena_id: arena.id, team_id: team.id, user_id: uid });
+    }
+  });
+  if (rows.length > 0) {
+    const { error } = await db.from("play_arena_members").insert(rows);
+    if (error) throw new Error(error.message);
+  }
+  return {
+    ok: true as const,
+    assigned: rows.length,
+    teams: targetTeams.map((team, index) => ({
+      id: team.id,
+      name: team.name,
+      members: buckets[index]?.length ?? 0,
+    })),
+  };
 }
 
 export async function adminListArenas(userId: string) {

@@ -1,6 +1,7 @@
 import { QuestionPrompt } from "@/components/QuestionPrompt";
 import { AdminNav } from "@/components/AdminNav";
 import { AdminAccessDenied, AdminPageHeader } from "@/components/admin/AdminPageUi";
+import { ArenaHostLobbyTools } from "@/components/play/ArenaHostLobbyTools";
 import { ArenaQuestionTimer, ArenaScoreboard } from "@/components/play/ArenaScoreboard";
 import { ArenaShareCard } from "@/components/play/ArenaShareCard";
 import { PageLoader } from "@/components/platform";
@@ -83,7 +84,7 @@ function ArenaHostPage() {
     );
   }
 
-  const { arena, question, teams, board } = data;
+  const { arena, question, teams, board, participants, directory } = data;
   const lastQuestion = arena.currentIndex >= arena.totalQuestions - 1;
   const lastInSegment = isLastQuestionOfSegment(arena.currentIndex, arena.questionsPerSegment);
   const submitted = teams.filter((t) => t.submitted).length;
@@ -115,6 +116,14 @@ function ArenaHostPage() {
       <ArenaQuestionTimer remaining={remaining} status={arena.status} />
 
       <ArenaShareCard arenaId={arena.id} arenaName={arena.name} />
+
+      {arena.status !== "complete" ? (
+        <ArenaHostLobbyTools
+          arenaId={arena.id}
+          participants={participants ?? []}
+          directory={directory ?? []}
+        />
+      ) : null}
 
       <div className="flex flex-wrap gap-2">
         {arena.status === "lobby" || arena.status === "draft" ? (

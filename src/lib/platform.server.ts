@@ -23,6 +23,7 @@ export type Profile = {
   team_group: string | null;
   leaderboard_opt_out: boolean;
   avatar_id: string | null;
+  last_seen_at?: string | null;
 };
 
 export type AttemptRow = {
@@ -93,6 +94,14 @@ async function allocateParticipantId(preferred?: string | null) {
 /** Public helper for profile saves that must keep/assign a participant id. */
 export async function allocateParticipantIdForSave(preferred?: string | null) {
   return allocateParticipantId(preferred);
+}
+
+export async function touchPresence(userId: string) {
+  const now = new Date().toISOString();
+  const { data } = await db.from("profiles").select("last_seen_at").eq("id", userId).maybeSingle();
+  const last = data?.last_seen_at ? Date.parse(data.last_seen_at) : 0;
+  if (last && Date.now() - last < 30_000) return;
+  await db.from("profiles").update({ last_seen_at: now }).eq("id", userId);
 }
 
 export async function ensureProfile(

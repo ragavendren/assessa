@@ -6,12 +6,14 @@ import { z } from "zod";
 export const getMe = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { ensureProfile, getXpTotal, getLevels } = await import("@/lib/platform.server");
+    const { ensureProfile, getXpTotal, getLevels, touchPresence } =
+      await import("@/lib/platform.server");
     const { resolveLevel } = await import("@/lib/gamification");
     const { profile, isAdmin } = await ensureProfile(
       context.userId,
       context.claims as unknown as Record<string, unknown>,
     );
+    await touchPresence(context.userId);
     const [xp, levels] = await Promise.all([getXpTotal(context.userId), getLevels()]);
     const needsOrg = !profile.organization?.trim() || !profile.department?.trim() ? true : false;
     return {
@@ -20,6 +22,15 @@ export const getMe = createServerFn({ method: "POST" })
       level: resolveLevel(xp, levels),
       needsOrg,
     };
+  });
+
+/** Lightweight online heartbeat for signed-in clients. */
+export const pingPresence = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { touchPresence } = await import("@/lib/platform.server");
+    await touchPresence(context.userId);
+    return { ok: true as const };
   });
 
 /** Active organisations + departments for signup / profile (no auth required). */

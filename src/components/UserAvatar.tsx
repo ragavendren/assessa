@@ -9,10 +9,18 @@ type UserAvatarProps = {
   emojiClassName?: string;
   title?: string;
   size?: number;
+  status?: "online" | "offline" | "busy" | "away" | "dnd";
 };
 
 /** Renders a catalog SVG avatar or initials fallback. */
-export function UserAvatar({ avatarId, name, className, title, size = 40 }: UserAvatarProps) {
+export function UserAvatar({
+  avatarId,
+  name,
+  className,
+  title,
+  size = 40,
+  status,
+}: UserAvatarProps) {
   return (
     <Avatar
       size={size}
@@ -20,6 +28,7 @@ export function UserAvatar({ avatarId, name, className, title, size = 40 }: User
       {...(avatarId !== undefined ? { type: avatarId } : {})}
       {...(name !== undefined ? { name } : {})}
       {...(title ? { title } : {})}
+      {...(status ? { status } : {})}
     />
   );
 }

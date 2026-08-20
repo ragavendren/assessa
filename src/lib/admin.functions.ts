@@ -739,7 +739,7 @@ export const getAdminUsers = createServerFn({ method: "POST" })
       supabaseAdmin
         .from("profiles")
         .select(
-          "id, full_name, email, organization, department, participant_id, mobile, avatar_id, created_at, updated_at, leaderboard_opt_out",
+          "id, full_name, email, organization, department, participant_id, mobile, avatar_id, created_at, updated_at, leaderboard_opt_out, last_seen_at",
         )
         .order("created_at", { ascending: false }),
       supabaseAdmin.from("user_roles").select("user_id, role"),
@@ -756,6 +756,7 @@ export const getAdminUsers = createServerFn({ method: "POST" })
       roleByUser.set(row.user_id, list);
     }
 
+    const { isUserOnline, presenceStatus } = await import("@/lib/presence");
     const users = (profiles ?? []).map((profile) => {
       const userAttempts = (attempts ?? []).filter((a) => a.user_id === profile.id);
       const submitted = userAttempts.filter((a) => a.status === "submitted");
@@ -766,6 +767,7 @@ export const getAdminUsers = createServerFn({ method: "POST" })
       const examsCompleted = new Set(submitted.map((a) => a.exam_id)).size;
       const lastActivity =
         userAttempts[0]?.submitted_at || userAttempts[0]?.started_at || profile.updated_at;
+      const lastSeenAt = profile.last_seen_at ?? null;
 
       return {
         id: profile.id,
@@ -781,6 +783,9 @@ export const getAdminUsers = createServerFn({ method: "POST" })
         leaderboardOptOut: profile.leaderboard_opt_out,
         createdAt: profile.created_at,
         lastActivity,
+        lastSeenAt,
+        online: isUserOnline(lastSeenAt),
+        presence: presenceStatus(lastSeenAt),
         optedAssessments: examsOpted,
         completedAssessments: examsCompleted,
         completionRate: examsOpted ? Math.round((examsCompleted / examsOpted) * 100) : 0,

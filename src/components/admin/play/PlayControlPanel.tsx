@@ -1018,6 +1018,10 @@ function TournamentPanel({
   const [wrongMarks, setWrongMarks] = useState(1);
   const [timeBonusMax, setTimeBonusMax] = useState(0);
   const [earlyLockBonus, setEarlyLockBonus] = useState(0);
+  const [precreateTeams, setPrecreateTeams] = useState(false);
+  const [teamCount, setTeamCount] = useState(4);
+  const [teamNamesText, setTeamNamesText] = useState("");
+  const [allowOpenTeams, setAllowOpenTeams] = useState(true);
   const [shareArenaId, setShareArenaId] = useState<string | null>(null);
 
   const createMut = useMutation({
@@ -1057,8 +1061,12 @@ function TournamentPanel({
     onError: (err) => toast.error(err instanceof Error ? err.message : "Could not delete"),
   });
   const arenaMut = useMutation({
-    mutationFn: () =>
-      createArena({
+    mutationFn: () => {
+      const teamNames = teamNamesText
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+      return createArena({
         data: {
           name: arenaName,
           poolId: arenaPoolId,
@@ -1069,8 +1077,16 @@ function TournamentPanel({
           wrongMarks,
           timeBonusMax,
           earlyLockBonus,
+          ...(precreateTeams
+            ? {
+                teamCount,
+                teamNames,
+                allowOpenTeams,
+              }
+            : {}),
         },
-      }),
+      });
+    },
     onSuccess: () => {
       toast.success("Live Arena lobby is open");
       onDone();
@@ -1145,7 +1161,7 @@ function TournamentPanel({
       {show.arena ? (
         <AdminPanel
           title="Live Arena"
-          description="Hosted team quiz: pick a pool, segments × questions, a per-question timer, +/− marks, and optional time / early-lock bonuses. Teams join from Play. You reveal each key."
+          description="Hosted team quiz: pick a pool, segments × questions, timer, and marks. Optionally precreate teams. Teams join from Play; you reveal each key."
         >
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             <input
@@ -1214,6 +1230,44 @@ function TournamentPanel({
               max={50}
               onChange={setEarlyLockBonus}
             />
+          </div>
+          <div className="mt-3 space-y-2 rounded-md border border-border p-3">
+            <label className="flex items-center gap-2 text-xs">
+              <input
+                type="checkbox"
+                checked={precreateTeams}
+                onChange={(e) => setPrecreateTeams(e.target.checked)}
+              />
+              Precreate teams (optional)
+            </label>
+            {precreateTeams ? (
+              <div className="grid gap-2 sm:grid-cols-2">
+                <NumField
+                  label="Number of teams"
+                  value={teamCount}
+                  min={1}
+                  max={32}
+                  onChange={setTeamCount}
+                />
+                <label className="flex items-end gap-2 pb-1 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={!allowOpenTeams}
+                    onChange={(e) => setAllowOpenTeams(!e.target.checked)}
+                  />
+                  Only allow joining these teams
+                </label>
+                <label className="block text-xs sm:col-span-2">
+                  Team names (optional, one per line)
+                  <textarea
+                    className="field mt-1 min-h-[4.5rem] w-full text-sm"
+                    placeholder={"Team Alpha\nTeam Beta"}
+                    value={teamNamesText}
+                    onChange={(e) => setTeamNamesText(e.target.value)}
+                  />
+                </label>
+              </div>
+            ) : null}
           </div>
           <button
             type="button"

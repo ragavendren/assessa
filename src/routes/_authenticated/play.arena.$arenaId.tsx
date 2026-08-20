@@ -113,24 +113,28 @@ function ArenaPlayerPage() {
         <section className="surface-paper space-y-3 rounded-2xl p-5">
           <h2 className="text-sm font-semibold">Join a team</h2>
           <p className="text-xs text-muted-foreground">
-            Create a name, or join an existing team by using the same name.
+            {data.arena.allowOpenTeams === false
+              ? "This arena uses precreated teams. Pick one below."
+              : "Create a name, or join an existing team by using the same name."}
           </p>
-          <div className="flex flex-wrap gap-2">
-            <input
-              className="field h-9 min-w-[12rem] text-sm"
-              placeholder="Team name"
-              value={teamName}
-              onChange={(e) => setTeamName(e.target.value)}
-            />
-            <button
-              type="button"
-              disabled={joinMut.isPending || teamName.trim().length < 2}
-              onClick={() => joinMut.mutate({ teamName: teamName.trim() })}
-              className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-60"
-            >
-              Join
-            </button>
-          </div>
+          {data.arena.allowOpenTeams !== false ? (
+            <div className="flex flex-wrap gap-2">
+              <input
+                className="field h-9 min-w-[12rem] text-sm"
+                placeholder="Team name"
+                value={teamName}
+                onChange={(e) => setTeamName(e.target.value)}
+              />
+              <button
+                type="button"
+                disabled={joinMut.isPending || teamName.trim().length < 2}
+                onClick={() => joinMut.mutate({ teamName: teamName.trim() })}
+                className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-60"
+              >
+                Join
+              </button>
+            </div>
+          ) : null}
           {data.teams.length > 0 ? (
             <ul className="flex flex-wrap gap-2 text-sm">
               {data.teams.map((team) => (
@@ -145,6 +149,8 @@ function ArenaPlayerPage() {
                 </li>
               ))}
             </ul>
+          ) : data.arena.allowOpenTeams === false ? (
+            <p className="text-xs text-muted-foreground">Waiting for the host to create teams.</p>
           ) : null}
         </section>
       ) : data.myTeam ? (

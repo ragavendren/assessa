@@ -1,6 +1,5 @@
 import { AdminNav } from "@/components/AdminNav";
 import {
-  AdminAccessDenied,
   AdminEmpty,
   AdminPageHeader,
   ResultCount,
@@ -181,10 +180,19 @@ function AdminUsersPage() {
     );
   }
   if (error || !data) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Could not load users. Check the server log or run pending database migrations.";
     return (
       <div>
         <AdminNav />
-        <AdminAccessDenied />
+        <div className="space-y-4">
+          <AdminPageHeader title="Users" />
+          <p className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+            {message}
+          </p>
+        </div>
       </div>
     );
   }
@@ -295,9 +303,17 @@ function AdminUsersPage() {
                               avatarId={user.avatarId}
                               name={user.name}
                               className="h-9 w-9 shrink-0"
+                              status={user.presence}
                             />
                             <span className="min-w-0">
-                              <span className="block truncate font-medium">{user.name}</span>
+                              <span className="block truncate font-medium">
+                                {user.name}
+                                {user.online ? (
+                                  <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide text-emerald-600">
+                                    Online
+                                  </span>
+                                ) : null}
+                              </span>
                               <span className="block truncate text-xs text-muted-foreground">
                                 {user.email}
                               </span>
@@ -342,9 +358,17 @@ function AdminUsersPage() {
                           avatarId={user.avatarId}
                           name={user.name}
                           className="h-10 w-10"
+                          status={user.presence}
                         />
                         <span className="min-w-0">
-                          <span className="block truncate font-medium">{user.name}</span>
+                          <span className="block truncate font-medium">
+                            {user.name}
+                            {user.online ? (
+                              <span className="ml-2 text-[10px] font-semibold uppercase tracking-wide text-emerald-600">
+                                Online
+                              </span>
+                            ) : null}
+                          </span>
                           <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                             {user.email}
                           </span>
@@ -402,11 +426,17 @@ function AdminUsersPage() {
                     avatarId={detailQuery.data.profile.avatarId ?? selectedUser?.avatarId ?? null}
                     name={detailQuery.data.profile.name}
                     className="h-14 w-14 text-sm"
+                    status={selectedUser?.presence}
                   />
                   <div className="min-w-0 flex-1">
                     <p className="text-hairline text-muted-foreground">Participant</p>
                     <h3 className="mt-1 truncate font-display text-2xl leading-tight">
                       {detailQuery.data.profile.name}
+                      {selectedUser?.online ? (
+                        <span className="ml-2 align-middle text-xs font-semibold uppercase tracking-wide text-emerald-600">
+                          Online
+                        </span>
+                      ) : null}
                     </h3>
                     <p className="mt-1 truncate text-sm text-muted-foreground">
                       {detailQuery.data.profile.email}

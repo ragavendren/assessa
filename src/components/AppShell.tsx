@@ -5,6 +5,7 @@ import { ProfileCompletionGate } from "@/components/ProfileCompletionGate";
 import { UserAvatar } from "@/components/UserAvatar";
 import { XpHud } from "@/components/XpHud";
 import { useMe } from "@/hooks/use-me";
+import { usePresenceHeartbeat } from "@/hooks/use-presence-heartbeat";
 import { getPlayFlags } from "@/lib/play.functions";
 import { listNotifications } from "@/lib/platform.functions";
 import { supabase } from "@/integrations/supabase/client";
@@ -24,6 +25,7 @@ const NAV = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { data } = useMe();
+  usePresenceHeartbeat(Boolean(data?.profile?.id));
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const fetchPlayFlags = useServerFn(getPlayFlags);

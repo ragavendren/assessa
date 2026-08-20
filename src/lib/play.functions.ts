@@ -461,6 +461,9 @@ export const createLiveArena = createServerFn({ method: "POST" })
         wrongMarks: z.number().int().min(0).max(20),
         timeBonusMax: z.number().int().min(0).max(50).optional(),
         earlyLockBonus: z.number().int().min(0).max(50).optional(),
+        teamCount: z.number().int().min(0).max(32).optional(),
+        teamNames: z.array(z.string().trim().min(0).max(40)).max(32).optional(),
+        allowOpenTeams: z.boolean().optional(),
       })
       .parse(input),
   )
@@ -478,6 +481,9 @@ export const createLiveArena = createServerFn({ method: "POST" })
       wrongMarks: data.wrongMarks,
       timeBonusMax: data.timeBonusMax ?? 0,
       earlyLockBonus: data.earlyLockBonus ?? 0,
+      teamCount: data.teamCount ?? 0,
+      teamNames: data.teamNames ?? [],
+      allowOpenTeams: data.allowOpenTeams !== false,
     });
   });
 
@@ -560,4 +566,38 @@ export const deleteLiveArena = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const { adminDeleteArena } = await import("@/lib/play.arena.server");
     return adminDeleteArena(context.userId, data.arenaId);
+  });
+
+export const spinArenaParticipant = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) =>
+    z.object({ arenaId: uuid, source: z.enum(["lobby", "all"]) }).parse(input),
+  )
+  .handler(async ({ context, data }) => {
+    const { adminArenaSpinPick } = await import("@/lib/play.arena.server");
+    return adminArenaSpinPick(context.userId, data);
+  });
+
+export const splitArenaTeams = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) =>
+    z
+      .object({
+        arenaId: uuid,
+        teamCount: z.number().int().min(1).max(32),
+        perTeam: z.number().int().min(1).max(50).nullable().optional(),
+        source: z.enum(["lobby", "all"]),
+        userIds: z.array(uuid).max(500).optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ context, data }) => {
+    const { adminArenaSplitTeams } = await import("@/lib/play.arena.server");
+    return adminArenaSplitTeams(context.userId, {
+      arenaId: data.arenaId,
+      teamCount: data.teamCount,
+      perTeam: data.perTeam ?? null,
+      source: data.source,
+      userIds: data.userIds,
+    });
   });

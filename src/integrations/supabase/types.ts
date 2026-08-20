@@ -831,6 +831,7 @@ export type Database = {
           published_through_segment: number;
           time_bonus_max: number;
           early_lock_bonus: number;
+          allow_open_teams: boolean;
           created_by: string | null;
           created_at: string;
           updated_at: string;
@@ -854,6 +855,7 @@ export type Database = {
           published_through_segment?: number;
           time_bonus_max?: number;
           early_lock_bonus?: number;
+          allow_open_teams?: boolean;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -877,6 +879,7 @@ export type Database = {
           published_through_segment?: number;
           time_bonus_max?: number;
           early_lock_bonus?: number;
+          allow_open_teams?: boolean;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -1354,6 +1357,7 @@ export type Database = {
           participant_id: string | null;
           team_group: string | null;
           updated_at: string;
+          last_seen_at: string | null;
         };
         Insert: {
           avatar_id?: string | null;
@@ -1369,6 +1373,7 @@ export type Database = {
           participant_id?: string | null;
           team_group?: string | null;
           updated_at?: string;
+          last_seen_at?: string | null;
         };
         Update: {
           avatar_id?: string | null;
@@ -1384,6 +1389,7 @@ export type Database = {
           participant_id?: string | null;
           team_group?: string | null;
           updated_at?: string;
+          last_seen_at?: string | null;
         };
         Relationships: [];
       };
