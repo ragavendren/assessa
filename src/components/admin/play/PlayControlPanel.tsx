@@ -1490,8 +1490,18 @@ function NumField({
         type="number"
         min={min}
         max={max}
+        step={1}
         value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
+        onChange={(e) => {
+          const raw = e.target.value;
+          if (raw === "") {
+            onChange(min);
+            return;
+          }
+          const next = Number(raw);
+          if (!Number.isFinite(next)) return;
+          onChange(Math.trunc(next));
+        }}
       />
     </label>
   );

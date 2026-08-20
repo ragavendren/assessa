@@ -6,6 +6,18 @@ import { PLAY_KINDS, type PlayKind } from "@/lib/play.math";
 const kindSchema = z.enum(PLAY_KINDS);
 const uuid = z.string().uuid();
 
+/** Accept number inputs that may arrive as floats from `<input type="number">`. */
+function zWhole(min: number, max: number) {
+  return z.preprocess((value) => Math.trunc(Number(value)), z.number().int().min(min).max(max));
+}
+
+function zWholeOptional(min: number, max: number) {
+  return z.preprocess((value) => {
+    if (value === undefined || value === null || value === "") return undefined;
+    return Math.trunc(Number(value));
+  }, z.number().int().min(min).max(max).optional());
+}
+
 export const getPlayHub = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -454,14 +466,14 @@ export const createLiveArena = createServerFn({ method: "POST" })
         activityId: uuid.nullable().optional(),
         poolId: uuid,
         courseId: uuid.nullable().optional(),
-        segmentCount: z.number().int().min(1).max(12),
-        questionsPerSegment: z.number().int().min(1).max(20),
-        perQuestionSeconds: z.number().int().min(5).max(600),
-        correctMarks: z.number().int().min(0).max(20),
-        wrongMarks: z.number().int().min(0).max(20),
-        timeBonusMax: z.number().int().min(0).max(50).optional(),
-        earlyLockBonus: z.number().int().min(0).max(50).optional(),
-        teamCount: z.number().int().min(0).max(32).optional(),
+        segmentCount: zWhole(1, 12),
+        questionsPerSegment: zWhole(1, 20),
+        perQuestionSeconds: zWhole(5, 600),
+        correctMarks: zWhole(0, 20),
+        wrongMarks: zWhole(0, 20),
+        timeBonusMax: zWholeOptional(0, 50),
+        earlyLockBonus: zWholeOptional(0, 50),
+        teamCount: zWholeOptional(0, 32),
         teamNames: z.array(z.string().trim().min(0).max(40)).max(32).optional(),
         allowOpenTeams: z.boolean().optional(),
       })
