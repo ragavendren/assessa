@@ -521,6 +521,8 @@ export type Database = {
           invitee_id: string | null;
           invitee_email: string | null;
           status: string;
+          inviter_ready: boolean;
+          invitee_ready: boolean;
           winner_id: string | null;
           created_at: string;
         };
@@ -532,6 +534,8 @@ export type Database = {
           invitee_id?: string | null;
           invitee_email?: string | null;
           status?: string;
+          inviter_ready?: boolean;
+          invitee_ready?: boolean;
           winner_id?: string | null;
           created_at?: string;
         };
@@ -543,6 +547,8 @@ export type Database = {
           invitee_id?: string | null;
           invitee_email?: string | null;
           status?: string;
+          inviter_ready?: boolean;
+          invitee_ready?: boolean;
           winner_id?: string | null;
           created_at?: string;
         };

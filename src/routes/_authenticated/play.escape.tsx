@@ -8,19 +8,16 @@ import { useMemo } from "react";
 import { z } from "zod";
 
 export const Route = createFileRoute("/_authenticated/play/escape")({
-  validateSearch: z.object({
-    courseId: z.string().uuid().optional(),
-  }),
+  validateSearch: z.object({}),
   head: () => ({ meta: [{ title: "Escape rooms — Assessa" }] }),
   component: EscapeListPage,
 });
 
 function EscapeListPage() {
-  const { courseId } = Route.useSearch();
   const fetchRooms = useServerFn(getEscapeRooms);
   const { data, isPending } = useQuery({
-    queryKey: ["escape-rooms", courseId ?? "all"],
-    queryFn: () => fetchRooms({ data: { courseId: courseId ?? null } }),
+    queryKey: ["escape-rooms"],
+    queryFn: () => fetchRooms({ data: {} }),
   });
 
   const items = useMemo(() => {
@@ -28,7 +25,7 @@ function EscapeListPage() {
     return data.map((room) => ({
       id: room.id,
       title: room.name,
-      meta: `${room.scenes.length} scenes${room.courseName ? ` · ${room.courseName}` : ""}`,
+      meta: `${room.scenes.length} scenes`,
       statusLabel: "Open",
       statusTone: "lobby" as const,
       to: "/play/escape/$scenarioId",
@@ -42,11 +39,7 @@ function EscapeListPage() {
     <PlayLobbyList
       title="Escape rooms"
       blurb="Pick a published scenario and work through each incident scene."
-      empty={
-        courseId
-          ? "No escape rooms for this course yet."
-          : "No escape scenarios are published right now."
-      }
+      empty="No escape scenarios are published right now."
       items={items}
     />
   );

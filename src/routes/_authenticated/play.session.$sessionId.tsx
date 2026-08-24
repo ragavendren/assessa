@@ -1,10 +1,17 @@
 import { PlayOptions } from "@/components/play/PlayOptions";
 import { QuestionPrompt } from "@/components/QuestionPrompt";
+import { BattleHud } from "@/components/play/BattleHud";
 import { SpeedHud } from "@/components/play/SpeedHud";
 import { RapidHud, SurvivalHud } from "@/components/play/SurvivalHud";
 import { SurvivalHitBanner, SurvivalLifeLostBanner } from "@/components/play/SurvivalOutcome";
 import { PageLoader } from "@/components/platform";
-import { answerPlayItem, finishPlay, getPlayPaper, savePlayProgress } from "@/lib/play.functions";
+import {
+  answerPlayItem,
+  finishPlay,
+  getBattleLive,
+  getPlayPaper,
+  savePlayProgress,
+} from "@/lib/play.functions";
 import { PLAY_KIND_META } from "@/lib/play.math";
 import { crossedSpeedAlert } from "@/lib/play.speed";
 import { cn } from "@/lib/utils";
@@ -25,6 +32,7 @@ function PlaySessionPage() {
   const { sessionId } = Route.useParams();
   const navigate = useNavigate();
   const fetchPaper = useServerFn(getPlayPaper);
+  const fetchBattle = useServerFn(getBattleLive);
   const save = useServerFn(savePlayProgress);
   const grade = useServerFn(answerPlayItem);
   const finish = useServerFn(finishPlay);
@@ -35,6 +43,23 @@ function PlaySessionPage() {
     retry: false,
     refetchOnWindowFocus: false,
   });
+
+  const matchId = data?.session.matchId ?? null;
+  const isBattle = data?.session.kind === "battle" && Boolean(matchId);
+
+  const { data: battleLive } = useQuery({
+    queryKey: ["battle-live", matchId],
+    queryFn: () => fetchBattle({ data: { matchId: matchId! } }),
+    enabled: Boolean(isBattle && matchId),
+    refetchInterval: isBattle ? 2000 : false,
+  });
+
+  useEffect(() => {
+    if (!battleLive) return;
+    if (battleLive.canAnswer && !data?.session.endsAt) {
+      void refetch();
+    }
+  }, [battleLive?.canAnswer, battleLive?.bothPlaying, data?.session.endsAt, refetch]);
 
   const [answers, setAnswers] = useState<Record<string, number | number[]>>({});
   const [index, setIndex] = useState(0);
@@ -145,12 +170,12 @@ function PlaySessionPage() {
   }, []);
 
   useEffect(() => {
-    if (!data?.session.rules.perItem && data?.session.kind === "marathon") {
+    if (!data?.session.rules.perItem && (data?.session.kind === "marathon" || data?.session.kind === "battle")) {
       const id = window.setInterval(() => {
         void save({
           data: { sessionId, answers: answersRef.current, currentIndex: index },
         });
-      }, 8000);
+      }, data.session.kind === "battle" ? 3000 : 8000);
       return () => window.clearInterval(id);
     }
     return undefined;
@@ -179,6 +204,8 @@ function PlaySessionPage() {
   const isSpeed = data.session.kind === "speed";
   const maxLives = sessionRules.lives ?? 3;
   const speedDuration = Math.max(1, sessionRules.durationSeconds ?? remaining ?? 300);
+  const waitingForOpponent = Boolean(battleLive?.waitingForOpponent);
+  const showBattleQuestions = !isBattle || Boolean(battleLive?.canAnswer);
 
   async function submitItem() {
     if (!question) return;
@@ -224,6 +251,27 @@ function PlaySessionPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
+      {battleLive ? (
+        <BattleHud
+          me={battleLive.me}
+          opponent={battleLive.opponent}
+          waitingForOpponent={waitingForOpponent}
+          winnerId={battleLive.winnerId}
+          myUserId={battleLive.me.userId}
+        />
+      ) : null}
+
+      {waitingForOpponent ? (
+        <div className="rounded-2xl border border-dashed border-border bg-secondary/20 px-5 py-10 text-center">
+          <p className="font-medium">You are in the battle lobby</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Questions unlock when your opponent also presses Play. Same paper for both of you.
+          </p>
+        </div>
+      ) : null}
+
+      {showBattleQuestions ? (
+        <>
       {isSurvival && data.session.livesLeft != null ? (
         <SurvivalHud
           livesLeft={data.session.livesLeft}
@@ -355,7 +403,15 @@ function PlaySessionPage() {
                 {index < data.questions.length - 1 ? (
                   <button
                     type="button"
-                    onClick={() => setIndex((i) => i + 1)}
+                    onClick={() => {
+                      const next = index + 1;
+                      setIndex(next);
+                      if (data.session.kind === "battle") {
+                        void save({
+                          data: { sessionId, answers: answersRef.current, currentIndex: next },
+                        });
+                      }
+                    }}
                     className="rounded-md border border-border px-3 py-2 text-sm"
                   >
                     Next
@@ -386,6 +442,8 @@ function PlaySessionPage() {
             )}
           </div>
         </article>
+      ) : null}
+        </>
       ) : null}
     </div>
   );

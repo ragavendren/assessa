@@ -8,19 +8,16 @@ import { useMemo } from "react";
 import { z } from "zod";
 
 export const Route = createFileRoute("/_authenticated/play/knockout")({
-  validateSearch: z.object({
-    courseId: z.string().uuid().optional(),
-  }),
+  validateSearch: z.object({}),
   head: () => ({ meta: [{ title: "Knockout brackets — Assessa" }] }),
   component: KnockoutListPage,
 });
 
 function KnockoutListPage() {
-  const { courseId } = Route.useSearch();
   const fetchTournaments = useServerFn(listPlayTournaments);
   const { data, isPending } = useQuery({
-    queryKey: ["play-tournaments", courseId ?? "all"],
-    queryFn: () => fetchTournaments({ data: { courseId: courseId ?? null } }),
+    queryKey: ["play-tournaments"],
+    queryFn: () => fetchTournaments({ data: {} }),
   });
 
   const items = useMemo(() => {
@@ -46,11 +43,7 @@ function KnockoutListPage() {
     <PlayLobbyList
       title="Knockout"
       blurb="Join an open bracket tournament. Matches draw from the pool chosen when the bracket was created."
-      empty={
-        courseId
-          ? "No knockout brackets for this course yet."
-          : "No knockout brackets are open right now."
-      }
+      empty="No knockout brackets are open right now."
       items={items}
     />
   );

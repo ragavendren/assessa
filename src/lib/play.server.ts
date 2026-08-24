@@ -931,15 +931,54 @@ export async function startPlaySession(
 
   let questionIds: string[] = [];
   let instanceId: string | null = null;
+  let syncedEndsAt: string | null = null;
+  let deferBattleClock = false;
   if (args.matchId) {
     const { data: match } = await db
       .from("play_matches")
-      .select("id, instance_id, inviter_id, invitee_id, status")
+      .select(
+        "id, instance_id, inviter_id, invitee_id, status, inviter_ready, invitee_ready",
+      )
       .eq("id", args.matchId)
       .maybeSingle();
     if (!match) throw new Error("Battle not found.");
     if (match.inviter_id !== userId && match.invitee_id !== userId)
       throw new Error("This battle is not yours.");
+    if (kind === "battle") {
+      if (match.status === "pending") throw new Error("Wait for the invite to be accepted.");
+      if (match.status === "complete") throw new Error("This battle is already finished.");
+      if (match.status === "declined") throw new Error("This battle was declined.");
+      const bothReady = Boolean(match.inviter_ready) && Boolean(match.invitee_ready);
+      if (!bothReady && match.status !== "active") {
+        throw new Error("Both players must press Ready before playing.");
+      }
+      const { data: existing } = await db
+        .from("play_sessions")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("match_id", args.matchId)
+        .eq("status", "in_progress")
+        .maybeSingle();
+      if (existing) return { sessionId: existing.id, resumed: true };
+      const { data: peer } = await db
+        .from("play_sessions")
+        .select("id, ends_at")
+        .eq("match_id", args.matchId)
+        .neq("user_id", userId)
+        .eq("status", "in_progress")
+        .maybeSingle();
+      if (peer) {
+        const sharedEnds = rules.durationSeconds
+          ? new Date(Date.now() + rules.durationSeconds * 1000).toISOString()
+          : null;
+        syncedEndsAt = sharedEnds;
+        if (sharedEnds) {
+          await db.from("play_sessions").update({ ends_at: sharedEnds }).eq("id", peer.id);
+        }
+      } else {
+        deferBattleClock = true;
+      }
+    }
     if (match.instance_id) {
       const { data: inst } = await db
         .from("challenge_instances")
@@ -966,14 +1005,19 @@ export async function startPlaySession(
     if (args.matchId) {
       await db
         .from("play_matches")
-        .update({ instance_id: inst.id, status: "ready" })
+        .update({ instance_id: inst.id, status: "active" })
         .eq("id", args.matchId);
     }
+  } else if (args.matchId && kind === "battle") {
+    await db.from("play_matches").update({ status: "active" }).eq("id", args.matchId);
   }
 
-  const endsAt = rules.durationSeconds
-    ? new Date(Date.now() + rules.durationSeconds * 1000).toISOString()
-    : null;
+  const endsAt = deferBattleClock
+    ? null
+    : (syncedEndsAt ??
+      (rules.durationSeconds
+        ? new Date(Date.now() + rules.durationSeconds * 1000).toISOString()
+        : null));
   const questionEndsAt = rules.perQuestionSeconds
     ? new Date(Date.now() + rules.perQuestionSeconds * 1000).toISOString()
     : null;
@@ -1598,6 +1642,8 @@ export async function markFlash(userId: string, questionId: string, known: boole
 export async function inviteBattle(userId: string, email: string) {
   const trimmed = email.trim().toLowerCase();
   if (!trimmed.includes("@")) throw new Error("Enter a valid email.");
+  const { data: me } = await db.from("profiles").select("email").eq("id", userId).maybeSingle();
+  if (me?.email?.toLowerCase() === trimmed) throw new Error("You cannot invite yourself.");
   const { data: invitee } = await db
     .from("profiles")
     .select("id, email")
@@ -1612,6 +1658,8 @@ export async function inviteBattle(userId: string, email: string) {
       invitee_id: invitee?.id ?? null,
       invitee_email: trimmed,
       status: "pending",
+      inviter_ready: false,
+      invitee_ready: false,
     })
     .select("id")
     .single();
@@ -1631,11 +1679,307 @@ export async function inviteBattle(userId: string, email: string) {
 export async function acceptBattle(userId: string, matchId: string) {
   const { data: match } = await db.from("play_matches").select("*").eq("id", matchId).maybeSingle();
   if (!match) throw new Error("Battle not found.");
+  if (match.status !== "pending") throw new Error("This invite is no longer pending.");
   const { data: me } = await db.from("profiles").select("email").eq("id", userId).single();
   const allowed = match.invitee_id === userId || match.invitee_email === me?.email;
   if (!allowed) throw new Error("This invite is not for you.");
-  await db.from("play_matches").update({ invitee_id: userId, status: "ready" }).eq("id", matchId);
-  return startPlaySession(userId, { kind: "battle", matchId });
+  if (match.inviter_id === userId) throw new Error("You cannot accept your own invite.");
+  const { error } = await db
+    .from("play_matches")
+    .update({
+      invitee_id: userId,
+      status: "ready",
+      inviter_ready: false,
+      invitee_ready: false,
+    })
+    .eq("id", matchId);
+  if (error) throw new Error(error.message);
+  await notify(match.inviter_id, {
+    kind: "play_battle",
+    title: "Battle accepted",
+    body: "Your opponent accepted. Press Ready, then Play when both are ready.",
+    href: "/play/battle",
+    icon: "⚔️",
+  });
+  return { matchId, status: "ready" as const };
+}
+
+export async function readyBattle(userId: string, matchId: string) {
+  const { data: match } = await db.from("play_matches").select("*").eq("id", matchId).maybeSingle();
+  if (!match) throw new Error("Battle not found.");
+  if (match.status !== "ready" && match.status !== "active") {
+    throw new Error("Accept the invite before marking ready.");
+  }
+  const isInviter = match.inviter_id === userId;
+  const isInvitee = match.invitee_id === userId;
+  if (!isInviter && !isInvitee) throw new Error("This battle is not yours.");
+
+  const inviterReady = isInviter ? true : Boolean(match.inviter_ready);
+  const inviteeReady = isInvitee ? true : Boolean(match.invitee_ready);
+  const bothReady = inviterReady && inviteeReady;
+  const patch: {
+    inviter_ready: boolean;
+    invitee_ready: boolean;
+    status?: string;
+    instance_id?: string;
+  } = {
+    inviter_ready: inviterReady,
+    invitee_ready: inviteeReady,
+  };
+
+  if (bothReady) {
+    patch.status = "active";
+    if (!match.instance_id) {
+      const challenge = await ensureChallenge({ kind: "battle" });
+      const poolId =
+        challenge.poolId ?? (await largestPoolId(challenge.rules.questionCount, challenge.courseId));
+      if (!poolId) throw new Error("Add pool questions before starting a battle.");
+      const inst = await ensureInstance({
+        challengeId: challenge.id,
+        periodKey: `match:${matchId}`,
+        poolId,
+        topic: challenge.topic,
+        count: challenge.rules.questionCount,
+        ...(challenge.allowedTopics ? { allowedTopics: challenge.allowedTopics } : {}),
+      });
+      patch.instance_id = inst.id;
+    }
+  }
+
+  const { error } = await db.from("play_matches").update(patch).eq("id", matchId);
+  if (error) throw new Error(error.message);
+
+  const opponentId = isInviter ? match.invitee_id : match.inviter_id;
+  if (opponentId) {
+    await notify(opponentId, {
+      kind: "play_battle",
+      title: bothReady ? "Battle ready — Play now" : "Opponent is ready",
+      body: bothReady
+        ? "Both players are ready. Open Battle and press Play."
+        : "Press Ready so you can start the battle together.",
+      href: "/play/battle",
+      icon: "⚔️",
+    });
+  }
+
+  return { matchId, bothReady, status: bothReady ? ("active" as const) : ("ready" as const) };
+}
+
+export async function listMyBattles(userId: string) {
+  if (!(await kindEnabled("battle"))) return { battles: [] as const };
+  const myEmail = await emailOf(userId);
+  const [{ data: byParty, error: partyError }, { data: byEmail, error: emailError }] =
+    await Promise.all([
+      db
+        .from("play_matches")
+        .select(
+          "id, status, inviter_id, invitee_id, invitee_email, inviter_ready, invitee_ready, winner_id, created_at, instance_id",
+        )
+        .or(`inviter_id.eq.${userId},invitee_id.eq.${userId}`)
+        .order("created_at", { ascending: false })
+        .limit(30),
+      myEmail
+        ? db
+            .from("play_matches")
+            .select(
+              "id, status, inviter_id, invitee_id, invitee_email, inviter_ready, invitee_ready, winner_id, created_at, instance_id",
+            )
+            .eq("invitee_email", myEmail)
+            .eq("status", "pending")
+            .order("created_at", { ascending: false })
+            .limit(20)
+        : Promise.resolve({ data: [] as never[], error: null }),
+    ]);
+  if (partyError) throw new Error(partyError.message);
+  if (emailError) throw new Error(emailError.message);
+
+  const byId = new Map<string, NonNullable<typeof byParty>[number]>();
+  for (const row of [...(byParty ?? []), ...(byEmail ?? [])]) byId.set(row.id, row);
+  const rows = [...byId.values()].sort(
+    (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
+  );
+  const userIds = [
+    ...new Set(
+      rows.flatMap((m) => [m.inviter_id, m.invitee_id].filter((id): id is string => Boolean(id))),
+    ),
+  ];
+  const { data: profiles } =
+    userIds.length > 0
+      ? await db.from("profiles").select("id, full_name, display_name, email").in("id", userIds)
+      : { data: [] as Array<{ id: string; full_name: string | null; display_name: string | null; email: string | null }> };
+  const nameById = new Map(
+    (profiles ?? []).map((p) => [
+      p.id,
+      p.display_name || p.full_name || p.email || "Participant",
+    ]),
+  );
+
+  const matchIds = rows.map((m) => m.id);
+  const { data: sessions } =
+    matchIds.length > 0
+      ? await db
+          .from("play_sessions")
+          .select("id, match_id, user_id, status, score, correct_count, current_index, answers")
+          .in("match_id", matchIds)
+      : { data: [] as Array<{
+          id: string;
+          match_id: string | null;
+          user_id: string;
+          status: string;
+          score: number | null;
+          correct_count: number | null;
+          current_index: number;
+          answers: unknown;
+        }> };
+
+  const sessionsByMatch = new Map<string, typeof sessions>();
+  for (const session of sessions ?? []) {
+    if (!session.match_id) continue;
+    const list = sessionsByMatch.get(session.match_id) ?? [];
+    list.push(session);
+    sessionsByMatch.set(session.match_id, list);
+  }
+
+  const battles = rows.map((match) => {
+    const role: "inviter" | "invitee" =
+      match.inviter_id === userId ? "inviter" : "invitee";
+    const opponentId = role === "inviter" ? match.invitee_id : match.inviter_id;
+    const opponentName =
+      (opponentId ? nameById.get(opponentId) : null) ??
+      match.invitee_email ??
+      "Opponent";
+    const myReady = role === "inviter" ? Boolean(match.inviter_ready) : Boolean(match.invitee_ready);
+    const theirReady =
+      role === "inviter" ? Boolean(match.invitee_ready) : Boolean(match.inviter_ready);
+    const bothReady = myReady && theirReady;
+    const mine = (sessionsByMatch.get(match.id) ?? []).find((s) => s.user_id === userId) ?? null;
+    const theirs =
+      (sessionsByMatch.get(match.id) ?? []).find((s) => s.user_id !== userId) ?? null;
+
+    let phase: "invited" | "accepted" | "ready" | "playing" | "complete" | "declined" = "invited";
+    if (match.status === "declined") phase = "declined";
+    else if (match.status === "complete") phase = "complete";
+    else if (mine?.status === "in_progress" || theirs?.status === "in_progress") phase = "playing";
+    else if (match.status === "active" || bothReady) phase = "ready";
+    else if (match.status === "ready") phase = "accepted";
+    else phase = "invited";
+
+    return {
+      id: match.id,
+      status: match.status,
+      phase,
+      role,
+      opponentName,
+      opponentEmail: match.invitee_email,
+      myReady,
+      theirReady,
+      bothReady,
+      canAccept: match.status === "pending" && role === "invitee",
+      canReady:
+        (match.status === "ready" || match.status === "active") &&
+        !myReady &&
+        match.status !== "complete",
+      canPlay:
+        (match.status === "active" || bothReady) &&
+        match.status !== "complete" &&
+        match.status !== "pending" &&
+        match.status !== "declined",
+      mySessionId: mine?.id ?? null,
+      mySessionStatus: mine?.status ?? null,
+      theirSessionStatus: theirs?.status ?? null,
+      winnerId: match.winner_id,
+      createdAt: match.created_at,
+    };
+  });
+
+  return { battles };
+}
+
+async function emailOf(userId: string) {
+  const { data } = await db.from("profiles").select("email").eq("id", userId).maybeSingle();
+  return (data?.email ?? "").toLowerCase();
+}
+
+export async function getBattleLive(userId: string, matchId: string) {
+  const { data: match } = await db
+    .from("play_matches")
+    .select(
+      "id, status, inviter_id, invitee_id, invitee_email, inviter_ready, invitee_ready, winner_id, instance_id",
+    )
+    .eq("id", matchId)
+    .maybeSingle();
+  if (!match) throw new Error("Battle not found.");
+  if (match.inviter_id !== userId && match.invitee_id !== userId) {
+    throw new Error("This battle is not yours.");
+  }
+
+  const { data: sessions } = await db
+    .from("play_sessions")
+    .select(
+      "id, user_id, status, score, correct_count, current_index, answers, question_ids, duration_seconds",
+    )
+    .eq("match_id", matchId)
+    .order("started_at", { ascending: false });
+
+  const userIds = [match.inviter_id, match.invitee_id].filter((id): id is string => Boolean(id));
+  const { data: profiles } =
+    userIds.length > 0
+      ? await db.from("profiles").select("id, full_name, display_name, email").in("id", userIds)
+      : { data: [] as Array<{ id: string; full_name: string | null; display_name: string | null; email: string | null }> };
+  const nameById = new Map(
+    (profiles ?? []).map((p) => [
+      p.id,
+      p.display_name || p.full_name || p.email || "Participant",
+    ]),
+  );
+
+  function playerOf(playerId: string | null) {
+    const session = (sessions ?? []).find((s) => s.user_id === playerId) ?? null;
+    const answers = (session?.answers ?? {}) as Record<string, unknown>;
+    const answered = Object.keys(answers).length;
+    const total = session?.question_ids?.length ?? 15;
+    let playStatus: "waiting" | "playing" | "done" = "waiting";
+    if (session?.status === "submitted" || session?.status === "game_over") playStatus = "done";
+    else if (session?.status === "in_progress") playStatus = "playing";
+    return {
+      userId: playerId,
+      name: playerId ? nameById.get(playerId) ?? "Opponent" : match.invitee_email ?? "Opponent",
+      ready:
+        playerId === match.inviter_id
+          ? Boolean(match.inviter_ready)
+          : Boolean(match.invitee_ready),
+      playStatus,
+      sessionId: session?.id ?? null,
+      answered,
+      currentIndex: session?.current_index ?? 0,
+      total,
+      score: session?.score ?? null,
+      correctCount: session?.correct_count ?? null,
+      durationSeconds: session?.duration_seconds ?? null,
+      isMe: playerId === userId,
+    };
+  }
+
+  const me = playerOf(userId);
+  const opponentId = match.inviter_id === userId ? match.invitee_id : match.inviter_id;
+  const opponent = playerOf(opponentId);
+  const bothPlaying = me.playStatus === "playing" && opponent.playStatus === "playing";
+  const waitingForOpponent = me.playStatus === "playing" && opponent.playStatus === "waiting";
+  const canAnswer =
+    me.playStatus === "playing" &&
+    (opponent.playStatus === "playing" || opponent.playStatus === "done");
+
+  return {
+    matchId: match.id,
+    status: match.status,
+    winnerId: match.winner_id,
+    bothReady: Boolean(match.inviter_ready) && Boolean(match.invitee_ready),
+    bothPlaying,
+    waitingForOpponent,
+    canAnswer,
+    me,
+    opponent,
+  };
 }
 
 export async function listCareerReadiness(userId: string) {

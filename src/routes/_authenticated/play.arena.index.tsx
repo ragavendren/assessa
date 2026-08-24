@@ -8,26 +8,16 @@ import { useMemo } from "react";
 import { z } from "zod";
 
 export const Route = createFileRoute("/_authenticated/play/arena/")({
-  validateSearch: z.object({
-    activityId: z.string().uuid().optional(),
-    courseId: z.string().uuid().optional(),
-  }),
+  validateSearch: z.object({}),
   head: () => ({ meta: [{ title: "Live Arena lobbies — Assessa" }] }),
   component: ArenaListPage,
 });
 
 function ArenaListPage() {
-  const { activityId, courseId } = Route.useSearch();
   const fetchArenas = useServerFn(listLiveArenas);
   const { data, isPending } = useQuery({
-    queryKey: ["live-arenas", activityId ?? "all", courseId ?? "all"],
-    queryFn: () =>
-      fetchArenas({
-        data: {
-          activityId: activityId ?? null,
-          courseId: courseId ?? null,
-        },
-      }),
+    queryKey: ["live-arenas"],
+    queryFn: () => fetchArenas({ data: {} }),
   });
 
   const items = useMemo(() => {
@@ -41,7 +31,6 @@ function ArenaListPage() {
         meta: [
           `${arena.segment_count}×${arena.questions_per_segment} questions`,
           `${arena.per_question_seconds}s timer`,
-          arena.courseName ? arena.courseName : null,
         ]
           .filter(Boolean)
           .join(" · "),
@@ -59,11 +48,7 @@ function ArenaListPage() {
     <PlayLobbyList
       title="Live Arena"
       blurb="Open lobbies for hosted team quizzes. Join with a team name — anyone using the same name is on your side."
-      empty={
-        courseId || activityId
-          ? "No lobbies for this course or activity right now. Check back when a host opens one."
-          : "No live arenas are open right now. Ask a host to open a lobby from Play control."
-      }
+      empty="No live arenas are open right now. Ask a host to open a lobby from Play control."
       items={items}
     />
   );

@@ -4,8 +4,13 @@ import { PageLoader } from "@/components/platform";
 import { PlayLeaderboardPanel } from "@/components/play/PlayLeaderboardPanel";
 import { PlayModeCard } from "@/components/play/PlayModeCard";
 import { beginPlay, getPlayHub } from "@/lib/play.functions";
-import { PLAY_KIND_GROUPS, PLAY_KIND_META, type PlayKind, type PlaySegment } from "@/lib/play.math";
-import { cn } from "@/lib/utils";
+import {
+  PLAY_KIND_GROUPS,
+  PLAY_KIND_META,
+  type PlayKind,
+  type PlaySegment,
+  type PlaySegmentMode,
+} from "@/lib/play.math";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
@@ -14,10 +19,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 export const Route = createFileRoute("/_authenticated/play/")({
-  validateSearch: z.object({
-    courseId: z.string().uuid().optional(),
-    activityId: z.string().uuid().optional(),
-  }),
+  validateSearch: z.object({}),
   head: () => ({
     meta: [
       { title: "Play — Assessa" },
@@ -30,28 +32,18 @@ export const Route = createFileRoute("/_authenticated/play/")({
   component: PlayHub,
 });
 
-const LINK_MODES: Partial<
-  Record<
-    PlayKind,
-    {
-      to: string;
-      params?: { tournamentId: string };
-      searchKey?: "courseId" | "activityId" | "both";
-    }
-  >
-> = {
-  topic: { to: "/play/topics", searchKey: "courseId" },
-  flash: { to: "/play/flash", searchKey: "courseId" },
+const LINK_MODES: Partial<Record<PlayKind, { to: string; params?: { tournamentId: string } }>> = {
+  topic: { to: "/play/topics" },
+  flash: { to: "/play/flash" },
   battle: { to: "/play/battle" },
   team: { to: "/play/team" },
-  escape: { to: "/play/escape", searchKey: "courseId" },
-  arena: { to: "/play/arena", searchKey: "both" },
-  knockout: { to: "/play/knockout", searchKey: "courseId" },
+  escape: { to: "/play/escape" },
+  arena: { to: "/play/arena" },
+  knockout: { to: "/play/knockout" },
 };
 
 function PlayHub() {
   const navigate = useNavigate({ from: Route.fullPath });
-  const { courseId: searchCourseId, activityId: searchActivityId } = Route.useSearch();
   const fetchHub = useServerFn(getPlayHub);
   const start = useServerFn(beginPlay);
   const { data, isPending } = useQuery({ queryKey: ["play-hub"], queryFn: () => fetchHub() });
@@ -70,26 +62,41 @@ function PlayHub() {
   });
 
   const segments = data?.segments ?? [];
-  const courseSegments = segments.filter((s) => s.scope === "course");
-  const activitySegments = segments.filter((s) => s.scope === "activity");
-  const selected =
-    (searchActivityId
-      ? activitySegments.find((s) => s.id === searchActivityId)
-      : courseSegments.find((s) => s.id === searchCourseId)) ??
-    courseSegments[0] ??
-    activitySegments[0] ??
-    null;
 
-  const boardKind = useMemo(() => {
-    if (!selected) return null;
-    return (
-      selected.modes.find((m) => m.kind === "daily")?.kind ??
-      selected.modes.find((m) => m.kind === "speed")?.kind ??
-      selected.modes.find((m) => m.kind === "topic")?.kind ??
-      selected.modes[0]?.kind ??
-      null
-    );
-  }, [selected]);
+  type ModeChoice = { segment: PlaySegment; mode: PlaySegmentMode };
+  const modeByKind = useMemo(() => {
+    const map = new Map<PlayKind, ModeChoice>();
+    for (const segment of segments) {
+      for (const mode of segment.modes) {
+        const existing = map.get(mode.kind);
+        if (!existing || mode.questionCount > existing.mode.questionCount) {
+          map.set(mode.kind, { segment, mode });
+        }
+      }
+    }
+    return map;
+  }, [segments]);
+
+  const boardKind = useMemo<PlayKind | null>(() => {
+    const order: PlayKind[] = [
+      "daily",
+      "speed",
+      "topic",
+      "flash",
+      "survival",
+      "battle",
+      "team",
+      "rapid",
+      "marathon",
+      "knockout",
+      "escape",
+      "arena",
+      "weekly",
+    ];
+    return order.find((k) => modeByKind.has(k)) ?? null;
+  }, [modeByKind]);
+
+  const boardChoice = boardKind ? modeByKind.get(boardKind) ?? null : null;
 
   if (isPending || !data) return <PageLoader label="Loading play modes…" />;
 
@@ -136,7 +143,6 @@ function PlayHub() {
               to="/play/leaderboard"
               search={{
                 kind: boardKind,
-                ...(selected?.scope === "activity" ? { activityId: selected.id } : {}),
               }}
               className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-sm font-medium hover:bg-secondary"
             >
@@ -150,74 +156,17 @@ function PlayHub() {
           </p>
         </div>
       </header>
-
-      {courseSegments.length > 0 ? (
-        <section>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Course
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {courseSegments.map((segment) => (
-              <button
-                key={segment.id}
-                type="button"
-                onClick={() => navigate({ search: { courseId: segment.id } })}
-                className={cn(
-                  "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition-colors",
-                  selected?.scope === "course" && selected.id === segment.id
-                    ? "border-primary bg-primary/10 font-medium text-primary"
-                    : "border-border hover:bg-secondary",
-                )}
-              >
-                <AssessaIcon name="courses" className="h-4 w-4 shrink-0" />
-                {segment.name}
-                <span className="text-xs text-muted-foreground">({segment.modes.length})</span>
-              </button>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {activitySegments.length > 0 ? (
-        <section>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Activity
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {activitySegments.map((segment) => (
-              <button
-                key={segment.id}
-                type="button"
-                onClick={() => navigate({ search: { activityId: segment.id } })}
-                className={cn(
-                  "inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition-colors",
-                  selected?.scope === "activity" && selected.id === segment.id
-                    ? "border-primary bg-primary/10 font-medium text-primary"
-                    : "border-border hover:bg-secondary",
-                )}
-              >
-                <AssessaIcon name="escape" className="h-4 w-4 shrink-0" />
-                {segment.name}
-                <span className="text-xs text-muted-foreground">({segment.modes.length})</span>
-              </button>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {selected && boardKind ? (
+      {boardKind && boardChoice ? (
         <section className="surface-paper rounded-xl p-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="flex items-center gap-2 text-sm font-semibold">
               <AssessaIcon name="trophy" className="h-4 w-4 text-amber-500" />
               Leaderboard · {PLAY_KIND_META[boardKind].label}
-              {selected.scope === "activity" ? ` · ${selected.name}` : ""}
             </h2>
             <Link
               to="/play/leaderboard"
               search={{
                 kind: boardKind,
-                ...(selected.scope === "activity" ? { activityId: selected.id } : {}),
               }}
               className="text-xs font-medium text-accent underline"
             >
@@ -227,15 +176,11 @@ function PlayHub() {
           <div className="mt-3">
             <PlayLeaderboardPanel
               kind={boardKind}
-              {...(selected.scope === "activity"
-                ? { activityId: selected.id, label: selected.name }
-                : { label: PLAY_KIND_META[boardKind].label })}
             />
           </div>
         </section>
       ) : null}
-
-      {selected ? <SegmentPanel segment={selected} data={data} startMut={startMut} /> : null}
+      <ModesPanel modeByKind={modeByKind} data={data} startMut={startMut} />
 
       {data.resume.length > 0 ? (
         <section>
@@ -303,54 +248,65 @@ function PlayHub() {
   );
 }
 
-function SegmentPanel({
-  segment,
+function ModesPanel({
+  modeByKind,
   data,
   startMut,
 }: {
-  segment: PlaySegment;
+  modeByKind: Map<
+    PlayKind,
+    {
+      segment: PlaySegment;
+      mode: PlaySegmentMode;
+    }
+  >;
   data: NonNullable<Awaited<ReturnType<typeof getPlayHub>>>;
   startMut: {
     isPending: boolean;
     mutate: (args: { kind: PlayKind; courseId?: string; poolId?: string | null }) => void;
   };
 }) {
-  const daily = segment.modes.find((m) => m.kind === "daily");
-  const weekly = segment.modes.find((m) => m.kind === "weekly");
-
-  function launch(kind: PlayKind) {
-    const mode = segment.modes.find((m) => m.kind === kind);
+  function start(kind: PlayKind) {
+    const choice = modeByKind.get(kind);
+    if (!choice) return;
+    const { segment, mode } = choice;
     startMut.mutate({
       kind,
       ...(segment.scope === "course"
         ? { courseId: segment.id }
-        : mode?.bindingCourseId
+        : mode.bindingCourseId
           ? { courseId: mode.bindingCourseId }
           : {}),
-      ...(mode?.poolId ? { poolId: mode.poolId } : {}),
+      ...(mode.poolId ? { poolId: mode.poolId } : {}),
     });
   }
 
+  const dailyChoice = modeByKind.get("daily") ?? null;
+  const weeklyChoice = modeByKind.get("weekly") ?? null;
+
   return (
     <div className="space-y-6">
-      {(daily || weekly) && (
+      {(dailyChoice || weeklyChoice) && (
         <section className="surface-metal rounded-xl p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {segment.name}
+                Required
               </p>
               <h2 className="mt-1 text-lg font-semibold">
-                {daily ? PLAY_KIND_META.daily.label : PLAY_KIND_META.weekly.label}
+                {dailyChoice ? PLAY_KIND_META.daily.label : PLAY_KIND_META.weekly.label}
               </h2>
-              <p className="text-sm text-muted-foreground">{daily?.blurb ?? weekly?.blurb}</p>
+              <p className="text-sm text-muted-foreground">
+                {dailyChoice?.mode.blurb ?? weeklyChoice?.mode.blurb}
+              </p>
             </div>
             <span className="rounded-md bg-secondary px-2 py-1 text-xs tabular-nums">
-              {segment.questionCount} pool questions
+              {dailyChoice?.segment.questionCount ?? weeklyChoice?.segment.questionCount ?? 0} pool questions
             </span>
           </div>
+
           <div className="mt-4 flex flex-wrap gap-2">
-            {daily ? (
+            {dailyChoice ? (
               data.daily.completed ? (
                 data.daily.sessionId ? (
                   <Link
@@ -367,18 +323,19 @@ function SegmentPanel({
                 <button
                   type="button"
                   disabled={startMut.isPending}
-                  onClick={() => launch("daily")}
+                  onClick={() => start("daily")}
                   className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
                 >
                   Start daily
                 </button>
               )
             ) : null}
-            {weekly ? (
+
+            {weeklyChoice ? (
               <button
                 type="button"
                 disabled={startMut.isPending || data.weekly.completed}
-                onClick={() => launch("weekly")}
+                onClick={() => start("weekly")}
                 className="rounded-md border border-border px-3 py-2 text-sm"
               >
                 {data.weekly.completed ? "Weekly done" : "Weekly challenge"}
@@ -389,43 +346,35 @@ function SegmentPanel({
       )}
 
       {PLAY_KIND_GROUPS.map((group) => {
-        const modes = segment.modes.filter((m) => group.kinds.includes(m.kind));
-        if (modes.length === 0) return null;
+        if (group.label === "Events") return null;
+        const kinds = group.kinds.filter((k) => k !== "daily" && k !== "weekly");
+        const choices = kinds
+          .map((kind) => modeByKind.get(kind))
+          .filter(Boolean) as Array<{ segment: PlaySegment; mode: PlaySegmentMode }>;
+        if (choices.length === 0) return null;
+
         return (
           <section key={group.label}>
             <h2 className="text-sm font-semibold">{group.label}</h2>
             <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {modes.map((mode) => {
+              {choices.map((choice) => {
+                const mode = choice.mode;
                 const link = LINK_MODES[mode.kind];
+                const courseIdForCard =
+                  choice.segment.scope === "course"
+                    ? choice.segment.id
+                    : mode.bindingCourseId ?? choice.segment.id;
+
                 if (link) {
-                  const courseScopeId =
-                    segment.scope === "course" ? segment.id : (mode.bindingCourseId ?? undefined);
-                  const search =
-                    link.searchKey === "courseId" && courseScopeId
-                      ? { courseId: courseScopeId }
-                      : link.searchKey === "both"
-                        ? {
-                            ...(segment.scope === "course"
-                              ? { courseId: segment.id }
-                              : courseScopeId
-                                ? { courseId: courseScopeId }
-                                : {}),
-                            ...(segment.scope === "activity" ? { activityId: segment.id } : {}),
-                          }
-                        : link.searchKey === "activityId" && segment.scope === "activity"
-                          ? { activityId: segment.id }
-                          : undefined;
                   return (
                     <PlayModeCard
                       key={mode.kind}
                       kind={mode.kind}
-                      courseId={segment.id}
+                      courseId={courseIdForCard}
                       questionCount={mode.questionCount}
                       durationSeconds={mode.durationSeconds}
                       lives={mode.lives}
                       to={link.to}
-                      {...(search && Object.keys(search).length > 0 ? { search } : {})}
-                      {...(link.params ? { params: link.params } : {})}
                       footer={
                         mode.kind === "battle" ? (
                           <AssessaIcon
@@ -437,16 +386,17 @@ function SegmentPanel({
                     />
                   );
                 }
+
                 return (
                   <PlayModeCard
                     key={mode.kind}
                     kind={mode.kind}
-                    courseId={segment.id}
+                    courseId={courseIdForCard}
                     questionCount={mode.questionCount}
                     durationSeconds={mode.durationSeconds}
                     lives={mode.lives}
                     pending={startMut.isPending}
-                    onStart={() => launch(mode.kind)}
+                    onStart={() => start(mode.kind)}
                   />
                 );
               })}

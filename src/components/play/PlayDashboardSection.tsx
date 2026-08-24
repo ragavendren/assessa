@@ -96,14 +96,6 @@ export function PlayDashboardSection({
           </div>
           <Link
             to="/play"
-            {...(segment
-              ? {
-                  search:
-                    segment.scope === "activity"
-                      ? { activityId: segment.id }
-                      : { courseId: segment.id },
-                }
-              : {})}
             className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
           >
             Open Play

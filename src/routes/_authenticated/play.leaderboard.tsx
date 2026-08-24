@@ -1,9 +1,10 @@
 import { AssessaIcon } from "@/components/icons";
+import { ArenaScoreboard } from "@/components/play/ArenaScoreboard";
 import { BoardStage, LeaderboardChip, LeaderboardHero } from "@/components/leaderboard/BoardStage";
 import { LeaderboardTabs } from "@/components/play/LeaderboardTabs";
 import { EmptyState, PageLoader } from "@/components/platform";
 import { useMe } from "@/hooks/use-me";
-import { getPlayBoard, getPlayHub } from "@/lib/play.functions";
+import { getArenaPlayer, getPlayBoard, getPlayHub, listLiveArenas } from "@/lib/play.functions";
 import { PLAY_KIND_META, PLAY_KINDS, type PlayKind } from "@/lib/play.math";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
@@ -16,6 +17,7 @@ export const Route = createFileRoute("/_authenticated/play/leaderboard")({
   validateSearch: z.object({
     kind: z.enum(PLAY_KINDS).optional(),
     activityId: z.string().uuid().optional(),
+    arenaId: z.string().uuid().optional(),
     topic: z.string().optional(),
   }),
   head: () => ({ meta: [{ title: "Play leaderboard — Assessa" }] }),
@@ -28,6 +30,8 @@ function PlayLeaderboardPage() {
   const { data: me } = useMe();
   const fetchHub = useServerFn(getPlayHub);
   const fetchBoard = useServerFn(getPlayBoard);
+  const fetchArenas = useServerFn(listLiveArenas);
+  const fetchArenaPlayer = useServerFn(getArenaPlayer);
 
   const { data: hub, isPending: hubPending } = useQuery({
     queryKey: ["play-hub"],
@@ -56,6 +60,26 @@ function PlayLeaderboardPage() {
   const activityId = search.activityId ?? null;
   const activity = activities.find((s) => s.id === activityId) ?? null;
 
+  const isArena = kind === "arena";
+
+  const { data: arenasData, isPending: arenasPending } = useQuery({
+    queryKey: ["play-arenas"],
+    queryFn: () => fetchArenas({ data: {} }),
+    enabled: isArena && hub?.menuEnabled === true,
+  });
+
+  const arenaId = search.arenaId ?? null;
+  const selectedArenaId = useMemo(() => {
+    if (!isArena) return null;
+    return arenaId ?? arenasData?.arenas?.[0]?.id ?? null;
+  }, [arenaId, arenasData?.arenas, isArena]);
+
+  const { data: arenaState, isPending: arenaPending } = useQuery({
+    queryKey: ["play-arena-leaderboard", selectedArenaId],
+    queryFn: () => fetchArenaPlayer({ data: { arenaId: selectedArenaId! } }),
+    enabled: isArena && Boolean(selectedArenaId) && hub?.menuEnabled === true,
+  });
+
   const { data: board, isPending: boardPending } = useQuery({
     queryKey: ["play-board-full", kind, activityId ?? "all", search.topic ?? ""],
     queryFn: () =>
@@ -66,7 +90,7 @@ function PlayLeaderboardPage() {
           ...(search.topic ? { topic: search.topic } : {}),
         },
       }),
-    enabled: Boolean(kind),
+    enabled: Boolean(kind) && !isArena,
   });
 
   if (hubPending || !hub) return <PageLoader label="Loading leaderboard…" />;
@@ -128,23 +152,38 @@ function PlayLeaderboardPage() {
   const meta = PLAY_KIND_META[kind];
   const myRank = rows.find((row) => row.isMe)?.rank ?? null;
 
+  const arenaRankedCount = isArena
+    ? arenaState?.board.overallVisible
+      ? arenaState.board.rows.length
+      : arenaState?.board.segmentVisible
+        ? arenaState.board.segmentRows.length
+        : 0
+    : rows.length;
+  const arenaMyRank = isArena ? arenaState?.myTeam?.rank ?? null : null;
+
   return (
     <div className="space-y-6">
       <LeaderboardHero
         kicker="Play leaderboard"
         title="Rankings"
-        subtitle="Filter by play mode and activity. Top 3 stand on the podium — gold, silver and bronze stay highlighted."
+        subtitle={
+          isArena
+            ? "Live arena events. Select an event to see the team leaderboard."
+            : "Filter by play mode and activity. Top 3 stand on the podium — gold, silver and bronze stay highlighted."
+        }
         chips={
           <>
             <LeaderboardChip
               icon={<AssessaIcon name="trophy" className="h-3.5 w-3.5" />}
               label="Ranked"
-              value={rows.length}
+              value={arenaRankedCount}
             />
             <LeaderboardChip
               icon={<AssessaIcon name="sparkles" className="h-3.5 w-3.5" />}
               label="Your place"
-              value={myRank ? `#${myRank}` : "—"}
+              value={
+                isArena ? (arenaMyRank ? `#${arenaMyRank}` : "—") : myRank ? `#${myRank}` : "—"
+              }
             />
           </>
         }
@@ -161,7 +200,14 @@ function PlayLeaderboardPage() {
               key={modeKind}
               type="button"
               onClick={() =>
-                navigate({ search: (prev) => ({ ...prev, kind: modeKind, topic: undefined }) })
+                navigate({
+                  search: (prev) => ({
+                    ...prev,
+                    kind: modeKind,
+                    topic: undefined,
+                    ...(modeKind === "arena" ? {} : { arenaId: undefined }),
+                  }),
+                })
               }
               className={cn(
                 "rounded-full border px-3 py-1.5 text-sm",
@@ -176,7 +222,7 @@ function PlayLeaderboardPage() {
         </div>
       </section>
 
-      {activities.length > 0 ? (
+      {!isArena && activities.length > 0 ? (
         <section>
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Activity
@@ -214,7 +260,80 @@ function PlayLeaderboardPage() {
         </section>
       ) : null}
 
-      {boardPending ? (
+      {isArena ? (
+        <div className="space-y-4">
+          <section>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Events
+            </p>
+            {arenasPending || !arenasData ? (
+              <PageLoader label="Loading live arenas…" />
+            ) : arenasData.arenas.length === 0 ? (
+              <EmptyState title="No live arenas" body="Ask a host to open a lobby from Play control." />
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {arenasData.arenas.map((a) => {
+                  const active = selectedArenaId === a.id;
+                  return (
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() =>
+                        navigate({
+                          search: (prev) => ({
+                            ...prev,
+                            arenaId: a.id,
+                          }),
+                        })
+                      }
+                      className={cn(
+                        "rounded-full border px-3 py-1.5 text-sm",
+                        active
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border hover:bg-secondary",
+                      )}
+                    >
+                      {a.name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          {arenaPending || !arenaState ? (
+            <PageLoader label="Loading arena leaderboard…" />
+          ) : (
+            <ArenaScoreboard
+              rows={
+                arenaState.board.overallVisible
+                  ? arenaState.board.rows
+                  : arenaState.board.segmentVisible
+                    ? arenaState.board.segmentRows
+                    : []
+              }
+              highlightId={arenaState.myTeam?.id ?? null}
+              currentSegmentWinner={arenaState.board.overallVisible ? null : arenaState.board.currentSegmentWinner}
+              segmentWinners={arenaState.board.segmentWinners}
+              champion={arenaState.board.champion}
+              visible={arenaState.board.overallVisible || arenaState.board.segmentVisible}
+              showSegmentColumn={!arenaState.board.overallVisible}
+              title={
+                arenaState.board.overallVisible
+                  ? "Overall leaderboard"
+                  : arenaState.board.publishedSegment != null
+                    ? `Segment ${arenaState.board.publishedSegment + 1} results`
+                    : "Scoreboard"
+              }
+              emptyHint={
+                arenaState.arena.status === "complete"
+                  ? "No teams scored."
+                  : "The host publishes each segment’s results, then the overall board at the end."
+              }
+            />
+          )}
+        </div>
+      ) : boardPending ? (
         <PageLoader label="Loading scores…" />
       ) : rows.length === 0 ? (
         <EmptyState

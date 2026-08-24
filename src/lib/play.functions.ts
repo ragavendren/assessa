@@ -228,6 +228,29 @@ export const joinBattle = createServerFn({ method: "POST" })
     return acceptBattle(context.userId, data.matchId);
   });
 
+export const readyBattleMatch = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) => z.object({ matchId: uuid }).parse(input))
+  .handler(async ({ context, data }) => {
+    const { readyBattle } = await import("@/lib/play.server");
+    return readyBattle(context.userId, data.matchId);
+  });
+
+export const listBattles = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { listMyBattles } = await import("@/lib/play.server");
+    return listMyBattles(context.userId);
+  });
+
+export const getBattleLive = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) => z.object({ matchId: uuid }).parse(input))
+  .handler(async ({ context, data }) => {
+    const { getBattleLive: load } = await import("@/lib/play.server");
+    return load(context.userId, data.matchId);
+  });
+
 export const getEscapeRooms = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) =>

@@ -89,9 +89,18 @@ function ArenaPlayerPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-5">
-      <Link to="/play/arena" className="text-xs text-accent underline">
-        Live Arena
-      </Link>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <Link to="/play/arena" className="text-xs text-accent underline">
+          Live Arena
+        </Link>
+        <Link
+          to="/play/leaderboard"
+          search={{ kind: "arena", arenaId }}
+          className="text-xs text-accent underline"
+        >
+          Arena leaderboard
+        </Link>
+      </div>
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
