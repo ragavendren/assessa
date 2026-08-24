@@ -2,18 +2,13 @@ import { createMiddleware } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "./types";
-import {
-  createSupabaseFetch,
-  formatSupabaseFetchError,
-  stripEnvQuotes,
-} from "./server-fetch";
+import { createSupabaseFetch, formatSupabaseFetchError, stripEnvQuotes } from "./server-fetch";
 
 export const requireSupabaseAuth = createMiddleware({
   type: "function",
 }).server(async ({ next }) => {
   const SUPABASE_URL =
-    stripEnvQuotes(process.env["SUPABASE_URL"]) ||
-    stripEnvQuotes(process.env["VITE_SUPABASE_URL"]);
+    stripEnvQuotes(process.env["SUPABASE_URL"]) || stripEnvQuotes(process.env["VITE_SUPABASE_URL"]);
   const SUPABASE_PUBLISHABLE_KEY =
     stripEnvQuotes(process.env["SUPABASE_PUBLISHABLE_KEY"]) ||
     stripEnvQuotes(process.env["VITE_SUPABASE_PUBLISHABLE_KEY"]);

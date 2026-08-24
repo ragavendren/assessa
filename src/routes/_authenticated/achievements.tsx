@@ -121,9 +121,7 @@ function Achievements() {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {SKILL_TRACKS.map((value, index) => {
           const count = data.filter((badge) => trackOf(badge) === value).length;
-          const earned = data.filter(
-            (badge) => trackOf(badge) === value && badge.earnedAt,
-          ).length;
+          const earned = data.filter((badge) => trackOf(badge) === value && badge.earnedAt).length;
           return (
             <button
               key={value}

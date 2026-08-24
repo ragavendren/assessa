@@ -62,9 +62,6 @@ export const TRACK_LABELS: Record<BadgeTrack, string> = {
 
 export function isBadgeTrack(value: string | null | undefined): value is BadgeTrack {
   return (
-    value === "beginner" ||
-    value === "intermediate" ||
-    value === "expertise" ||
-    value === "elite"
+    value === "beginner" || value === "intermediate" || value === "expertise" || value === "elite"
   );
 }
