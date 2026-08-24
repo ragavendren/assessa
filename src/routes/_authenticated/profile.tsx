@@ -1,8 +1,10 @@
 import { AvatarPicker } from "@/components/AvatarPicker";
 import { OrgDepartmentFields } from "@/components/OrgDepartmentFields";
 import { PageLoader, SectionHeading } from "@/components/platform";
-import { getMe, saveProfile } from "@/lib/platform.functions";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ProfileBootstrapError } from "@/components/ProfileBootstrapError";
+import { useMe } from "@/hooks/use-me";
+import { saveProfile } from "@/lib/platform.functions";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { Mail, Shield } from "lucide-react";
@@ -29,13 +31,9 @@ export const Route = createFileRoute("/_authenticated/profile")({
 });
 
 function ProfilePage() {
-  const fetchMe = useServerFn(getMe);
   const save = useServerFn(saveProfile);
   const queryClient = useQueryClient();
-  const { data, isPending } = useQuery({
-    queryKey: ["me"],
-    queryFn: () => fetchMe(),
-  });
+  const { data, isPending, isFetching, isError, error, refetch } = useMe();
 
   const [form, setForm] = useState({
     full_name: "",
@@ -76,10 +74,20 @@ function ProfilePage() {
       queryClient.invalidateQueries({ queryKey: ["me"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
-    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not save"),
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not save"),
   });
 
-  if (isPending || !data) return <PageLoader />;
+  if (isError) {
+    return (
+      <ProfileBootstrapError
+        message={error instanceof Error ? error.message : undefined}
+        onRetry={() => void refetch()}
+      />
+    );
+  }
+
+  if ((isPending || isFetching) && !data) return <PageLoader label="Loading profile…" />;
+  if (!data) return <PageLoader label="Loading profile…" />;
 
   const displayLabel =
     form.display_name.trim() || form.full_name.trim() || data.profile.email || "Participant";

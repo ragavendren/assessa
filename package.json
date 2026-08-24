@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "vite dev",
+    "dev:clean": "vite dev --force",
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint .",

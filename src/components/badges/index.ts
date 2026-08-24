@@ -5,8 +5,15 @@ export {
   BADGE_MAP,
   BADGE_TYPES,
   resolveBadgeDefinition,
+  resolveBadgeTrack,
   type BadgeDefinition,
   type BadgeGlyphId,
   type BadgeType,
 } from "./badgeMap";
-export { TRACK_LABELS, TRACK_PALETTES, type BadgeTrack, type TrackPalette } from "./tracks";
+export {
+  TRACK_LABELS,
+  TRACK_PALETTES,
+  isBadgeTrack,
+  type BadgeTrack,
+  type TrackPalette,
+} from "./tracks";

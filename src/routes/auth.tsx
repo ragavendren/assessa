@@ -60,10 +60,12 @@ function AuthPage() {
 
   useEffect(() => {
     let active = true;
-    void supabase.auth.getSession().then(({ data }) => {
-      if (!active || !data.session) return;
-      navigate({ to: destination, replace: true });
-    });
+    void import("@/lib/auth-session").then(({ resolveClientSession }) =>
+      resolveClientSession({ waitMs: 1500 }).then((session) => {
+        if (!active || !session) return;
+        navigate({ to: destination, replace: true });
+      }),
+    );
     return () => {
       active = false;
     };
@@ -111,10 +113,14 @@ function AuthPage() {
           setCheckEmail(true);
           return;
         }
+        const { resolveClientSession } = await import("@/lib/auth-session");
+        await resolveClientSession({ waitMs: 2000 });
         navigate({ to: destination, replace: true });
       } else {
         const { error } = await supabase.auth.signInWithPassword(parsed.data);
         if (error) throw error;
+        const { resolveClientSession } = await import("@/lib/auth-session");
+        await resolveClientSession({ waitMs: 2000 });
         navigate({ to: destination, replace: true });
       }
     } catch (error) {

@@ -41,11 +41,11 @@ function AuthCallbackPage() {
         if (search.code) {
           const { error } = await supabase.auth.exchangeCodeForSession(search.code);
           if (error) throw error;
-        } else {
-          const { data, error } = await supabase.auth.getSession();
-          if (error) throw error;
-          if (!data.session) throw new Error("No session returned from the identity provider.");
         }
+
+        const { resolveClientSession } = await import("@/lib/auth-session");
+        const session = await resolveClientSession({ waitMs: 2500 });
+        if (!session) throw new Error("No session returned from the identity provider.");
 
         const { data: userData } = await supabase.auth.getUser();
         if (!userData.user) throw new Error("Signed in, but no user was returned.");

@@ -1,6 +1,12 @@
 import { cn } from "@/lib/utils";
 import { BadgeBase } from "./BadgeBase";
-import { BADGE_MAP, resolveBadgeDefinition, type BadgeGlyphId, type BadgeType } from "./badgeMap";
+import {
+  BADGE_MAP,
+  resolveBadgeDefinition,
+  resolveBadgeTrack,
+  type BadgeGlyphId,
+  type BadgeType,
+} from "./badgeMap";
 import type { BadgeTrack } from "./tracks";
 
 export type BadgeProps = {
@@ -9,7 +15,7 @@ export type BadgeProps = {
   /** Alias for `type` — useful when rendering from a DB row. */
   code?: string | null | undefined;
   size?: number | undefined;
-  track?: BadgeTrack | undefined;
+  track?: BadgeTrack | string | null | undefined;
   glyph?: BadgeGlyphId | undefined;
   title?: string | undefined;
   earned?: boolean | undefined;
@@ -36,8 +42,9 @@ export function Badge({
   className,
   mark,
 }: BadgeProps) {
-  const def = resolveBadgeDefinition(type ?? code ?? undefined);
-  const resolvedTrack = track ?? def?.track ?? "intermediate";
+  const key = type ?? code ?? undefined;
+  const def = resolveBadgeDefinition(key);
+  const resolvedTrack = resolveBadgeTrack(track, key);
   const resolvedGlyph = glyph ?? def?.glyph ?? "star";
   const resolvedTitle = title ?? def?.label;
   const resolvedMark = mark ?? def?.mark;
@@ -61,5 +68,5 @@ export function Badge({
   );
 }
 
-export { BADGE_MAP, resolveBadgeDefinition };
+export { BADGE_MAP, resolveBadgeDefinition, resolveBadgeTrack };
 export type { BadgeType };

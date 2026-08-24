@@ -25,7 +25,8 @@ const NAV = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { data } = useMe();
-  usePresenceHeartbeat(Boolean(data?.profile?.id));
+  const profileReady = Boolean(data?.profile?.id);
+  usePresenceHeartbeat(profileReady);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const fetchPlayFlags = useServerFn(getPlayFlags);
@@ -34,11 +35,13 @@ export function AppShell({ children }: { children: ReactNode }) {
     queryKey: ["play-flags"],
     queryFn: () => fetchPlayFlags(),
     staleTime: 60_000,
+    enabled: profileReady,
   });
   const { data: notices } = useQuery({
     queryKey: ["notifications"],
     queryFn: () => fetchNotifications(),
     staleTime: 30_000,
+    enabled: profileReady,
   });
   const pathname = useRouterState({
     select: (state) => state.location.pathname,

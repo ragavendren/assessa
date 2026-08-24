@@ -1,4 +1,4 @@
-import type { BadgeTrack } from "./tracks";
+import { isBadgeTrack, type BadgeTrack } from "./tracks";
 
 /**
  * Glyph keys drawn as pure SVG paths inside the shield.
@@ -333,6 +333,18 @@ export function resolveBadgeDefinition(
   if (BY_CODE.has(asCode)) return BY_CODE.get(asCode)!;
   if (BY_CODE.has(raw)) return BY_CODE.get(raw)!;
   return null;
+}
+
+/**
+ * Prefer an explicit DB track; otherwise derive from the badge code / type map.
+ * Avoids forcing the intermediate (blue) default when the catalog already knows the palette.
+ */
+export function resolveBadgeTrack(
+  track: string | null | undefined,
+  codeOrType?: string | null,
+): BadgeTrack {
+  if (isBadgeTrack(track)) return track;
+  return resolveBadgeDefinition(codeOrType)?.track ?? "intermediate";
 }
 
 export const BADGE_TYPES = Object.keys(BADGE_MAP) as BadgeType[];

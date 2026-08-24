@@ -1,4 +1,4 @@
-import { Badge, type BadgeTrack } from "@/components/badges";
+import { Badge, resolveBadgeTrack, type BadgeTrack } from "@/components/badges";
 import { isBadgeIconId } from "@/lib/badge-icons";
 import { cn } from "@/lib/utils";
 
@@ -18,21 +18,9 @@ type BadgeMarkProps = {
   name?: string | undefined;
   earned?: boolean;
   size?: Size;
-  track?: BadgeTrack | string | undefined;
+  track?: BadgeTrack | string | null | undefined;
   className?: string | undefined;
 };
-
-function asTrack(value: string | undefined): BadgeTrack | undefined {
-  if (
-    value === "beginner" ||
-    value === "intermediate" ||
-    value === "expertise" ||
-    value === "elite"
-  ) {
-    return value;
-  }
-  return undefined;
-}
 
 /**
  * App-wide badge mark — reusable SVG shield with glitter on earned badges.
@@ -47,18 +35,19 @@ export function BadgeMark({
   className,
 }: BadgeMarkProps) {
   const glyphOverride = isBadgeIconId(icon) ? icon : undefined;
-  const resolvedTrack = asTrack(track);
+  const key = code ?? icon;
+  const resolvedTrack = resolveBadgeTrack(track, key);
 
   return (
     <Badge
-      type={code ?? icon}
+      type={key}
       earned={earned}
       size={SIZE_PX[size]}
+      track={resolvedTrack}
       className={cn(className)}
       {...(code != null ? { code } : {})}
       {...(name ? { title: name } : {})}
       {...(glyphOverride ? { glyph: glyphOverride } : {})}
-      {...(resolvedTrack ? { track: resolvedTrack } : {})}
     />
   );
 }

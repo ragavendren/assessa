@@ -1,5 +1,5 @@
 import { BadgeMark } from "@/components/BadgeMark";
-import type { BadgeTrack } from "@/components/badges";
+import { resolveBadgeTrack } from "@/components/badges";
 import { cn } from "@/lib/utils";
 import { useEffect, useMemo, useRef } from "react";
 
@@ -36,16 +36,8 @@ type Sim = {
   clash: number[];
 };
 
-function asTrack(value: string | undefined): BadgeTrack {
-  if (
-    value === "beginner" ||
-    value === "intermediate" ||
-    value === "expertise" ||
-    value === "elite"
-  ) {
-    return value;
-  }
-  return "intermediate";
+function badgeTrackOf(badge: DriftBadge | undefined) {
+  return resolveBadgeTrack(badge?.track, badge?.code ?? badge?.icon);
 }
 
 function ease(t: number) {
@@ -60,9 +52,9 @@ export function BadgeDriftWall({ badges, className, limit = 6 }: BadgeDriftWallP
       .slice(0, limit)
       .map((badge) => ({
         icon: badge.icon,
+        track: badgeTrackOf(badge),
         ...(badge.name ? { name: badge.name } : {}),
         ...(badge.code ? { code: badge.code } : {}),
-        ...(badge.track ? { track: badge.track } : {}),
       })),
   );
 
@@ -152,7 +144,7 @@ export function BadgeDriftWall({ badges, className, limit = 6 }: BadgeDriftWallP
           <BadgeMark
             icon={badge.icon}
             size="sm"
-            track={asTrack(badge.track)}
+            track={badgeTrackOf(badge)}
             className="opacity-80 shadow-none"
             {...(badge.code ? { code: badge.code } : {})}
             {...(badge.name ? { name: badge.name } : {})}
@@ -182,7 +174,7 @@ function step(sim: Sim, badges: DriftBadge[], size: { w: number; h: number }, dt
     const dest = sim.dir === 1 ? sim.right : sim.left;
     const top = dest[dest.length - 1];
     dest.push(arrived);
-    if (top != null && asTrack(badges[arrived]?.track) !== asTrack(badges[top]?.track)) {
+    if (top != null && badgeTrackOf(badges[arrived]) !== badgeTrackOf(badges[top])) {
       sim.clash[arrived] = 1;
       sim.clash[top] = 1;
     }
@@ -220,7 +212,7 @@ function step(sim: Sim, badges: DriftBadge[], size: { w: number; h: number }, dt
 
 function paint(
   nodes: Array<HTMLSpanElement | null>,
-  badges: DriftBadge[],
+  _badges: DriftBadge[],
   sim: Sim,
   size: { w: number; h: number },
 ) {

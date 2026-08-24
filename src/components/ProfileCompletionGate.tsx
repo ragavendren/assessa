@@ -10,7 +10,7 @@ import { toast } from "sonner";
 export function ProfileCompletionGate({ children }: { children: React.ReactNode }) {
   const save = useServerFn(saveProfile);
   const queryClient = useQueryClient();
-  const { data, isPending } = useMe();
+  const { data, isPending, isFetching, isError } = useMe();
 
   const [organization, setOrganization] = useState("");
   const [department, setDepartment] = useState("");
@@ -44,8 +44,10 @@ export function ProfileCompletionGate({ children }: { children: React.ReactNode 
       toast.error(error instanceof Error ? error.message : "Could not save organisation"),
   });
 
-  if (isPending || !data) return children;
-  if (!data.needsOrg) return children;
+  // Disabled queries report isPending=true forever — only block once a session-backed fetch is in flight.
+  if (isError) return children;
+  if ((isPending || isFetching) && !data) return children;
+  if (!data || !data.needsOrg) return children;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">

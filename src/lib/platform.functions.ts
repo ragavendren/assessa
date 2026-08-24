@@ -86,7 +86,7 @@ export const getDashboard = createServerFn({ method: "POST" })
       supabaseAdmin.from("user_streaks").select("*").eq("user_id", userId),
       supabaseAdmin
         .from("user_badges")
-        .select("earned_at, badges(code, name, icon, description)")
+        .select("earned_at, badges(code, name, icon, description, track)")
         .eq("user_id", userId)
         .order("earned_at", { ascending: false }),
       supabaseAdmin.from("badges").select("id").eq("active", true),
@@ -201,11 +201,12 @@ export const getDashboard = createServerFn({ method: "POST" })
           description?: string;
           track?: string;
         } | null;
+        const code = badge?.code;
         return {
-          code: badge?.code,
+          code,
           name: badge?.name ?? "Badge",
           icon: badge?.icon ?? "trophy",
-          track: badge?.track ?? "intermediate",
+          track: badge?.track ?? null,
           description: badge?.description ?? "",
           earnedAt: b.earned_at,
         };
@@ -222,7 +223,7 @@ export const getDashboard = createServerFn({ method: "POST" })
           code: badge?.code ?? badge?.name ?? "badge",
           name: badge?.name ?? "Badge",
           icon: badge?.icon ?? "trophy",
-          track: badge?.track ?? "intermediate",
+          track: badge?.track ?? null,
           description: badge?.description ?? "",
           earnedAt: b.earned_at,
         };
@@ -551,7 +552,7 @@ export const getAchievements = createServerFn({ method: "POST" })
       description: b.description,
       icon: b.icon,
       category: b.category,
-      track: (b.track as string | null) ?? "intermediate",
+      track: (b.track as string | null) ?? null,
       xp: b.xp_reward,
       earnedAt: ownedMap.get(b.id) ?? null,
       progress: ownedMap.has(b.id)

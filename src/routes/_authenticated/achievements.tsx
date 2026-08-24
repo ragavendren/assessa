@@ -1,4 +1,5 @@
 import { BadgeMark } from "@/components/BadgeMark";
+import { resolveBadgeTrack } from "@/components/badges";
 import { ListToolbar, listViewClass, useListViewMode } from "@/components/ListToolbar";
 import { EmptyState, PageLoader } from "@/components/platform";
 import {
@@ -14,6 +15,10 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
+
+function trackOf(badge: { code: string; track?: string | null }) {
+  return resolveBadgeTrack(badge.track, badge.code) as SkillTrack;
+}
 
 export const Route = createFileRoute("/_authenticated/achievements")({
   head: () => ({
@@ -42,7 +47,7 @@ type BadgeItem = {
   name: string;
   description: string;
   icon: string;
-  track: string;
+  track: string | null;
   category: string;
   xp: number;
   earnedAt: string | null;
@@ -67,7 +72,7 @@ function Achievements() {
     return (data ?? []).filter((badge) => {
       if (status === "earned" && !badge.earnedAt) return false;
       if (status === "locked" && badge.earnedAt) return false;
-      const badgeTrack = (badge.track as SkillTrack) || "intermediate";
+      const badgeTrack = trackOf(badge);
       if (track !== "all" && badgeTrack !== track) return false;
       if (!q) return true;
       return (
@@ -115,11 +120,9 @@ function Achievements() {
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {SKILL_TRACKS.map((value, index) => {
-          const count = data.filter(
-            (badge) => ((badge.track as SkillTrack) || "intermediate") === value,
-          ).length;
+          const count = data.filter((badge) => trackOf(badge) === value).length;
           const earned = data.filter(
-            (badge) => ((badge.track as SkillTrack) || "intermediate") === value && badge.earnedAt,
+            (badge) => trackOf(badge) === value && badge.earnedAt,
           ).length;
           return (
             <button
@@ -192,7 +195,7 @@ function Achievements() {
             </thead>
             <tbody className="divide-y divide-border">
               {visible.map((badge, index) => {
-                const badgeTrack = (badge.track as SkillTrack) || "intermediate";
+                const badgeTrack = trackOf(badge);
                 return (
                   <tr
                     key={badge.code}
@@ -252,7 +255,7 @@ function Achievements() {
 }
 
 function BadgeCard({ badge, index }: { badge: BadgeItem; index: number }) {
-  const badgeTrack = (badge.track as SkillTrack) || "intermediate";
+  const badgeTrack = trackOf(badge);
   const earned = Boolean(badge.earnedAt);
   const progressValue =
     badge.progress && badge.progress.required > 0
