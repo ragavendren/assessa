@@ -61,7 +61,7 @@ function PlayHub() {
     onError: (error) => toast.error(error instanceof Error ? error.message : "Could not start"),
   });
 
-  const segments = data?.segments ?? [];
+  const segments = useMemo(() => data?.segments ?? [], [data?.segments]);
 
   type ModeChoice = { segment: PlaySegment; mode: PlaySegmentMode };
   const modeByKind = useMemo(() => {
@@ -96,7 +96,7 @@ function PlayHub() {
     return order.find((k) => modeByKind.has(k)) ?? null;
   }, [modeByKind]);
 
-  const boardChoice = boardKind ? modeByKind.get(boardKind) ?? null : null;
+  const boardChoice = boardKind ? (modeByKind.get(boardKind) ?? null) : null;
 
   if (isPending || !data) return <PageLoader label="Loading play modes…" />;
 
@@ -174,9 +174,7 @@ function PlayHub() {
             </Link>
           </div>
           <div className="mt-3">
-            <PlayLeaderboardPanel
-              kind={boardKind}
-            />
+            <PlayLeaderboardPanel kind={boardKind} />
           </div>
         </section>
       ) : null}
@@ -301,7 +299,8 @@ function ModesPanel({
               </p>
             </div>
             <span className="rounded-md bg-secondary px-2 py-1 text-xs tabular-nums">
-              {dailyChoice?.segment.questionCount ?? weeklyChoice?.segment.questionCount ?? 0} pool questions
+              {dailyChoice?.segment.questionCount ?? weeklyChoice?.segment.questionCount ?? 0} pool
+              questions
             </span>
           </div>
 
@@ -348,9 +347,10 @@ function ModesPanel({
       {PLAY_KIND_GROUPS.map((group) => {
         if (group.label === "Events") return null;
         const kinds = group.kinds.filter((k) => k !== "daily" && k !== "weekly");
-        const choices = kinds
-          .map((kind) => modeByKind.get(kind))
-          .filter(Boolean) as Array<{ segment: PlaySegment; mode: PlaySegmentMode }>;
+        const choices = kinds.map((kind) => modeByKind.get(kind)).filter(Boolean) as Array<{
+          segment: PlaySegment;
+          mode: PlaySegmentMode;
+        }>;
         if (choices.length === 0) return null;
 
         return (
@@ -363,7 +363,7 @@ function ModesPanel({
                 const courseIdForCard =
                   choice.segment.scope === "course"
                     ? choice.segment.id
-                    : mode.bindingCourseId ?? choice.segment.id;
+                    : (mode.bindingCourseId ?? choice.segment.id);
 
                 if (link) {
                   return (

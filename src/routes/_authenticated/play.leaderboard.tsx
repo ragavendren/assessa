@@ -159,7 +159,7 @@ function PlayLeaderboardPage() {
         ? arenaState.board.segmentRows.length
         : 0
     : rows.length;
-  const arenaMyRank = isArena ? arenaState?.myTeam?.rank ?? null : null;
+  const arenaMyRank = isArena ? (arenaState?.myTeam?.rank ?? null) : null;
 
   return (
     <div className="space-y-6">
@@ -269,7 +269,10 @@ function PlayLeaderboardPage() {
             {arenasPending || !arenasData ? (
               <PageLoader label="Loading live arenas…" />
             ) : arenasData.arenas.length === 0 ? (
-              <EmptyState title="No live arenas" body="Ask a host to open a lobby from Play control." />
+              <EmptyState
+                title="No live arenas"
+                body="Ask a host to open a lobby from Play control."
+              />
             ) : (
               <div className="flex flex-wrap gap-2">
                 {arenasData.arenas.map((a) => {
@@ -313,7 +316,9 @@ function PlayLeaderboardPage() {
                     : []
               }
               highlightId={arenaState.myTeam?.id ?? null}
-              currentSegmentWinner={arenaState.board.overallVisible ? null : arenaState.board.currentSegmentWinner}
+              currentSegmentWinner={
+                arenaState.board.overallVisible ? null : arenaState.board.currentSegmentWinner
+              }
               segmentWinners={arenaState.board.segmentWinners}
               champion={arenaState.board.champion}
               visible={arenaState.board.overallVisible || arenaState.board.segmentVisible}

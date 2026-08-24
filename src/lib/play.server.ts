@@ -936,9 +936,7 @@ export async function startPlaySession(
   if (args.matchId) {
     const { data: match } = await db
       .from("play_matches")
-      .select(
-        "id, instance_id, inviter_id, invitee_id, status, inviter_ready, invitee_ready",
-      )
+      .select("id, instance_id, inviter_id, invitee_id, status, inviter_ready, invitee_ready")
       .eq("id", args.matchId)
       .maybeSingle();
     if (!match) throw new Error("Battle not found.");
@@ -1732,7 +1730,8 @@ export async function readyBattle(userId: string, matchId: string) {
     if (!match.instance_id) {
       const challenge = await ensureChallenge({ kind: "battle" });
       const poolId =
-        challenge.poolId ?? (await largestPoolId(challenge.rules.questionCount, challenge.courseId));
+        challenge.poolId ??
+        (await largestPoolId(challenge.rules.questionCount, challenge.courseId));
       if (!poolId) throw new Error("Add pool questions before starting a battle.");
       const inst = await ensureInstance({
         challengeId: challenge.id,
@@ -1806,12 +1805,16 @@ export async function listMyBattles(userId: string) {
   const { data: profiles } =
     userIds.length > 0
       ? await db.from("profiles").select("id, full_name, display_name, email").in("id", userIds)
-      : { data: [] as Array<{ id: string; full_name: string | null; display_name: string | null; email: string | null }> };
+      : {
+          data: [] as Array<{
+            id: string;
+            full_name: string | null;
+            display_name: string | null;
+            email: string | null;
+          }>,
+        };
   const nameById = new Map(
-    (profiles ?? []).map((p) => [
-      p.id,
-      p.display_name || p.full_name || p.email || "Participant",
-    ]),
+    (profiles ?? []).map((p) => [p.id, p.display_name || p.full_name || p.email || "Participant"]),
   );
 
   const matchIds = rows.map((m) => m.id);
@@ -1821,16 +1824,18 @@ export async function listMyBattles(userId: string) {
           .from("play_sessions")
           .select("id, match_id, user_id, status, score, correct_count, current_index, answers")
           .in("match_id", matchIds)
-      : { data: [] as Array<{
-          id: string;
-          match_id: string | null;
-          user_id: string;
-          status: string;
-          score: number | null;
-          correct_count: number | null;
-          current_index: number;
-          answers: unknown;
-        }> };
+      : {
+          data: [] as Array<{
+            id: string;
+            match_id: string | null;
+            user_id: string;
+            status: string;
+            score: number | null;
+            correct_count: number | null;
+            current_index: number;
+            answers: unknown;
+          }>,
+        };
 
   const sessionsByMatch = new Map<string, typeof sessions>();
   for (const session of sessions ?? []) {
@@ -1841,20 +1846,17 @@ export async function listMyBattles(userId: string) {
   }
 
   const battles = rows.map((match) => {
-    const role: "inviter" | "invitee" =
-      match.inviter_id === userId ? "inviter" : "invitee";
+    const role: "inviter" | "invitee" = match.inviter_id === userId ? "inviter" : "invitee";
     const opponentId = role === "inviter" ? match.invitee_id : match.inviter_id;
     const opponentName =
-      (opponentId ? nameById.get(opponentId) : null) ??
-      match.invitee_email ??
-      "Opponent";
-    const myReady = role === "inviter" ? Boolean(match.inviter_ready) : Boolean(match.invitee_ready);
+      (opponentId ? nameById.get(opponentId) : null) ?? match.invitee_email ?? "Opponent";
+    const myReady =
+      role === "inviter" ? Boolean(match.inviter_ready) : Boolean(match.invitee_ready);
     const theirReady =
       role === "inviter" ? Boolean(match.invitee_ready) : Boolean(match.inviter_ready);
     const bothReady = myReady && theirReady;
     const mine = (sessionsByMatch.get(match.id) ?? []).find((s) => s.user_id === userId) ?? null;
-    const theirs =
-      (sessionsByMatch.get(match.id) ?? []).find((s) => s.user_id !== userId) ?? null;
+    const theirs = (sessionsByMatch.get(match.id) ?? []).find((s) => s.user_id !== userId) ?? null;
 
     let phase: "invited" | "accepted" | "ready" | "playing" | "complete" | "declined" = "invited";
     if (match.status === "declined") phase = "declined";
@@ -1925,12 +1927,16 @@ export async function getBattleLive(userId: string, matchId: string) {
   const { data: profiles } =
     userIds.length > 0
       ? await db.from("profiles").select("id, full_name, display_name, email").in("id", userIds)
-      : { data: [] as Array<{ id: string; full_name: string | null; display_name: string | null; email: string | null }> };
+      : {
+          data: [] as Array<{
+            id: string;
+            full_name: string | null;
+            display_name: string | null;
+            email: string | null;
+          }>,
+        };
   const nameById = new Map(
-    (profiles ?? []).map((p) => [
-      p.id,
-      p.display_name || p.full_name || p.email || "Participant",
-    ]),
+    (profiles ?? []).map((p) => [p.id, p.display_name || p.full_name || p.email || "Participant"]),
   );
 
   function playerOf(playerId: string | null) {
@@ -1943,11 +1949,9 @@ export async function getBattleLive(userId: string, matchId: string) {
     else if (session?.status === "in_progress") playStatus = "playing";
     return {
       userId: playerId,
-      name: playerId ? nameById.get(playerId) ?? "Opponent" : match.invitee_email ?? "Opponent",
+      name: playerId ? (nameById.get(playerId) ?? "Opponent") : (match.invitee_email ?? "Opponent"),
       ready:
-        playerId === match.inviter_id
-          ? Boolean(match.inviter_ready)
-          : Boolean(match.invitee_ready),
+        playerId === match.inviter_id ? Boolean(match.inviter_ready) : Boolean(match.invitee_ready),
       playStatus,
       sessionId: session?.id ?? null,
       answered,

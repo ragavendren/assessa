@@ -121,10 +121,7 @@ function BattlePage() {
       ) : (
         <ul className="space-y-3">
           {battles.map((battle) => (
-            <li
-              key={battle.id}
-              className="rounded-2xl border border-border bg-card p-4"
-            >
+            <li key={battle.id} className="rounded-2xl border border-border bg-card p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="font-medium">{battle.opponentName}</p>
@@ -188,7 +185,9 @@ function BattlePage() {
                       Results
                     </Link>
                   ) : battle.phase === "invited" && battle.role === "inviter" ? (
-                    <span className="self-center text-xs text-muted-foreground">Waiting for accept</span>
+                    <span className="self-center text-xs text-muted-foreground">
+                      Waiting for accept
+                    </span>
                   ) : battle.phase === "accepted" && battle.myReady ? (
                     <span className="self-center text-xs text-muted-foreground">
                       Waiting for opponent

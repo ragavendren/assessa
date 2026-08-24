@@ -35,7 +35,9 @@ export function BattleHud({
           Battle
         </p>
         {waitingForOpponent ? (
-          <p className="text-xs text-amber-700 dark:text-amber-300">Waiting for opponent to start…</p>
+          <p className="text-xs text-amber-700 dark:text-amber-300">
+            Waiting for opponent to start…
+          </p>
         ) : null}
       </div>
       <div className="grid gap-3 p-4 sm:grid-cols-2">
