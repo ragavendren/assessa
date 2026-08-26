@@ -275,7 +275,9 @@ export function PlayControlPanel({ data }: { data: AdminPlayData }) {
               ? "Create a lobby here. Use List to publish, host, and manage all arenas."
               : editingKind === "knockout"
                 ? "Create a bracket here. Use List to publish and manage tournaments."
-                : "Course and activity control where it appears. Pool and topics control the bank."
+                : editingKind === "battle"
+                  ? "Pick the pool, question count, and timer used for every Battle 1v1. Players manage invites on Play → Battle."
+                  : "Course and activity control where it appears. Pool and topics control the bank."
         }
         size="xl"
       >
@@ -478,7 +480,9 @@ export function ModeEditor({
           ? "Turn the mode on when you are ready for participants to see it."
           : challenge.kind === "flash"
             ? "Participants pick a course, then a topic, then start the deck. Bind a course (or leave Any) and optionally limit topics."
-            : "Participants only see this mode when it is On. Course and Activity control which Play hub segment it appears under; pool and topics control the bank."
+            : challenge.kind === "battle"
+              ? "Choose the question pool and count for every 1v1. Players invite by email, accept or decline, both Ready, then Play the same paper."
+              : "Participants only see this mode when it is On. Course and Activity control which Play hub segment it appears under; pool and topics control the bank."
       }
       action={
         <div className="flex gap-2">

@@ -2,19 +2,23 @@ import { AdminPageHeader, ResultCount, StatusPill } from "@/components/admin/Adm
 import { EscapePanel, type AdminPlayData } from "@/components/admin/play/PlayControlPanel";
 import { ArenaShareCard } from "@/components/play/ArenaShareCard";
 import { ListToolbar, useListViewMode } from "@/components/ListToolbar";
-import { EmptyState } from "@/components/platform";
+import { EmptyState, PageLoader } from "@/components/platform";
 import { SlideOver } from "@/components/ui/slide-over";
 import {
+  declareTournamentWinner,
   deleteLiveArena,
+  getTournamentDetail,
+  removeTournamentEntrant,
   setEscapeStatus,
   setLiveArenaListed,
   setTournamentListed,
+  setTournamentMatchSlot,
   startPlayTournament,
   updateLiveArena,
   updatePlayTournament,
 } from "@/lib/play.functions";
 import { cn } from "@/lib/utils";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
@@ -679,6 +683,7 @@ export function AdminKnockoutList({ data }: { data: AdminPlayData }) {
   const [filter, setFilter] = useState<PublishFilter>("all");
   const [view, setView] = useListViewMode("admin-play-knockout", "stack");
   const [editing, setEditing] = useState<TournamentRow | null>(null);
+  const [managing, setManaging] = useState<TournamentRow | null>(null);
 
   const invalidate = () => void queryClient.invalidateQueries({ queryKey: ["admin-play"] });
 
@@ -696,6 +701,9 @@ export function AdminKnockoutList({ data }: { data: AdminPlayData }) {
     onSuccess: () => {
       toast.success("Bracket started");
       invalidate();
+      if (managing) {
+        void queryClient.invalidateQueries({ queryKey: ["admin-tournament", managing.id] });
+      }
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Start failed"),
   });
@@ -731,8 +739,8 @@ export function AdminKnockoutList({ data }: { data: AdminPlayData }) {
         title="Knockout brackets"
         back={{ to: "/admin/play", label: "Play" }}
         help={{
-          label: "Publish to Play",
-          body: "Publish a bracket so participants see it on Play → Knockout. Edit is available while unpublished or before the bracket is finished.",
+          label: "Publish & manage",
+          body: "Publish so players can join. Use Manage to override slots by email, force winners when nobody plays, and advance the bracket.",
         }}
       />
       <ListToolbar
@@ -801,6 +809,13 @@ export function AdminKnockoutList({ data }: { data: AdminPlayData }) {
                       </td>
                       <td className="px-3 py-2">
                         <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            className={actionBtn}
+                            onClick={() => setManaging(row)}
+                          >
+                            Manage
+                          </button>
                           {canEditTournament(row) ? (
                             <button
                               type="button"
@@ -854,6 +869,9 @@ export function AdminKnockoutList({ data }: { data: AdminPlayData }) {
                     </StatusPill>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
+                    <button type="button" className={actionBtn} onClick={() => setManaging(row)}>
+                      Manage
+                    </button>
                     {canEditTournament(row) ? (
                       <button type="button" className={actionBtn} onClick={() => setEditing(row)}>
                         Edit
@@ -903,6 +921,363 @@ export function AdminKnockoutList({ data }: { data: AdminPlayData }) {
           />
         ) : null}
       </SlideOver>
+
+      <SlideOver
+        open={managing != null}
+        onClose={() => setManaging(null)}
+        title={managing ? `Manage · ${managing.name}` : "Manage bracket"}
+        description="Override slots by email, remove entrants, and force winners so the bracket can advance when players do not play."
+        size="xl"
+      >
+        {managing ? (
+          <TournamentManagePanel
+            key={managing.id}
+            tournamentId={managing.id}
+            onStarted={() => startMut.mutate(managing.id)}
+            starting={startMut.isPending}
+          />
+        ) : null}
+      </SlideOver>
+    </div>
+  );
+}
+
+function TournamentManagePanel({
+  tournamentId,
+  onStarted,
+  starting,
+}: {
+  tournamentId: string;
+  onStarted: () => void;
+  starting: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const fetchT = useServerFn(getTournamentDetail);
+  const removeEntrant = useServerFn(removeTournamentEntrant);
+  const setSlot = useServerFn(setTournamentMatchSlot);
+  const declareWinner = useServerFn(declareTournamentWinner);
+
+  const { data, isPending, refetch } = useQuery({
+    queryKey: ["admin-tournament", tournamentId],
+    queryFn: () => fetchT({ data: { tournamentId } }),
+    refetchInterval: 4000,
+  });
+
+  const invalidate = () => {
+    void refetch();
+    void queryClient.invalidateQueries({ queryKey: ["admin-play"] });
+  };
+
+  const removeMut = useMutation({
+    mutationFn: (entrantUserId: string) => removeEntrant({ data: { tournamentId, entrantUserId } }),
+    onSuccess: () => {
+      toast.success("Entrant removed");
+      invalidate();
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not remove"),
+  });
+
+  const slotMut = useMutation({
+    mutationFn: (payload: {
+      tournamentMatchId: string;
+      playerAEmail?: string | null;
+      playerBEmail?: string | null;
+      playerAId?: string | null;
+      playerBId?: string | null;
+    }) => setSlot({ data: payload }),
+    onSuccess: () => {
+      toast.success("Slot updated");
+      invalidate();
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not update slot"),
+  });
+
+  const winnerMut = useMutation({
+    mutationFn: (payload: { tournamentMatchId: string; winnerId: string | null }) =>
+      declareWinner({ data: payload }),
+    onSuccess: () => {
+      toast.success("Winner set — bracket advanced");
+      invalidate();
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not advance"),
+  });
+
+  if (isPending || !data) return <PageLoader label="Loading bracket…" />;
+
+  const { tournament, entrants, matches } = data;
+  const openMatches = matches.filter((m) => m.status !== "complete");
+
+  return (
+    <div className="space-y-6">
+      <div className="rounded-xl border border-border bg-secondary/20 px-3 py-2 text-xs text-muted-foreground">
+        {tournament.size}-player · {tournament.status} · {entrants.length} entrants · players are
+        identified by name and email. Empty slots become byes when you start; use Force winner to
+        move the bracket when nobody plays.
+      </div>
+
+      {tournament.status === "open" ? (
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-60"
+            disabled={starting || entrants.length < 2}
+            onClick={onStarted}
+          >
+            {starting ? "Starting…" : "Start bracket"}
+          </button>
+        </div>
+      ) : null}
+
+      <section aria-labelledby="admin-entrants">
+        <h3 id="admin-entrants" className="text-sm font-semibold">
+          Entrants
+        </h3>
+        {entrants.length === 0 ? (
+          <p className="mt-2 text-xs text-muted-foreground">No entrants yet.</p>
+        ) : (
+          <ul className="mt-2 space-y-2">
+            {entrants.map((e) => (
+              <li
+                key={e.userId}
+                className="flex items-start justify-between gap-2 rounded-lg border border-border px-3 py-2 text-sm"
+              >
+                <div className="min-w-0">
+                  <p className="font-medium">{e.name}</p>
+                  {e.email ? <p className="text-xs text-muted-foreground">{e.email}</p> : null}
+                </div>
+                {tournament.status === "open" ? (
+                  <button
+                    type="button"
+                    className={actionBtn}
+                    disabled={removeMut.isPending}
+                    onClick={() => removeMut.mutate(e.userId)}
+                  >
+                    Remove
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section aria-labelledby="admin-matches" className="space-y-3">
+        <h3 id="admin-matches" className="text-sm font-semibold">
+          Matches ({openMatches.length} open)
+        </h3>
+        {matches.length === 0 ? (
+          <p className="text-xs text-muted-foreground">Start the bracket to seed match slots.</p>
+        ) : (
+          matches.map((match) => (
+            <AdminMatchCard
+              key={match.id}
+              match={match}
+              entrants={entrants}
+              busy={slotMut.isPending || winnerMut.isPending}
+              onSetEmails={(playerAEmail, playerBEmail) =>
+                slotMut.mutate({
+                  tournamentMatchId: match.id,
+                  playerAEmail,
+                  playerBEmail,
+                })
+              }
+              onClearSide={(side) =>
+                slotMut.mutate({
+                  tournamentMatchId: match.id,
+                  ...(side === "a" ? { playerAId: null } : { playerBId: null }),
+                })
+              }
+              onPickEntrant={(side, userId) =>
+                slotMut.mutate({
+                  tournamentMatchId: match.id,
+                  ...(side === "a" ? { playerAId: userId } : { playerBId: userId }),
+                })
+              }
+              onDeclare={(winnerId) => winnerMut.mutate({ tournamentMatchId: match.id, winnerId })}
+            />
+          ))
+        )}
+      </section>
+    </div>
+  );
+}
+
+function AdminMatchCard({
+  match,
+  entrants,
+  busy,
+  onSetEmails,
+  onClearSide,
+  onPickEntrant,
+  onDeclare,
+}: {
+  match: {
+    id: string;
+    round: number;
+    slot: number;
+    status: string;
+    playerA: { id: string; name: string; email: string | null } | null;
+    playerB: { id: string; name: string; email: string | null } | null;
+    winner: { id: string; name: string; email: string | null } | null;
+  };
+  entrants: Array<{ userId: string; name: string; email: string | null }>;
+  busy: boolean;
+  onSetEmails: (a: string | null, b: string | null) => void;
+  onClearSide: (side: "a" | "b") => void;
+  onPickEntrant: (side: "a" | "b", userId: string | null) => void;
+  onDeclare: (winnerId: string | null) => void;
+}) {
+  const [emailA, setEmailA] = useState(match.playerA?.email ?? "");
+  const [emailB, setEmailB] = useState(match.playerB?.email ?? "");
+  const complete = match.status === "complete";
+
+  return (
+    <article className="rounded-xl border border-border p-3 text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-medium text-muted-foreground">
+          Round {match.round + 1} · Match {match.slot + 1}
+        </p>
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          {match.status}
+        </span>
+      </div>
+
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <SlotEditor
+          label="Player A"
+          name={match.playerA?.name}
+          email={emailA}
+          onEmailChange={setEmailA}
+          entrants={entrants}
+          disabled={complete || busy}
+          onPick={(id) => onPickEntrant("a", id)}
+          onClear={() => onClearSide("a")}
+        />
+        <SlotEditor
+          label="Player B"
+          name={match.playerB?.name}
+          email={emailB}
+          onEmailChange={setEmailB}
+          entrants={entrants}
+          disabled={complete || busy}
+          onPick={(id) => onPickEntrant("b", id)}
+          onClear={() => onClearSide("b")}
+        />
+      </div>
+
+      {!complete ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            className={actionBtn}
+            disabled={busy}
+            onClick={() => onSetEmails(emailA.trim() || null, emailB.trim() || null)}
+          >
+            Apply emails
+          </button>
+          {match.playerA ? (
+            <button
+              type="button"
+              className={actionBtn}
+              disabled={busy}
+              onClick={() => onDeclare(match.playerA!.id)}
+            >
+              Force A wins
+            </button>
+          ) : null}
+          {match.playerB ? (
+            <button
+              type="button"
+              className={actionBtn}
+              disabled={busy}
+              onClick={() => onDeclare(match.playerB!.id)}
+            >
+              Force B wins
+            </button>
+          ) : null}
+          {(match.playerA || match.playerB) && !(match.playerA && match.playerB) ? (
+            <button
+              type="button"
+              className={actionBtn}
+              disabled={busy}
+              onClick={() => onDeclare(null)}
+            >
+              Advance bye
+            </button>
+          ) : null}
+        </div>
+      ) : match.winner ? (
+        <p className="mt-3 text-xs text-muted-foreground" role="status">
+          Winner: {match.winner.name}
+          {match.winner.email ? ` · ${match.winner.email}` : ""}
+        </p>
+      ) : null}
+    </article>
+  );
+}
+
+function SlotEditor({
+  label,
+  name,
+  email,
+  onEmailChange,
+  entrants,
+  disabled,
+  onPick,
+  onClear,
+}: {
+  label: string;
+  name?: string | undefined;
+  email: string;
+  onEmailChange: (v: string) => void;
+  entrants: Array<{ userId: string; name: string; email: string | null }>;
+  disabled?: boolean;
+  onPick: (userId: string | null) => void;
+  onClear: () => void;
+}) {
+  return (
+    <div className="space-y-2 rounded-lg border border-border/70 bg-secondary/10 p-2">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <p className="text-sm font-medium">{name ?? "Empty"}</p>
+      <label className="block text-xs">
+        Email
+        <input
+          type="email"
+          className="field mt-1 h-8 w-full text-xs"
+          value={email}
+          disabled={disabled}
+          onChange={(e) => onEmailChange(e.target.value)}
+          autoComplete="off"
+          placeholder="player@example.com"
+        />
+      </label>
+      <label className="block text-xs">
+        Or pick entrant
+        <select
+          className="field mt-1 h-8 w-full text-xs"
+          disabled={disabled}
+          defaultValue=""
+          onChange={(e) => {
+            const v = e.target.value;
+            if (!v) return;
+            onPick(v);
+            e.target.value = "";
+          }}
+        >
+          <option value="">Select…</option>
+          {entrants.map((e) => (
+            <option key={e.userId} value={e.userId}>
+              {e.name}
+              {e.email ? ` · ${e.email}` : ""}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button type="button" className={actionBtn} disabled={disabled} onClick={onClear}>
+        Clear slot
+      </button>
     </div>
   );
 }

@@ -228,6 +228,14 @@ export const joinBattle = createServerFn({ method: "POST" })
     return acceptBattle(context.userId, data.matchId);
   });
 
+export const declineBattleMatch = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) => z.object({ matchId: uuid }).parse(input))
+  .handler(async ({ context, data }) => {
+    const { declineBattle } = await import("@/lib/play.server");
+    return declineBattle(context.userId, data.matchId);
+  });
+
 export const readyBattleMatch = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) => z.object({ matchId: uuid }).parse(input))
@@ -284,9 +292,9 @@ export const beginEscapeScene = createServerFn({ method: "POST" })
 export const getTournamentDetail = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) => z.object({ tournamentId: uuid }).parse(input))
-  .handler(async ({ data }) => {
+  .handler(async ({ context, data }) => {
     const { getTournament } = await import("@/lib/play.server");
-    return getTournament(data.tournamentId);
+    return getTournament(data.tournamentId, context.userId);
   });
 
 export const enterTournament = createServerFn({ method: "POST" })
@@ -687,6 +695,47 @@ export const updatePlayTournament = createServerFn({ method: "POST" })
       size: data.size,
       ...(data.poolId !== undefined ? { poolId: data.poolId } : {}),
     });
+  });
+
+export const removeTournamentEntrant = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) => z.object({ tournamentId: uuid, entrantUserId: uuid }).parse(input))
+  .handler(async ({ context, data }) => {
+    const { adminRemoveTournamentEntrant } = await import("@/lib/play.server");
+    return adminRemoveTournamentEntrant(context.userId, data.tournamentId, data.entrantUserId);
+  });
+
+export const setTournamentMatchSlot = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) =>
+    z
+      .object({
+        tournamentMatchId: uuid,
+        playerAId: uuid.nullable().optional(),
+        playerBId: uuid.nullable().optional(),
+        playerAEmail: z.string().trim().email().nullable().optional(),
+        playerBEmail: z.string().trim().email().nullable().optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ context, data }) => {
+    const { adminSetTournamentMatchSlot } = await import("@/lib/play.server");
+    return adminSetTournamentMatchSlot(context.userId, data);
+  });
+
+export const declareTournamentWinner = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) =>
+    z
+      .object({
+        tournamentMatchId: uuid,
+        winnerId: uuid.nullable(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ context, data }) => {
+    const { adminDeclareTournamentWinner } = await import("@/lib/play.server");
+    return adminDeclareTournamentWinner(context.userId, data);
   });
 
 export const spinArenaParticipant = createServerFn({ method: "POST" })

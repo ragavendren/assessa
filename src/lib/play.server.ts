@@ -1293,16 +1293,45 @@ async function maybeCompleteMatch(matchId: string) {
       Number(a.duration_seconds ?? 0) - Number(b.duration_seconds ?? 0),
   );
   const winner = ranked[0]?.user_id ?? null;
-  await db.from("play_matches").update({ status: "complete", winner_id: winner }).eq("id", matchId);
+  if (!winner) return;
+  await declareMatchWinner(matchId, winner);
+}
+
+async function declareMatchWinner(matchId: string, winnerId: string) {
+  await db
+    .from("play_matches")
+    .update({ status: "complete", winner_id: winnerId })
+    .eq("id", matchId);
   const { data: tmatch } = await db
     .from("play_tournament_matches")
     .select("id, tournament_id, round, slot")
     .eq("match_id", matchId)
     .maybeSingle();
-  if (tmatch && winner) {
-    await db.from("play_tournament_matches").update({ winner_id: winner }).eq("id", tmatch.id);
-    await advanceTournament(tmatch.tournament_id, tmatch.round, tmatch.slot, winner);
+  if (tmatch) {
+    await db.from("play_tournament_matches").update({ winner_id: winnerId }).eq("id", tmatch.id);
+    await advanceTournament(tmatch.tournament_id, tmatch.round, tmatch.slot, winnerId);
   }
+}
+
+async function ensureKnockoutPlayMatch(
+  challengeId: string,
+  playerA: string,
+  playerB: string,
+): Promise<string> {
+  const { data: match, error } = await db
+    .from("play_matches")
+    .insert({
+      challenge_id: challengeId,
+      inviter_id: playerA,
+      invitee_id: playerB,
+      status: "ready",
+      inviter_ready: false,
+      invitee_ready: false,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  return match.id;
 }
 
 async function advanceTournament(
@@ -1315,7 +1344,7 @@ async function advanceTournament(
   const nextSlot = Math.floor(slot / 2);
   const { data: next } = await db
     .from("play_tournament_matches")
-    .select("id, player_a, player_b")
+    .select("id, player_a, player_b, match_id, winner_id")
     .eq("tournament_id", tournamentId)
     .eq("round", nextRound)
     .eq("slot", nextSlot)
@@ -1326,6 +1355,92 @@ async function advanceTournament(
   }
   const patch = slot % 2 === 0 ? { player_a: winnerId } : { player_b: winnerId };
   await db.from("play_tournament_matches").update(patch).eq("id", next.id);
+
+  const playerA = slot % 2 === 0 ? winnerId : next.player_a;
+  const playerB = slot % 2 === 0 ? next.player_b : winnerId;
+  if (playerA && playerB && !next.match_id && !next.winner_id) {
+    const { data: tournament } = await db
+      .from("play_tournaments")
+      .select("pool_id")
+      .eq("id", tournamentId)
+      .maybeSingle();
+    const challenge = await ensureChallenge({
+      kind: "knockout",
+      ...(tournament?.pool_id ? { poolId: tournament.pool_id } : {}),
+    });
+    const matchId = await ensureKnockoutPlayMatch(challenge.id, playerA, playerB);
+    await db
+      .from("play_tournament_matches")
+      .update({ match_id: matchId, player_a: playerA, player_b: playerB })
+      .eq("id", next.id);
+  } else if (playerA && !playerB && !next.winner_id) {
+    await db
+      .from("play_tournament_matches")
+      .update({ winner_id: playerA, player_a: playerA })
+      .eq("id", next.id);
+    await advanceTournament(tournamentId, nextRound, nextSlot, playerA);
+  } else if (!playerA && playerB && !next.winner_id) {
+    await db
+      .from("play_tournament_matches")
+      .update({ winner_id: playerB, player_b: playerB })
+      .eq("id", next.id);
+    await advanceTournament(tournamentId, nextRound, nextSlot, playerB);
+  }
+}
+
+async function resolveByeWinners(tournamentId: string) {
+  const { data: matches } = await db
+    .from("play_tournament_matches")
+    .select("id, round, slot, player_a, player_b, winner_id, match_id")
+    .eq("tournament_id", tournamentId)
+    .order("round")
+    .order("slot");
+  for (const match of matches ?? []) {
+    if (match.winner_id) continue;
+    if (match.player_a && !match.player_b) {
+      await db
+        .from("play_tournament_matches")
+        .update({ winner_id: match.player_a })
+        .eq("id", match.id);
+      await advanceTournament(tournamentId, match.round, match.slot, match.player_a);
+    } else if (!match.player_a && match.player_b) {
+      await db
+        .from("play_tournament_matches")
+        .update({ winner_id: match.player_b })
+        .eq("id", match.id);
+      await advanceTournament(tournamentId, match.round, match.slot, match.player_b);
+    }
+  }
+}
+
+type ProfileLabel = {
+  id: string;
+  name: string;
+  email: string | null;
+};
+
+async function loadProfileLabels(userIds: string[]): Promise<Map<string, ProfileLabel>> {
+  const unique = [...new Set(userIds.filter(Boolean))];
+  if (unique.length === 0) return new Map();
+  const { data } = await db
+    .from("profiles")
+    .select("id, full_name, display_name, email")
+    .in("id", unique);
+  return new Map(
+    (data ?? []).map((row) => [
+      row.id,
+      {
+        id: row.id,
+        name: row.display_name || row.full_name || row.email || "Participant",
+        email: row.email ?? null,
+      },
+    ]),
+  );
+}
+
+function labelOf(map: Map<string, ProfileLabel>, userId: string | null | undefined) {
+  if (!userId) return null;
+  return map.get(userId) ?? { id: userId, name: "Participant", email: null };
 }
 
 export async function summarisePlay(
@@ -1640,14 +1755,36 @@ export async function markFlash(userId: string, questionId: string, known: boole
 export async function inviteBattle(userId: string, email: string) {
   const trimmed = email.trim().toLowerCase();
   if (!trimmed.includes("@")) throw new Error("Enter a valid email.");
-  const { data: me } = await db.from("profiles").select("email").eq("id", userId).maybeSingle();
-  if (me?.email?.toLowerCase() === trimmed) throw new Error("You cannot invite yourself.");
-  const { data: invitee } = await db
-    .from("profiles")
-    .select("id, email")
-    .eq("email", trimmed)
-    .maybeSingle();
+  const myEmail = await emailOf(userId);
+  if (myEmail && myEmail === trimmed) throw new Error("You cannot invite yourself.");
+
+  const invitee = await findProfileByEmail(trimmed);
   const challenge = await ensureChallenge({ kind: "battle" });
+  const poolId =
+    challenge.poolId ?? (await largestPoolId(challenge.rules.questionCount, challenge.courseId));
+  if (!poolId) {
+    throw new Error(
+      "Battle has no questions yet. An admin must Configure Battle with a question pool.",
+    );
+  }
+
+  // One open invite per pair — refresh instead of stacking duplicates.
+  const { data: existingOpen } = await db
+    .from("play_matches")
+    .select("id, status")
+    .eq("inviter_id", userId)
+    .eq("invitee_email", trimmed)
+    .in("status", ["pending", "ready", "active"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (existingOpen) {
+    if (existingOpen.status === "pending") {
+      return { matchId: existingOpen.id, reused: true as const };
+    }
+    throw new Error("You already have an open battle with this player.");
+  }
+
   const { data, error } = await db
     .from("play_matches")
     .insert({
@@ -1671,27 +1808,53 @@ export async function inviteBattle(userId: string, email: string) {
       icon: "⚔️",
     });
   }
-  return { matchId: data.id };
+  return { matchId: data.id, reused: false as const };
 }
 
 export async function acceptBattle(userId: string, matchId: string) {
   const { data: match } = await db.from("play_matches").select("*").eq("id", matchId).maybeSingle();
   if (!match) throw new Error("Battle not found.");
-  if (match.status !== "pending") throw new Error("This invite is no longer pending.");
-  const { data: me } = await db.from("profiles").select("email").eq("id", userId).single();
-  const allowed = match.invitee_id === userId || match.invitee_email === me?.email;
-  if (!allowed) throw new Error("This invite is not for you.");
+  if (match.status === "declined") throw new Error("This invite was declined.");
+  if (match.status === "complete") throw new Error("This battle is already finished.");
   if (match.inviter_id === userId) throw new Error("You cannot accept your own invite.");
-  const { error } = await db
+
+  const myEmail = await emailOf(userId);
+  const emailMatch =
+    Boolean(match.invitee_email) &&
+    Boolean(myEmail) &&
+    match.invitee_email!.toLowerCase() === myEmail;
+  const allowed = match.invitee_id === userId || emailMatch;
+  if (!allowed) throw new Error("This invite is not for you.");
+
+  // Already accepted (idempotent) — keep lobby in sync for both sides.
+  if (match.status === "ready" || match.status === "active") {
+    if (match.invitee_id !== userId) {
+      await db.from("play_matches").update({ invitee_id: userId }).eq("id", matchId);
+    }
+    return { matchId, status: match.status as "ready" | "active" };
+  }
+
+  if (match.status !== "pending") {
+    throw new Error("This invite is no longer pending.");
+  }
+
+  const { data: updated, error } = await db
     .from("play_matches")
     .update({
       invitee_id: userId,
+      invitee_email: myEmail || match.invitee_email,
       status: "ready",
       inviter_ready: false,
       invitee_ready: false,
     })
-    .eq("id", matchId);
+    .eq("id", matchId)
+    .eq("status", "pending")
+    .select("id, status, invitee_id")
+    .maybeSingle();
   if (error) throw new Error(error.message);
+  if (!updated)
+    throw new Error("Could not accept — invite may have changed. Refresh and try again.");
+
   await notify(match.inviter_id, {
     kind: "play_battle",
     title: "Battle accepted",
@@ -1702,11 +1865,75 @@ export async function acceptBattle(userId: string, matchId: string) {
   return { matchId, status: "ready" as const };
 }
 
+export async function declineBattle(userId: string, matchId: string) {
+  const { data: match } = await db.from("play_matches").select("*").eq("id", matchId).maybeSingle();
+  if (!match) throw new Error("Battle not found.");
+  if (match.status === "complete") throw new Error("This battle is already finished.");
+  if (match.status === "declined") return { matchId, status: "declined" as const };
+
+  const myEmail = await emailOf(userId);
+  const isInviter = match.inviter_id === userId;
+  const isInvitee =
+    match.invitee_id === userId ||
+    (Boolean(match.invitee_email) &&
+      Boolean(myEmail) &&
+      match.invitee_email!.toLowerCase() === myEmail);
+  if (!isInviter && !isInvitee) throw new Error("This battle is not yours.");
+
+  // Inviter can cancel while pending; invitee can decline while pending.
+  // Either side may abandon before both have finished if still in lobby (ready, not playing).
+  if (match.status === "active") {
+    const { count } = await db
+      .from("play_sessions")
+      .select("id", { count: "exact", head: true })
+      .eq("match_id", matchId)
+      .eq("status", "in_progress");
+    if ((count ?? 0) > 0) {
+      throw new Error("Cannot decline while a battle session is in progress.");
+    }
+  }
+
+  if (!isInviter && match.status !== "pending" && match.status !== "ready") {
+    throw new Error("This invite can no longer be declined.");
+  }
+  if (isInviter && match.status !== "pending" && match.status !== "ready") {
+    throw new Error("Only open lobby battles can be cancelled.");
+  }
+
+  const { error } = await db
+    .from("play_matches")
+    .update({
+      status: "declined",
+      invitee_id: match.invitee_id ?? (isInvitee ? userId : null),
+      inviter_ready: false,
+      invitee_ready: false,
+    })
+    .eq("id", matchId);
+  if (error) throw new Error(error.message);
+
+  const notifyId = isInviter ? match.invitee_id : match.inviter_id;
+  if (notifyId) {
+    await notify(notifyId, {
+      kind: "play_battle",
+      title: isInviter ? "Battle cancelled" : "Battle declined",
+      body: isInviter
+        ? "The inviter cancelled the battle invite."
+        : "Your opponent declined the battle invite.",
+      href: "/play/battle",
+      icon: "⚔️",
+    });
+  }
+  return { matchId, status: "declined" as const };
+}
+
 export async function readyBattle(userId: string, matchId: string) {
   const { data: match } = await db.from("play_matches").select("*").eq("id", matchId).maybeSingle();
   if (!match) throw new Error("Battle not found.");
+  if (match.status === "pending") {
+    throw new Error("Wait for the invite to be accepted first.");
+  }
   if (match.status !== "ready" && match.status !== "active") {
-    throw new Error("Accept the invite before marking ready.");
+    throw new Error("This battle is not open for ready-up.");
   }
   const isInviter = match.inviter_id === userId;
   const isInvitee = match.invitee_id === userId;
@@ -1767,24 +1994,31 @@ export async function readyBattle(userId: string, matchId: string) {
 export async function listMyBattles(userId: string) {
   if (!(await kindEnabled("battle"))) return { battles: [] as const };
   const myEmail = await emailOf(userId);
+
+  const { data: battleChallenges } = await db.from("challenges").select("id").eq("kind", "battle");
+  const challengeIds = (battleChallenges ?? []).map((c) => c.id);
+  if (challengeIds.length === 0) return { battles: [] as const };
+
   const [{ data: byParty, error: partyError }, { data: byEmail, error: emailError }] =
     await Promise.all([
       db
         .from("play_matches")
         .select(
-          "id, status, inviter_id, invitee_id, invitee_email, inviter_ready, invitee_ready, winner_id, created_at, instance_id",
+          "id, status, inviter_id, invitee_id, invitee_email, inviter_ready, invitee_ready, winner_id, created_at, instance_id, challenge_id",
         )
+        .in("challenge_id", challengeIds)
         .or(`inviter_id.eq.${userId},invitee_id.eq.${userId}`)
         .order("created_at", { ascending: false })
-        .limit(30),
+        .limit(40),
       myEmail
         ? db
             .from("play_matches")
             .select(
-              "id, status, inviter_id, invitee_id, invitee_email, inviter_ready, invitee_ready, winner_id, created_at, instance_id",
+              "id, status, inviter_id, invitee_id, invitee_email, inviter_ready, invitee_ready, winner_id, created_at, instance_id, challenge_id",
             )
-            .eq("invitee_email", myEmail)
-            .eq("status", "pending")
+            .in("challenge_id", challengeIds)
+            .ilike("invitee_email", myEmail)
+            .in("status", ["pending", "ready", "active"])
             .order("created_at", { ascending: false })
             .limit(20)
         : Promise.resolve({ data: [] as never[], error: null }),
@@ -1797,25 +2031,27 @@ export async function listMyBattles(userId: string) {
   const rows = [...byId.values()].sort(
     (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
   );
+
+  // Heal stuck pending rows where invitee is already bound (legacy / race).
+  for (const row of rows) {
+    if (row.status === "pending" && row.invitee_id) {
+      const { data: healed } = await db
+        .from("play_matches")
+        .update({ status: "ready", inviter_ready: false, invitee_ready: false })
+        .eq("id", row.id)
+        .eq("status", "pending")
+        .select("status")
+        .maybeSingle();
+      if (healed) row.status = "ready";
+    }
+  }
+
   const userIds = [
     ...new Set(
       rows.flatMap((m) => [m.inviter_id, m.invitee_id].filter((id): id is string => Boolean(id))),
     ),
   ];
-  const { data: profiles } =
-    userIds.length > 0
-      ? await db.from("profiles").select("id, full_name, display_name, email").in("id", userIds)
-      : {
-          data: [] as Array<{
-            id: string;
-            full_name: string | null;
-            display_name: string | null;
-            email: string | null;
-          }>,
-        };
-  const nameById = new Map(
-    (profiles ?? []).map((p) => [p.id, p.display_name || p.full_name || p.email || "Participant"]),
-  );
+  const profiles = await loadProfileLabels(userIds);
 
   const matchIds = rows.map((m) => m.id);
   const { data: sessions } =
@@ -1837,7 +2073,7 @@ export async function listMyBattles(userId: string) {
           }>,
         };
 
-  const sessionsByMatch = new Map<string, typeof sessions>();
+  const sessionsByMatch = new Map<string, NonNullable<typeof sessions>>();
   for (const session of sessions ?? []) {
     if (!session.match_id) continue;
     const list = sessionsByMatch.get(session.match_id) ?? [];
@@ -1848,8 +2084,9 @@ export async function listMyBattles(userId: string) {
   const battles = rows.map((match) => {
     const role: "inviter" | "invitee" = match.inviter_id === userId ? "inviter" : "invitee";
     const opponentId = role === "inviter" ? match.invitee_id : match.inviter_id;
-    const opponentName =
-      (opponentId ? nameById.get(opponentId) : null) ?? match.invitee_email ?? "Opponent";
+    const opponent = labelOf(profiles, opponentId);
+    const opponentName = opponent?.name ?? match.invitee_email ?? "Opponent";
+    const opponentEmail = (opponent?.email || match.invitee_email || null)?.toLowerCase() ?? null;
     const myReady =
       role === "inviter" ? Boolean(match.inviter_ready) : Boolean(match.invitee_ready);
     const theirReady =
@@ -1863,8 +2100,29 @@ export async function listMyBattles(userId: string) {
     else if (match.status === "complete") phase = "complete";
     else if (mine?.status === "in_progress" || theirs?.status === "in_progress") phase = "playing";
     else if (match.status === "active" || bothReady) phase = "ready";
-    else if (match.status === "ready") phase = "accepted";
+    else if (match.status === "ready" || Boolean(match.invitee_id)) phase = "accepted";
     else phase = "invited";
+
+    const canAccept =
+      match.status === "pending" &&
+      role === "invitee" &&
+      (match.invitee_id === userId ||
+        (Boolean(match.invitee_email) &&
+          Boolean(myEmail) &&
+          match.invitee_email!.toLowerCase() === myEmail));
+    const canDecline =
+      match.status === "pending" ||
+      (match.status === "ready" && !bothReady && mine?.status !== "in_progress");
+    const canReady =
+      (match.status === "ready" || match.status === "active") &&
+      !myReady &&
+      match.status !== "complete" &&
+      match.status !== "declined";
+    const canPlay =
+      (match.status === "active" || bothReady) &&
+      match.status !== "complete" &&
+      match.status !== "pending" &&
+      match.status !== "declined";
 
     return {
       id: match.id,
@@ -1872,20 +2130,14 @@ export async function listMyBattles(userId: string) {
       phase,
       role,
       opponentName,
-      opponentEmail: match.invitee_email,
+      opponentEmail,
       myReady,
       theirReady,
       bothReady,
-      canAccept: match.status === "pending" && role === "invitee",
-      canReady:
-        (match.status === "ready" || match.status === "active") &&
-        !myReady &&
-        match.status !== "complete",
-      canPlay:
-        (match.status === "active" || bothReady) &&
-        match.status !== "complete" &&
-        match.status !== "pending" &&
-        match.status !== "declined",
+      canAccept,
+      canDecline,
+      canReady,
+      canPlay,
       mySessionId: mine?.id ?? null,
       mySessionStatus: mine?.status ?? null,
       theirSessionStatus: theirs?.status ?? null,
@@ -1895,6 +2147,17 @@ export async function listMyBattles(userId: string) {
   });
 
   return { battles };
+}
+
+async function findProfileByEmail(email: string) {
+  const trimmed = email.trim().toLowerCase();
+  const { data } = await db
+    .from("profiles")
+    .select("id, email")
+    .ilike("email", trimmed)
+    .limit(1)
+    .maybeSingle();
+  return data;
 }
 
 async function emailOf(userId: string) {
@@ -1910,10 +2173,17 @@ export async function getBattleLive(userId: string, matchId: string) {
     )
     .eq("id", matchId)
     .maybeSingle();
-  if (!match) throw new Error("Battle not found.");
+  if (!match) throw new Error("Match not found.");
   if (match.inviter_id !== userId && match.invitee_id !== userId) {
-    throw new Error("This battle is not yours.");
+    throw new Error("This match is not yours.");
   }
+
+  const { data: tournamentLink } = await db
+    .from("play_tournament_matches")
+    .select("id")
+    .eq("match_id", matchId)
+    .maybeSingle();
+  const mode = tournamentLink ? ("knockout" as const) : ("battle" as const);
 
   const { data: sessions } = await db
     .from("play_sessions")
@@ -1923,21 +2193,10 @@ export async function getBattleLive(userId: string, matchId: string) {
     .eq("match_id", matchId)
     .order("started_at", { ascending: false });
 
-  const userIds = [match.inviter_id, match.invitee_id].filter((id): id is string => Boolean(id));
-  const { data: profiles } =
-    userIds.length > 0
-      ? await db.from("profiles").select("id, full_name, display_name, email").in("id", userIds)
-      : {
-          data: [] as Array<{
-            id: string;
-            full_name: string | null;
-            display_name: string | null;
-            email: string | null;
-          }>,
-        };
-  const nameById = new Map(
-    (profiles ?? []).map((p) => [p.id, p.display_name || p.full_name || p.email || "Participant"]),
+  const userIds = [match.inviter_id, match.invitee_id, match.winner_id].filter((id): id is string =>
+    Boolean(id),
   );
+  const profiles = await loadProfileLabels(userIds);
 
   function playerOf(playerId: string | null) {
     const session = (sessions ?? []).find((s) => s.user_id === playerId) ?? null;
@@ -1947,9 +2206,11 @@ export async function getBattleLive(userId: string, matchId: string) {
     let playStatus: "waiting" | "playing" | "done" = "waiting";
     if (session?.status === "submitted" || session?.status === "game_over") playStatus = "done";
     else if (session?.status === "in_progress") playStatus = "playing";
+    const label = labelOf(profiles, playerId);
     return {
       userId: playerId,
-      name: playerId ? (nameById.get(playerId) ?? "Opponent") : (match.invitee_email ?? "Opponent"),
+      name: label?.name ?? match.invitee_email ?? "Opponent",
+      email: label?.email ?? (playerId ? null : match.invitee_email),
       ready:
         playerId === match.inviter_id ? Boolean(match.inviter_ready) : Boolean(match.invitee_ready),
       playStatus,
@@ -1968,15 +2229,22 @@ export async function getBattleLive(userId: string, matchId: string) {
   const opponentId = match.inviter_id === userId ? match.invitee_id : match.inviter_id;
   const opponent = playerOf(opponentId);
   const bothPlaying = me.playStatus === "playing" && opponent.playStatus === "playing";
-  const waitingForOpponent = me.playStatus === "playing" && opponent.playStatus === "waiting";
+  // Knockout: each player can answer independently; battle waits for both to start.
+  const waitingForOpponent =
+    mode === "battle" && me.playStatus === "playing" && opponent.playStatus === "waiting";
   const canAnswer =
     me.playStatus === "playing" &&
-    (opponent.playStatus === "playing" || opponent.playStatus === "done");
+    (mode === "knockout" || opponent.playStatus === "playing" || opponent.playStatus === "done");
+
+  const winner = labelOf(profiles, match.winner_id);
 
   return {
     matchId: match.id,
+    mode,
     status: match.status,
     winnerId: match.winner_id,
+    winnerName: winner?.name ?? null,
+    winnerEmail: winner?.email ?? null,
     bothReady: Boolean(match.inviter_ready) && Boolean(match.invitee_ready),
     bothPlaying,
     waitingForOpponent,
@@ -2533,46 +2801,70 @@ export async function joinTournament(userId: string, tournamentId: string) {
     .maybeSingle();
   if (!t || t.status !== "open") throw new Error("Tournament is not open.");
   if (t.listed === false) throw new Error("This tournament is not published yet.");
+
+  const { data: existing } = await db
+    .from("play_tournament_entrants")
+    .select("user_id")
+    .eq("tournament_id", tournamentId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (existing) {
+    return { ok: true as const, alreadyJoined: true as const };
+  }
+
   const { count } = await db
     .from("play_tournament_entrants")
     .select("user_id", { count: "exact", head: true })
     .eq("tournament_id", tournamentId);
   if ((count ?? 0) >= t.size) throw new Error("Tournament is full.");
-  await db
+
+  const { error } = await db
     .from("play_tournament_entrants")
-    .upsert({ tournament_id: tournamentId, user_id: userId });
-  return { ok: true as const };
+    .insert({ tournament_id: tournamentId, user_id: userId });
+  if (error) {
+    if (error.code === "23505") return { ok: true as const, alreadyJoined: true as const };
+    throw new Error(error.message);
+  }
+  return { ok: true as const, alreadyJoined: false as const };
 }
 
 export async function adminStartTournament(userId: string, tournamentId: string) {
   await requireAdmin(userId);
   const { data: t } = await db.from("play_tournaments").select("*").eq("id", tournamentId).single();
   if (!t) throw new Error("Tournament not found.");
+  if (t.status !== "open") throw new Error("Bracket already started or finished.");
   const { data: entrants } = await db
     .from("play_tournament_entrants")
     .select("user_id")
     .eq("tournament_id", tournamentId);
-  const players = (entrants ?? []).map((e) => e.user_id);
-  if (players.length < 2) throw new Error("Need at least two players.");
-  const size = t.size;
-  const padded = [...players];
-  while (padded.length < size) padded.push(padded[padded.length - 1]!);
+  const players = [...new Set((entrants ?? []).map((e) => e.user_id))];
+  if (players.length < 2) throw new Error("Need at least two distinct players.");
+  const size = t.size as 4 | 8 | 16 | 32;
+  // Unique players only — empty slots become byes (never pad with duplicates).
+  const seeded = [...players];
+  while (seeded.length < size) seeded.push("");
+  const slotsPlayers = seeded.slice(0, size).map((id) => (id ? id : null));
+
   const rounds = Math.log2(size);
   await db.from("play_tournament_matches").delete().eq("tournament_id", tournamentId);
-  const challenge = await ensureChallenge({ kind: "knockout", poolId: t.pool_id });
+  const challenge = await ensureChallenge({
+    kind: "knockout",
+    ...(t.pool_id ? { poolId: t.pool_id } : {}),
+  });
+
   for (let round = 0; round < rounds; round++) {
     const slots = size / 2 ** (round + 1);
     for (let slot = 0; slot < slots; slot++) {
-      const a = round === 0 ? (padded[slot * 2] ?? null) : null;
-      const b = round === 0 ? (padded[slot * 2 + 1] ?? null) : null;
+      const a = round === 0 ? (slotsPlayers[slot * 2] ?? null) : null;
+      const b = round === 0 ? (slotsPlayers[slot * 2 + 1] ?? null) : null;
       let matchId: string | null = null;
+      let winnerId: string | null = null;
       if (round === 0 && a && b) {
-        const { data: match } = await db
-          .from("play_matches")
-          .insert({ challenge_id: challenge.id, inviter_id: a, invitee_id: b, status: "ready" })
-          .select("id")
-          .single();
-        matchId = match?.id ?? null;
+        matchId = await ensureKnockoutPlayMatch(challenge.id, a, b);
+      } else if (round === 0 && a && !b) {
+        winnerId = a;
+      } else if (round === 0 && !a && b) {
+        winnerId = b;
       }
       await db.from("play_tournament_matches").insert({
         tournament_id: tournamentId,
@@ -2581,10 +2873,14 @@ export async function adminStartTournament(userId: string, tournamentId: string)
         player_a: a,
         player_b: b,
         match_id: matchId,
+        winner_id: winnerId,
       });
     }
   }
+
   await db.from("play_tournaments").update({ status: "active" }).eq("id", tournamentId);
+  await resolveByeWinners(tournamentId);
+
   await notifyPlayAudience({
     kind: "play_tournament",
     title: `${t.name} has started`,
@@ -2594,13 +2890,10 @@ export async function adminStartTournament(userId: string, tournamentId: string)
   return { ok: true as const };
 }
 
-export async function getTournament(tournamentId: string) {
+export async function getTournament(tournamentId: string, viewerId?: string | null) {
   const [{ data: t }, { data: entrants }, { data: matches }] = await Promise.all([
     db.from("play_tournaments").select("*").eq("id", tournamentId).maybeSingle(),
-    db
-      .from("play_tournament_entrants")
-      .select("user_id, profiles(full_name)")
-      .eq("tournament_id", tournamentId),
+    db.from("play_tournament_entrants").select("user_id, seed").eq("tournament_id", tournamentId),
     db
       .from("play_tournament_matches")
       .select("*")
@@ -2609,7 +2902,193 @@ export async function getTournament(tournamentId: string) {
       .order("slot"),
   ]);
   if (!t) throw new Error("Tournament not found.");
-  return { tournament: t, entrants: entrants ?? [], matches: matches ?? [] };
+
+  const userIds = [
+    ...(entrants ?? []).map((e) => e.user_id),
+    ...(matches ?? []).flatMap((m) => [m.player_a, m.player_b, m.winner_id]),
+  ].filter((id): id is string => Boolean(id));
+  const profiles = await loadProfileLabels(userIds);
+
+  const joined = Boolean(viewerId && (entrants ?? []).some((e) => e.user_id === viewerId));
+
+  return {
+    tournament: t,
+    joined,
+    viewerId: viewerId ?? null,
+    entrants: (entrants ?? []).map((e) => {
+      const profile = labelOf(profiles, e.user_id)!;
+      return {
+        userId: e.user_id,
+        seed: e.seed,
+        name: profile.name,
+        email: profile.email,
+      };
+    }),
+    matches: (matches ?? []).map((m) => {
+      const playerA = labelOf(profiles, m.player_a);
+      const playerB = labelOf(profiles, m.player_b);
+      const winner = labelOf(profiles, m.winner_id);
+      const isMine = Boolean(viewerId) && (m.player_a === viewerId || m.player_b === viewerId);
+      return {
+        id: m.id,
+        round: m.round,
+        slot: m.slot,
+        matchId: m.match_id,
+        playerA: playerA ? { id: playerA.id, name: playerA.name, email: playerA.email } : null,
+        playerB: playerB ? { id: playerB.id, name: playerB.name, email: playerB.email } : null,
+        winner: winner ? { id: winner.id, name: winner.name, email: winner.email } : null,
+        status: m.winner_id
+          ? ("complete" as const)
+          : m.match_id
+            ? ("playable" as const)
+            : m.player_a || m.player_b
+              ? ("pending" as const)
+              : ("empty" as const),
+        isMine,
+        canPlay: Boolean(m.match_id && !m.winner_id && isMine),
+      };
+    }),
+  };
+}
+
+export async function adminRemoveTournamentEntrant(
+  userId: string,
+  tournamentId: string,
+  entrantUserId: string,
+) {
+  await requireAdmin(userId);
+  const { data: t } = await db
+    .from("play_tournaments")
+    .select("status")
+    .eq("id", tournamentId)
+    .maybeSingle();
+  if (!t) throw new Error("Tournament not found.");
+  if (t.status !== "open")
+    throw new Error("Entrants can only be removed before the bracket starts.");
+  const { error } = await db
+    .from("play_tournament_entrants")
+    .delete()
+    .eq("tournament_id", tournamentId)
+    .eq("user_id", entrantUserId);
+  if (error) throw new Error(error.message);
+  return { ok: true as const };
+}
+
+async function resolveProfileIdByEmail(email: string) {
+  const trimmed = email.trim().toLowerCase();
+  if (!trimmed.includes("@")) throw new Error("Enter a valid email.");
+  const { data } = await db.from("profiles").select("id").eq("email", trimmed).maybeSingle();
+  if (!data) throw new Error(`No Assessa user found for ${trimmed}.`);
+  return data.id as string;
+}
+
+export async function adminSetTournamentMatchSlot(
+  userId: string,
+  payload: {
+    tournamentMatchId: string;
+    playerAId?: string | null;
+    playerBId?: string | null;
+    playerAEmail?: string | null;
+    playerBEmail?: string | null;
+  },
+) {
+  await requireAdmin(userId);
+  const { data: match } = await db
+    .from("play_tournament_matches")
+    .select("*")
+    .eq("id", payload.tournamentMatchId)
+    .maybeSingle();
+  if (!match) throw new Error("Match not found.");
+  if (match.winner_id)
+    throw new Error("This match already has a winner. Force a new winner instead.");
+
+  let playerA = payload.playerAId !== undefined ? payload.playerAId : match.player_a;
+  let playerB = payload.playerBId !== undefined ? payload.playerBId : match.player_b;
+  if (payload.playerAEmail !== undefined) {
+    playerA = payload.playerAEmail ? await resolveProfileIdByEmail(payload.playerAEmail) : null;
+  }
+  if (payload.playerBEmail !== undefined) {
+    playerB = payload.playerBEmail ? await resolveProfileIdByEmail(payload.playerBEmail) : null;
+  }
+
+  if (playerA && playerB && playerA === playerB) {
+    throw new Error("A player cannot occupy both slots in the same match.");
+  }
+
+  let matchId = match.match_id;
+  if (playerA && playerB) {
+    const { data: tournament } = await db
+      .from("play_tournaments")
+      .select("pool_id")
+      .eq("id", match.tournament_id)
+      .maybeSingle();
+    const challenge = await ensureChallenge({
+      kind: "knockout",
+      ...(tournament?.pool_id ? { poolId: tournament.pool_id } : {}),
+    });
+    if (matchId) {
+      await db
+        .from("play_matches")
+        .update({
+          inviter_id: playerA,
+          invitee_id: playerB,
+          status: "ready",
+          winner_id: null,
+        })
+        .eq("id", matchId);
+    } else {
+      matchId = await ensureKnockoutPlayMatch(challenge.id, playerA, playerB);
+    }
+  } else {
+    matchId = null;
+  }
+
+  const { error } = await db
+    .from("play_tournament_matches")
+    .update({
+      player_a: playerA,
+      player_b: playerB,
+      match_id: matchId,
+      winner_id: null,
+    })
+    .eq("id", match.id);
+  if (error) throw new Error(error.message);
+
+  return { ok: true as const };
+}
+
+export async function adminDeclareTournamentWinner(
+  userId: string,
+  payload: { tournamentMatchId: string; winnerId: string | null; reason?: string },
+) {
+  await requireAdmin(userId);
+  const { data: match } = await db
+    .from("play_tournament_matches")
+    .select("*")
+    .eq("id", payload.tournamentMatchId)
+    .maybeSingle();
+  if (!match) throw new Error("Match not found.");
+
+  let winnerId = payload.winnerId;
+  if (!winnerId) {
+    if (!match.player_a && !match.player_b) {
+      throw new Error("Assign at least one player before advancing this slot.");
+    }
+    winnerId = match.player_a ?? match.player_b;
+    if (!winnerId) throw new Error("No player available to advance.");
+  }
+
+  if (match.player_a !== winnerId && match.player_b !== winnerId) {
+    throw new Error("Winner must be one of the two players in this slot.");
+  }
+
+  if (match.match_id) {
+    await declareMatchWinner(match.match_id, winnerId);
+  } else {
+    await db.from("play_tournament_matches").update({ winner_id: winnerId }).eq("id", match.id);
+    await advanceTournament(match.tournament_id, match.round, match.slot, winnerId);
+  }
+  return { ok: true as const, winnerId };
 }
 
 export async function startKnockoutMatch(userId: string, matchId: string) {

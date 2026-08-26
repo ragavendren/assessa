@@ -45,13 +45,14 @@ function PlaySessionPage() {
   });
 
   const matchId = data?.session.matchId ?? null;
-  const isBattle = data?.session.kind === "battle" && Boolean(matchId);
+  const isDualMatch =
+    Boolean(matchId) && (data?.session.kind === "battle" || data?.session.kind === "knockout");
 
   const { data: battleLive } = useQuery({
     queryKey: ["battle-live", matchId],
     queryFn: () => fetchBattle({ data: { matchId: matchId! } }),
-    enabled: Boolean(isBattle && matchId),
-    refetchInterval: isBattle ? 2000 : false,
+    enabled: Boolean(isDualMatch && matchId),
+    refetchInterval: isDualMatch ? 2000 : false,
   });
 
   useEffect(() => {
@@ -172,7 +173,9 @@ function PlaySessionPage() {
   useEffect(() => {
     if (
       !data?.session.rules.perItem &&
-      (data?.session.kind === "marathon" || data?.session.kind === "battle")
+      (data?.session.kind === "marathon" ||
+        data?.session.kind === "battle" ||
+        data?.session.kind === "knockout")
     ) {
       const id = window.setInterval(
         () => {
@@ -180,7 +183,7 @@ function PlaySessionPage() {
             data: { sessionId, answers: answersRef.current, currentIndex: index },
           });
         },
-        data.session.kind === "battle" ? 3000 : 8000,
+        data.session.kind === "battle" || data.session.kind === "knockout" ? 3000 : 8000,
       );
       return () => window.clearInterval(id);
     }
@@ -211,7 +214,8 @@ function PlaySessionPage() {
   const maxLives = sessionRules.lives ?? 3;
   const speedDuration = Math.max(1, sessionRules.durationSeconds ?? remaining ?? 300);
   const waitingForOpponent = Boolean(battleLive?.waitingForOpponent);
-  const showBattleQuestions = !isBattle || Boolean(battleLive?.canAnswer);
+  const showBattleQuestions = !isDualMatch || Boolean(battleLive?.canAnswer);
+  const dualTitle = data.session.kind === "knockout" ? "Knockout 1v1" : "Battle";
 
   async function submitItem() {
     if (!question) return;
@@ -263,7 +267,9 @@ function PlaySessionPage() {
           opponent={battleLive.opponent}
           waitingForOpponent={waitingForOpponent}
           winnerId={battleLive.winnerId}
+          winnerName={battleLive.winnerName}
           myUserId={battleLive.me.userId}
+          title={dualTitle}
         />
       ) : null}
 
@@ -417,7 +423,7 @@ function PlaySessionPage() {
                         onClick={() => {
                           const next = index + 1;
                           setIndex(next);
-                          if (data.session.kind === "battle") {
+                          if (data.session.kind === "battle" || data.session.kind === "knockout") {
                             void save({
                               data: { sessionId, answers: answersRef.current, currentIndex: next },
                             });
