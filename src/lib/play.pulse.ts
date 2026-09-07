@@ -32,6 +32,8 @@ export type PulseTextAggregate = {
   kind: "text";
   total: number;
   items: Array<{ text: string; userId: string; submittedAt: string }>;
+  /** Token frequencies for Mentimeter-style word collage. */
+  words: Array<{ word: string; count: number }>;
 };
 
 export type PulseRatingAggregate = {
@@ -137,7 +139,77 @@ export function aggregateSlide(args: {
     .filter((r) => r.text.length > 0)
     .sort((a, b) => Date.parse(b.submittedAt) - Date.parse(a.submittedAt))
     .slice(0, 80);
-  return { kind: "text", total: items.length, items };
+  return {
+    kind: "text",
+    total: items.length,
+    items,
+    words: buildWordCollage(items.map((i) => i.text)),
+  };
+}
+
+const WORD_STOP = new Set([
+  "a",
+  "an",
+  "the",
+  "and",
+  "or",
+  "but",
+  "to",
+  "of",
+  "in",
+  "on",
+  "for",
+  "is",
+  "are",
+  "was",
+  "were",
+  "be",
+  "it",
+  "this",
+  "that",
+  "with",
+  "as",
+  "at",
+  "by",
+  "from",
+  "we",
+  "you",
+  "i",
+  "my",
+  "our",
+  "their",
+  "not",
+  "so",
+  "if",
+  "do",
+  "does",
+  "did",
+  "have",
+  "has",
+  "had",
+]);
+
+/** Collapse free-text answers into sized collage tokens. */
+export function buildWordCollage(texts: string[]): Array<{ word: string; count: number }> {
+  const counts = new Map<string, number>();
+  for (const text of texts) {
+    const tokens = text
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s'-]/gu, " ")
+      .split(/\s+/)
+      .map((t) => t.replace(/^['-]+|['-]+$/g, ""))
+      .filter((t) => t.length >= 2 && !WORD_STOP.has(t));
+    const seen = new Set<string>();
+    for (const token of tokens) {
+      if (seen.has(token)) continue;
+      seen.add(token);
+      counts.set(token, (counts.get(token) ?? 0) + 1);
+    }
+  }
+  return [...counts.entries()]
+    .map(([word, count]) => ({ word, count }))
+    .sort((a, b) => b.count - a.count || a.word.localeCompare(b.word))
+    .slice(0, 60);
 }
 
 export function pulseJoinUrl(pulseId: string, origin?: string) {
