@@ -113,24 +113,20 @@ function AdminPulseHostPage() {
       <PulseShareCard pulseId={pulse.id} pulseName={pulse.name} joinCode={pulse.joinCode} />
 
       <section className="flex flex-wrap gap-2" aria-label="Host controls">
-        {pulse.status === "draft" ? (
+        {pulse.status === "draft" || pulse.status === "lobby" ? (
           <button
             type="button"
             className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-60"
             disabled={busy}
-            onClick={() => actionMut.mutate({ action: "openLobby" })}
+            onClick={() =>
+              actionMut.mutate(
+                pulse.status === "draft"
+                  ? { action: "openLobby" }
+                  : { action: "showSlide", slideIndex: 0 },
+              )
+            }
           >
-            Open lobby
-          </button>
-        ) : null}
-        {pulse.status === "lobby" ? (
-          <button
-            type="button"
-            className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-60"
-            disabled={busy}
-            onClick={() => actionMut.mutate({ action: "showSlide", slideIndex: 0 })}
-          >
-            Start first slide
+            {pulse.status === "draft" ? "Start session" : "Start first slide"}
           </button>
         ) : null}
         {pulse.status === "prompt" || pulse.status === "results" ? (
@@ -138,7 +134,7 @@ function AdminPulseHostPage() {
             <button
               type="button"
               className={actionBtn}
-              disabled={busy}
+              disabled={busy || pulse.status === "results"}
               onClick={() => actionMut.mutate({ action: "reveal" })}
             >
               Reveal wall
@@ -161,12 +157,22 @@ function AdminPulseHostPage() {
             </button>
           </>
         ) : null}
+        {pulse.status === "complete" ? (
+          <button
+            type="button"
+            className={actionBtn}
+            disabled={busy}
+            onClick={() => actionMut.mutate({ action: "openLobby" })}
+          >
+            Restart session
+          </button>
+        ) : null}
       </section>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="rounded-2xl border border-border bg-card p-4">
           <h2 className="text-sm font-semibold">Current slide</h2>
-          {current && pulse.status !== "draft" && pulse.status !== "lobby" ? (
+          {current && (pulse.status === "prompt" || pulse.status === "results") ? (
             <div className="mt-3 space-y-2">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">
                 {current.type} · #{pulse.currentIndex + 1}/{slides.length}
@@ -182,9 +188,11 @@ function AdminPulseHostPage() {
             </div>
           ) : (
             <p className="mt-3 text-sm text-muted-foreground">
-              {pulse.status === "lobby"
-                ? "Lobby open — start when participants have joined."
-                : "Open the lobby, then start the first slide."}
+              {pulse.status === "complete"
+                ? "Session finished. Restart to run slides again, or pick a slide below."
+                : pulse.status === "lobby"
+                  ? "Lobby open — start the first slide when ready."
+                  : "Start the session to put the first slide live for participants."}
             </p>
           )}
           <ul className="mt-4 space-y-1">

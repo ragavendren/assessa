@@ -241,8 +241,8 @@ export async function adminPulseAction(
 
   switch (payload.action) {
     case "openLobby":
-      if (pulse.status === "complete") throw new Error("This pulse is finished.");
-      status = "lobby";
+      // Start (or restart) live: first slide so participants can answer immediately.
+      status = "prompt";
       currentIndex = 0;
       break;
     case "showSlide": {
@@ -303,11 +303,21 @@ async function responsesForSlide(pulseId: string, slideIndex: number) {
     .eq("pulse_id", pulseId)
     .eq("slide_index", slideIndex);
   if (error) throw new Error(error.message);
-  return (data ?? []).map((row) => ({
-    userId: row.user_id as string,
-    payload: row.payload as PulseResponsePayload,
-    submittedAt: row.submitted_at as string,
-  }));
+  return (data ?? []).map((row) => {
+    let payload = row.payload as PulseResponsePayload | string;
+    if (typeof payload === "string") {
+      try {
+        payload = JSON.parse(payload) as PulseResponsePayload;
+      } catch {
+        payload = { text: payload };
+      }
+    }
+    return {
+      userId: row.user_id as string,
+      payload: payload as PulseResponsePayload,
+      submittedAt: row.submitted_at as string,
+    };
+  });
 }
 
 async function maybeAutoRevealAllIn(pulseId: string) {
@@ -447,15 +457,13 @@ export async function getPulsePlayer(userId: string, pulseId: string) {
   if (pulse.status === "draft") throw new Error("This pulse is not open yet.");
 
   // Direct share links should enroll the signed-in participant immediately.
-  if (pulse.status !== "complete") {
-    const { error: joinError } = await db
-      .from("play_pulse_participants")
-      .upsert(
-        { pulse_id: pulseId, user_id: userId },
-        { onConflict: "pulse_id,user_id", ignoreDuplicates: true },
-      );
-    if (joinError) throw new Error(joinError.message);
-  }
+  const { error: joinError } = await db
+    .from("play_pulse_participants")
+    .upsert(
+      { pulse_id: pulseId, user_id: userId },
+      { onConflict: "pulse_id,user_id", ignoreDuplicates: true },
+    );
+  if (joinError) throw new Error(joinError.message);
 
   const slides = await loadSlides(pulseId);
   const { data: membership } = await db
@@ -475,7 +483,8 @@ export async function getPulsePlayer(userId: string, pulseId: string) {
     responseCount: responses.length,
     participantCount: participants,
   });
-  const wall = slide && showWall ? aggregateSlide({ slide, responses }) : null;
+  // Always build aggregates for the current slide so the wall can render once reveal rules allow.
+  const wall = slide ? aggregateSlide({ slide, responses }) : null;
 
   return {
     pulse: {
