@@ -7,7 +7,8 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 
-export const Route = createFileRoute("/_authenticated/admin/play/pulse")({
+/** List lives at /admin/play/live-pulse so /admin/play/pulse/$id can host without a path clash. */
+export const Route = createFileRoute("/_authenticated/admin/play/live-pulse")({
   head: () => ({
     meta: [{ title: "Pulse sessions — Assessa Admin" }],
   }),

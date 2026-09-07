@@ -27,7 +27,7 @@ export const Route = createFileRoute("/_authenticated/admin/play/modes/$kind")({
       throw redirect({ to: "/admin/play/knockout" });
     }
     if (params.kind === "pulse") {
-      throw redirect({ to: "/admin/play/pulse" });
+      throw redirect({ to: "/admin/play/live-pulse" });
     }
   },
   head: ({ params }) => ({

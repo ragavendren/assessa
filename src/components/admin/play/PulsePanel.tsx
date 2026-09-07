@@ -135,7 +135,7 @@ export function PulsePanel({
           )}
           <p className="text-xs text-muted-foreground">
             Open{" "}
-            <Link to="/admin/play/pulse" className="text-accent underline">
+            <Link to="/admin/play/live-pulse" className="text-accent underline">
               List pulses
             </Link>{" "}
             to publish, host, and manage all sessions.

@@ -341,10 +341,14 @@ export function PlayControlPanel({ data }: { data: AdminPlayData }) {
 
 function adminPlayEventListPath(
   kind: Extract<PlayKind, "arena" | "escape" | "knockout" | "pulse">,
-): "/admin/play/live-arena" | "/admin/play/escape" | "/admin/play/knockout" | "/admin/play/pulse" {
+):
+  | "/admin/play/live-arena"
+  | "/admin/play/escape"
+  | "/admin/play/knockout"
+  | "/admin/play/live-pulse" {
   if (kind === "arena") return "/admin/play/live-arena";
   if (kind === "escape") return "/admin/play/escape";
-  if (kind === "pulse") return "/admin/play/pulse";
+  if (kind === "pulse") return "/admin/play/live-pulse";
   return "/admin/play/knockout";
 }
 

@@ -89,7 +89,7 @@ function AdminPulseHostPage() {
       <AdminNav />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <Link to="/admin/play/pulse" className="text-xs text-accent underline">
+          <Link to="/admin/play/live-pulse" className="text-xs text-accent underline">
             Pulse list
           </Link>
           <h1 className="mt-1 font-display text-2xl">{pulse.name}</h1>
@@ -100,7 +100,7 @@ function AdminPulseHostPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Link
-            to="/admin/play_/pulse-board/$pulseId"
+            to="/admin/play/pulse-board/$pulseId"
             params={{ pulseId }}
             target="_blank"
             className={actionBtn}
