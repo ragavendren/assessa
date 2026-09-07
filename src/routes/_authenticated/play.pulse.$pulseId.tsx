@@ -10,13 +10,26 @@ import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/play/pulse/$pulseId")({
   head: () => ({ meta: [{ title: "Pulse — Assessa" }] }),
   component: PulsePlayerPage,
 });
+
+function queryErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message) return error.message;
+  if (
+    error &&
+    typeof error === "object" &&
+    "message" in error &&
+    typeof (error as { message: unknown }).message === "string"
+  ) {
+    return (error as { message: string }).message;
+  }
+  return "Pulse unavailable.";
+}
 
 function PulsePlayerPage() {
   const { pulseId } = Route.useParams();
@@ -26,21 +39,32 @@ function PulsePlayerPage() {
   const submitFn = useServerFn(submitPlayPulseResponse);
   usePulseRealtime(pulseId);
   const [text, setText] = useState("");
+  const autoJoinAttempted = useRef(false);
 
-  const { data, isPending, error } = useQuery({
+  const { data, isPending, error, refetch } = useQuery({
     queryKey: ["pulse-player", pulseId],
     queryFn: () => fetchPlayer({ data: { pulseId } }),
     refetchInterval: 3500,
+    retry: 1,
   });
 
   const joinMut = useMutation({
     mutationFn: () => joinFn({ data: { pulseId } }),
     onSuccess: () => {
-      toast.success("You’re in");
       void queryClient.invalidateQueries({ queryKey: ["pulse-player", pulseId] });
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Could not join"),
   });
+
+  // Fallback if an older server build did not auto-enroll on load.
+  useEffect(() => {
+    if (!data || data.joined || autoJoinAttempted.current || joinMut.isPending) return;
+    if (data.pulse.status === "draft" || data.pulse.status === "complete") return;
+    autoJoinAttempted.current = true;
+    joinMut.mutate();
+    // intentionally only when membership is missing
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mutate once per visit
+  }, [data?.joined, data?.pulse.status]);
 
   const submitMut = useMutation({
     mutationFn: (response: { choiceIndex: number } | { text: string } | { rating: number }) =>
@@ -59,16 +83,36 @@ function PulsePlayerPage() {
     onError: (err) => toast.error(err instanceof Error ? err.message : "Could not submit"),
   });
 
-  if (isPending || !data) return <PageLoader label="Loading Pulse…" />;
-  if (error) {
+  if (isPending && !data) {
+    return <PageLoader label="Loading Pulse…" />;
+  }
+
+  if (error || !data) {
     return (
-      <p className="text-sm text-muted-foreground">
-        {error instanceof Error ? error.message : "Pulse unavailable."}
-      </p>
+      <div className="mx-auto max-w-lg space-y-4 rounded-2xl border border-border bg-card p-6 text-center">
+        <p className="font-display text-xl">Could not open this Pulse</p>
+        <p className="text-sm text-muted-foreground">{queryErrorMessage(error)}</p>
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <button
+            type="button"
+            className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-secondary"
+            onClick={() => void refetch()}
+          >
+            Try again
+          </button>
+          <Link
+            to="/play/pulse"
+            className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground"
+          >
+            Back to Pulse
+          </Link>
+        </div>
+      </div>
     );
   }
 
   const { pulse, slide, joined, canAnswer, wall, wallVisible, participantCount } = data;
+  const joining = joinMut.isPending && !joined;
 
   return (
     <div className="mx-auto max-w-2xl space-y-5">
@@ -84,12 +128,17 @@ function PulsePlayerPage() {
 
       {!joined ? (
         <section className="rounded-2xl border border-border bg-card p-4">
-          <p className="text-sm text-muted-foreground">Join to answer slides and see the wall.</p>
+          <p className="text-sm text-muted-foreground">
+            {joining ? "Joining this Pulse…" : "Join to answer slides and see the response wall."}
+          </p>
           <button
             type="button"
             className="mt-3 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
             disabled={joinMut.isPending}
-            onClick={() => joinMut.mutate()}
+            onClick={() => {
+              autoJoinAttempted.current = true;
+              joinMut.mutate();
+            }}
           >
             {joinMut.isPending ? "Joining…" : "Join Pulse"}
           </button>
@@ -102,8 +151,14 @@ function PulsePlayerPage() {
         </p>
       ) : null}
 
+      {pulse.status === "draft" ? (
+        <p className="rounded-2xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+          This Pulse is not open yet. Ask the host to open the lobby.
+        </p>
+      ) : null}
+
       {slide ? (
-        <section className="rounded-2xl border border-border bg-card p-4 space-y-3">
+        <section className="space-y-3 rounded-2xl border border-border bg-card p-4">
           <p className="text-xs uppercase tracking-wide text-muted-foreground">
             Slide {pulse.currentIndex + 1} · {slide.type}
           </p>

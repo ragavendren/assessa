@@ -13,7 +13,7 @@ export function PulseWall({
   if (!wall) {
     return (
       <div className="rounded-2xl border border-dashed border-border bg-secondary/20 px-5 py-10 text-center text-sm text-muted-foreground">
-        Waiting for responses…
+        {title ?? "Waiting for responses…"}
       </div>
     );
   }

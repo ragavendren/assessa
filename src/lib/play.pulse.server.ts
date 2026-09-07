@@ -445,6 +445,18 @@ export async function joinPulseByCode(userId: string, code: string) {
 export async function getPulsePlayer(userId: string, pulseId: string) {
   const pulse = await loadPulse(pulseId);
   if (pulse.status === "draft") throw new Error("This pulse is not open yet.");
+
+  // Direct share links should enroll the signed-in participant immediately.
+  if (pulse.status !== "complete") {
+    const { error: joinError } = await db
+      .from("play_pulse_participants")
+      .upsert(
+        { pulse_id: pulseId, user_id: userId },
+        { onConflict: "pulse_id,user_id", ignoreDuplicates: true },
+      );
+    if (joinError) throw new Error(joinError.message);
+  }
+
   const slides = await loadSlides(pulseId);
   const { data: membership } = await db
     .from("play_pulse_participants")
