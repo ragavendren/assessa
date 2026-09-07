@@ -1,5 +1,6 @@
 import { AdminEmpty, AdminPanel, ResultCount, StatusPill } from "@/components/admin/AdminPageUi";
 import { PlayEventSetup, isEventKind } from "@/components/admin/play/PlayEventSetup";
+import { PulsePanel } from "@/components/admin/play/PulsePanel";
 import { AssessaIcon } from "@/components/icons";
 import { ArenaShareCard } from "@/components/play/ArenaShareCard";
 import { StatTile } from "@/components/platform";
@@ -99,6 +100,16 @@ export type AdminPlayData = {
     status: string;
     pool_id: string | null;
     listed?: boolean | null;
+  }>;
+  pulses: Array<{
+    id: string;
+    name: string;
+    joinCode: string;
+    status: string;
+    revealMode: string;
+    listed: boolean;
+    currentIndex: number;
+    createdAt: string;
   }>;
   blueprints?: Array<{
     id: string;
@@ -253,7 +264,7 @@ export function PlayControlPanel({ data }: { data: AdminPlayData }) {
         <StatTile label="Plays (7 days)" value={sessions7d} />
         <StatTile
           label="Events"
-          value={data.tournaments.length + data.arenas.length}
+          value={data.tournaments.length + data.arenas.length + data.pulses.length}
           hint={`${data.scenarios.filter((s) => s.status === "active").length} escape rooms live`}
         />
       </div>
@@ -275,9 +286,11 @@ export function PlayControlPanel({ data }: { data: AdminPlayData }) {
               ? "Create a lobby here. Use List to publish, host, and manage all arenas."
               : editingKind === "knockout"
                 ? "Create a bracket here. Use List to publish and manage tournaments."
-                : editingKind === "battle"
-                  ? "Pick the pool, question count, and timer used for every Battle 1v1. Players manage invites on Play → Battle."
-                  : "Course and activity control where it appears. Pool and topics control the bank."
+                : editingKind === "pulse"
+                  ? "Create a Pulse here — name, reveal mode, and slides. Use List to publish, host, and share codes."
+                  : editingKind === "battle"
+                    ? "Pick the pool, question count, and timer used for every Battle 1v1. Players manage invites on Play → Battle."
+                    : "Course and activity control where it appears. Pool and topics control the bank."
         }
         size="xl"
       >
@@ -308,6 +321,7 @@ export function PlayControlPanel({ data }: { data: AdminPlayData }) {
                   showManagedList={false}
                 />
               ),
+              pulse: <PulsePanel data={data} showManagedList={false} />,
             }}
           />
         ) : editing ? (
@@ -326,10 +340,11 @@ export function PlayControlPanel({ data }: { data: AdminPlayData }) {
 }
 
 function adminPlayEventListPath(
-  kind: Extract<PlayKind, "arena" | "escape" | "knockout">,
-): "/admin/play/live-arena" | "/admin/play/escape" | "/admin/play/knockout" {
+  kind: Extract<PlayKind, "arena" | "escape" | "knockout" | "pulse">,
+): "/admin/play/live-arena" | "/admin/play/escape" | "/admin/play/knockout" | "/admin/play/pulse" {
   if (kind === "arena") return "/admin/play/live-arena";
   if (kind === "escape") return "/admin/play/escape";
+  if (kind === "pulse") return "/admin/play/pulse";
   return "/admin/play/knockout";
 }
 
@@ -367,7 +382,9 @@ function ModesPanel({
                   ? data.arenas.length
                   : kind === "escape"
                     ? data.scenarios.length
-                    : data.tournaments.length
+                    : kind === "pulse"
+                      ? data.pulses.length
+                      : data.tournaments.length
                 : null;
               return (
                 <article key={kind} className="rounded-lg border border-border bg-card p-4">
@@ -421,7 +438,9 @@ function ModesPanel({
                           ? "List lobbies"
                           : kind === "escape"
                             ? "List scenarios"
-                            : "List brackets"}
+                            : kind === "pulse"
+                              ? "List pulses"
+                              : "List brackets"}
                       </Link>
                     ) : null}
                   </div>

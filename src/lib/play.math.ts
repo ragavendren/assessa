@@ -14,6 +14,7 @@ export const PLAY_KINDS = [
   "knockout",
   "escape",
   "arena",
+  "pulse",
 ] as const;
 
 export type PlayKind = (typeof PLAY_KINDS)[number];
@@ -44,7 +45,7 @@ export const PLAY_KIND_GROUPS: Array<{ label: string; kinds: PlayKind[] }> = [
   { label: "Solo", kinds: ["daily", "weekly", "topic"] },
   { label: "Arcade", kinds: ["speed", "survival", "rapid", "marathon", "flash"] },
   { label: "Social", kinds: ["battle", "team"] },
-  { label: "Events", kinds: ["knockout", "escape", "arena"] },
+  { label: "Events", kinds: ["knockout", "escape", "arena", "pulse"] },
 ];
 
 export const PLAY_KIND_META: Record<
@@ -86,6 +87,11 @@ export const PLAY_KIND_META: Record<
   arena: {
     label: "Live Arena",
     blurb: "Teams answer the same timed question. Hosts reveal keys and publish results.",
+    period: "match",
+  },
+  pulse: {
+    label: "Pulse",
+    blurb: "Host live slides; everyone responds in real time.",
     period: "match",
   },
 };
@@ -224,6 +230,19 @@ export function defaultRulesFor(kind: PlayKind, questionCount?: number): PlayRul
         xpCode: "arena_challenge",
         xpPoints: 40,
         reward: true,
+        perItem: true,
+      };
+    case "pulse":
+      return {
+        questionCount: 8,
+        durationSeconds: null,
+        perQuestionSeconds: null,
+        lives: null,
+        timeBonus: false,
+        onePerPeriod: false,
+        xpCode: "pulse_challenge",
+        xpPoints: 20,
+        reward: false,
         perItem: true,
       };
   }

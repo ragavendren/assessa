@@ -26,6 +26,9 @@ export const Route = createFileRoute("/_authenticated/admin/play/modes/$kind")({
     if (params.kind === "knockout") {
       throw redirect({ to: "/admin/play/knockout" });
     }
+    if (params.kind === "pulse") {
+      throw redirect({ to: "/admin/play/pulse" });
+    }
   },
   head: ({ params }) => ({
     meta: [{ title: `${PLAY_KIND_META[params.kind as PlayKind].label} — Assessa Admin` }],

@@ -70,6 +70,7 @@ const PLAY_KIND_ICONS: Record<PlayKind, AssessaIconName> = {
   arena: "arena",
   knockout: "knockout",
   escape: "escape",
+  pulse: "sparkles",
 };
 
 export function playKindIcon(kind: PlayKind): AssessaIconName {

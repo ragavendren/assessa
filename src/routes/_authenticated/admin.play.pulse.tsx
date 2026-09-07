@@ -1,27 +1,20 @@
 import { AdminNav } from "@/components/AdminNav";
-import { AdminAccessDenied, AdminPageHeader } from "@/components/admin/AdminPageUi";
-import { PlayControlPanel } from "@/components/admin/play/PlayControlPanel";
+import { AdminAccessDenied } from "@/components/admin/AdminPageUi";
+import { AdminPulseList } from "@/components/admin/play/AdminPlayEventList";
 import { PageLoader } from "@/components/platform";
 import { getAdminPlay } from "@/lib/play.functions";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 
-export const Route = createFileRoute("/_authenticated/admin/play/")({
+export const Route = createFileRoute("/_authenticated/admin/play/pulse")({
   head: () => ({
-    meta: [
-      { title: "Play control — Assessa Admin" },
-      {
-        name: "description",
-        content:
-          "Enable play modes, bind them to courses and topics, and configure timers, XP, escape rooms and tournaments.",
-      },
-    ],
+    meta: [{ title: "Pulse sessions — Assessa Admin" }],
   }),
-  component: AdminPlayIndexPage,
+  component: AdminPulseListPage,
 });
 
-function AdminPlayIndexPage() {
+function AdminPulseListPage() {
   const fetchAdmin = useServerFn(getAdminPlay);
   const { data, isPending, error } = useQuery({
     queryKey: ["admin-play"],
@@ -37,6 +30,7 @@ function AdminPlayIndexPage() {
       </div>
     );
   }
+
   if (error || !data) {
     const message =
       error instanceof Error
@@ -59,28 +53,17 @@ function AdminPlayIndexPage() {
       <div>
         <AdminNav />
         <div className="surface-paper p-8 text-center">
-          <p className="font-display text-xl">Play control could not load</p>
+          <p className="font-display text-xl">Pulse list could not load</p>
           <p className="mt-2 text-sm text-muted-foreground">{message}</p>
-          <p className="mt-3 text-xs text-muted-foreground">
-            If this mentions pulse or challenges_kind_check, run{" "}
-            <code className="rounded bg-secondary px-1">npm run db:migrate</code>.
-          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div>
       <AdminNav />
-      <AdminPageHeader
-        title="Play"
-        help={{
-          label: "Play vs assessments",
-          body: "Play pulls from course pools you bind here. Formal papers live under Assessments and are never cloned into Play.",
-        }}
-      />
-      <PlayControlPanel data={data} />
+      <AdminPulseList data={data} />
     </div>
   );
 }

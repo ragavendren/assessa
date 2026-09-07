@@ -638,6 +638,7 @@ export async function listPlayHub(userId: string) {
     { data: tournaments },
     { data: activities },
     { data: arenas },
+    { data: pulses },
     menuFlag,
   ] = await Promise.all([
     db.from("challenges").select("id, kind, status, course_id, activity_id, pool_id, topic, rules"),
@@ -691,6 +692,21 @@ export async function listPlayHub(userId: string) {
       .in("status", ["lobby", "question", "locked", "revealed"])
       .order("created_at", { ascending: false })
       .limit(12),
+    db
+      .from("play_pulses")
+      .select("id, name, join_code, status")
+      .eq("listed", true)
+      .neq("status", "draft")
+      .neq("status", "complete")
+      .order("created_at", { ascending: false })
+      .limit(12)
+      .then((res) => {
+        // Table may not exist until the Pulse migration is applied.
+        if (res.error && /play_pulses|schema cache|does not exist/i.test(res.error.message)) {
+          return { data: [] as typeof res.data, error: null };
+        }
+        return res;
+      }),
     playMenuEnabled(),
   ]);
 
@@ -733,6 +749,7 @@ export async function listPlayHub(userId: string) {
     scenarios: enabled.escape ? (scenarios ?? []) : [],
     tournaments: enabled.knockout ? (tournaments ?? []) : [],
     arenas: enabled.arena ? (arenas ?? []) : [],
+    pulses: enabled.pulse ? (pulses ?? []) : [],
     segments,
     menuEnabled,
   };
@@ -868,6 +885,9 @@ export async function startPlaySession(
   const kind = args.kind;
   if (kind === "arena") {
     throw new Error("Join Live Arena from Play — it is a hosted team event.");
+  }
+  if (kind === "pulse") {
+    throw new Error("Join Pulse from Play — it is a hosted live slide event.");
   }
   const challenge = await ensureChallenge({
     kind,
@@ -2349,9 +2369,17 @@ async function bootstrapPlayKinds() {
       rules: rulesJson(rules, null),
       status: "active",
     });
-    if (error && !error.message.toLowerCase().includes("duplicate")) {
-      throw new Error(error.message);
+    if (!error) continue;
+    const msg = error.message.toLowerCase();
+    // Skip if already present, or DB constraint not yet migrated for a new kind (e.g. pulse).
+    if (
+      msg.includes("duplicate") ||
+      msg.includes("challenges_kind_check") ||
+      msg.includes("check constraint")
+    ) {
+      continue;
     }
+    throw new Error(error.message);
   }
 }
 
@@ -2369,6 +2397,7 @@ export async function adminListPlay(userId: string) {
     tournaments,
     { data: arenas },
     { data: blueprints },
+    pulsesResult,
   ] = await Promise.all([
     db.from("challenges").select("*").order("kind"),
     db.from("play_sessions").select("kind").gte("started_at", since),
@@ -2385,7 +2414,19 @@ export async function adminListPlay(userId: string) {
       .order("created_at", { ascending: false })
       .limit(30),
     db.from("course_blueprints").select("id, name, course_id, version, is_default").order("name"),
+    db
+      .from("play_pulses")
+      .select("id, name, join_code, status, reveal_mode, listed, current_index, created_at")
+      .order("created_at", { ascending: false })
+      .limit(80)
+      .then((res) => {
+        if (res.error && /play_pulses|schema cache|does not exist/i.test(res.error.message)) {
+          return { data: [] as typeof res.data, error: null };
+        }
+        return res;
+      }),
   ]);
+  if (pulsesResult.error) throw new Error(pulsesResult.error.message);
   const sessionCounts = new Map<string, number>();
   for (const row of sessionRows ?? []) {
     sessionCounts.set(row.kind, (sessionCounts.get(row.kind) ?? 0) + 1);
@@ -2423,6 +2464,16 @@ export async function adminListPlay(userId: string) {
     scenarios,
     tournaments: tournaments.data ?? [],
     arenas: arenas ?? [],
+    pulses: (pulsesResult.data ?? []).map((row) => ({
+      id: row.id as string,
+      name: row.name as string,
+      joinCode: row.join_code as string,
+      status: row.status as string,
+      revealMode: row.reveal_mode as string,
+      listed: Boolean(row.listed),
+      currentIndex: row.current_index as number,
+      createdAt: row.created_at as string,
+    })),
     blueprints: (blueprints ?? []).map((row) => ({
       id: row.id,
       name: row.name,
@@ -2466,6 +2517,7 @@ function playKindNotice(kind: PlayKind) {
     knockout: "🏆",
     escape: "🚪",
     arena: "🏟️",
+    pulse: "✨",
   };
   const kinds: Record<PlayKind, string> = {
     topic: "play_topics",
@@ -2481,6 +2533,7 @@ function playKindNotice(kind: PlayKind) {
     knockout: "play_tournament",
     escape: "play_escape",
     arena: "play_arena",
+    pulse: "play_pulse",
   };
   return {
     kind: kinds[kind],

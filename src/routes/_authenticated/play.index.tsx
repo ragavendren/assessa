@@ -40,6 +40,7 @@ const LINK_MODES: Partial<Record<PlayKind, { to: string; params?: { tournamentId
   escape: { to: "/play/escape" },
   arena: { to: "/play/arena" },
   knockout: { to: "/play/knockout" },
+  pulse: { to: "/play/pulse" },
 };
 
 function PlayHub() {
@@ -203,7 +204,7 @@ function PlayHub() {
         </section>
       ) : null}
 
-      {data.enabled.escape || data.enabled.knockout || data.enabled.arena ? (
+      {data.enabled.escape || data.enabled.knockout || data.enabled.arena || data.enabled.pulse ? (
         <section>
           <h2 className="text-sm font-semibold">Events</h2>
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -236,6 +237,19 @@ function PlayHub() {
                 <p className="font-medium">Live Arena</p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {data.arenas.length} lobby{data.arenas.length === 1 ? "" : "ies"} available
+                </p>
+              </Link>
+            ) : null}
+            {data.enabled.pulse ? (
+              <Link
+                to="/play/pulse"
+                className="rounded-xl border border-border p-4 hover:bg-secondary"
+              >
+                <p className="font-medium">Pulse</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {(data.pulses?.length ?? 0) > 0
+                    ? `${data.pulses.length} session${data.pulses.length === 1 ? "" : "s"} open`
+                    : "Join with a link or code"}
                 </p>
               </Link>
             ) : null}

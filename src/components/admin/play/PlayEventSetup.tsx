@@ -5,9 +5,9 @@ import type { PlayKind } from "@/lib/play.math";
 import { useMemo, useState, type ReactNode } from "react";
 import type { AdminPlayChallenge, AdminPlayData, ChallengeSavePayload } from "./PlayControlPanel";
 
-type EventKind = Extract<PlayKind, "arena" | "escape" | "knockout">;
+type EventKind = Extract<PlayKind, "arena" | "escape" | "knockout" | "pulse">;
 
-export type EventStepId = "mode" | "activity" | "pool" | "lobby" | "scenes" | "bracket";
+export type EventStepId = "mode" | "activity" | "pool" | "lobby" | "scenes" | "bracket" | "pulse";
 
 type StepDef = { id: EventStepId; label: string; hint: string };
 
@@ -34,10 +34,17 @@ const STEPS: Record<EventKind, StepDef[]> = {
       hint: "Create a tournament with its pool. Players browse /play/knockout.",
     },
   ],
+  pulse: [
+    {
+      id: "pulse",
+      label: "Slides",
+      hint: "Create Pulse slides and set reveal mode. Players join from /play/pulse.",
+    },
+  ],
 };
 
 export function isEventKind(kind: PlayKind): kind is EventKind {
-  return kind === "arena" || kind === "escape" || kind === "knockout";
+  return kind === "arena" || kind === "escape" || kind === "knockout" || kind === "pulse";
 }
 
 export function PlayEventSetup({
@@ -151,6 +158,7 @@ function unlockMap(_kind: EventKind, data: AdminPlayData): Record<EventStepId, b
     lobby: hasPool,
     scenes: hasPool,
     bracket: hasPool,
+    pulse: true,
   };
 }
 

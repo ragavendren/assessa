@@ -1,6 +1,8 @@
 import { AdminPageHeader, ResultCount, StatusPill } from "@/components/admin/AdminPageUi";
 import { EscapePanel, type AdminPlayData } from "@/components/admin/play/PlayControlPanel";
+import { PulseCreateForm } from "@/components/admin/play/PulsePanel";
 import { ArenaShareCard } from "@/components/play/ArenaShareCard";
+import { PulseShareCard } from "@/components/play/PulseShareCard";
 import { ListToolbar, useListViewMode } from "@/components/ListToolbar";
 import { EmptyState, PageLoader } from "@/components/platform";
 import { SlideOver } from "@/components/ui/slide-over";
@@ -17,9 +19,11 @@ import {
   updateLiveArena,
   updatePlayTournament,
 } from "@/lib/play.functions";
+import { createPlayPulse, deletePlayPulse, setPulseListed } from "@/lib/play.pulse.functions";
+import type { PulseRevealMode, PulseSlideInput } from "@/lib/play.pulse";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -27,6 +31,7 @@ import { toast } from "sonner";
 type PublishFilter = "all" | "published" | "draft";
 type ArenaRow = AdminPlayData["arenas"][number];
 type TournamentRow = AdminPlayData["tournaments"][number];
+type PulseRow = AdminPlayData["pulses"][number];
 
 const actionBtn =
   "inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium hover:bg-secondary disabled:opacity-60";
@@ -1364,6 +1369,251 @@ function TournamentEditForm({
           {saving ? "Saving…" : "Save"}
         </button>
       </div>
+    </div>
+  );
+}
+
+export function AdminPulseList({ data }: { data: AdminPlayData }) {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const createFn = useServerFn(createPlayPulse);
+  const setListed = useServerFn(setPulseListed);
+  const removePulse = useServerFn(deletePlayPulse);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<PublishFilter>("all");
+  const [view, setView] = useListViewMode("admin-play-pulses", "stack");
+  const [creating, setCreating] = useState(false);
+
+  const invalidate = () => void queryClient.invalidateQueries({ queryKey: ["admin-play"] });
+
+  const createMut = useMutation({
+    mutationFn: (payload: {
+      name: string;
+      revealMode: PulseRevealMode;
+      slides: PulseSlideInput[];
+    }) => createFn({ data: payload }),
+    onSuccess: (result) => {
+      toast.success(`Pulse created · code ${result.joinCode}`);
+      setCreating(false);
+      invalidate();
+      void navigate({ to: "/admin/play/pulse/$pulseId", params: { pulseId: result.pulseId } });
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not create"),
+  });
+
+  const listedMut = useMutation({
+    mutationFn: (payload: { pulseId: string; listed: boolean }) => setListed({ data: payload }),
+    onSuccess: (_d, vars) => {
+      toast.success(vars.listed ? "Published to Play" : "Unpublished from Play");
+      invalidate();
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not update"),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (pulseId: string) => removePulse({ data: { pulseId } }),
+    onSuccess: () => {
+      toast.success("Pulse deleted");
+      invalidate();
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not delete"),
+  });
+
+  const rows = useMemo(() => {
+    return data.pulses.filter((row) => {
+      if (filter === "published" && !row.listed) return false;
+      if (filter === "draft" && row.listed) return false;
+      return matchesSearch(`${row.name} ${row.status} ${row.joinCode}`, search);
+    });
+  }, [data.pulses, filter, search]);
+
+  const publishedCount = data.pulses.filter((r) => r.listed).length;
+
+  return (
+    <div>
+      <AdminPageHeader
+        title="Pulse sessions"
+        back={{ to: "/admin/play", label: "Play" }}
+        help={{
+          label: "Publish to Play",
+          body: "Create slides and a reveal mode, then publish so participants see the session on Play → Pulse. Host from here to open the lobby and advance slides.",
+        }}
+        action={
+          <button
+            type="button"
+            className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
+            onClick={() => setCreating(true)}
+          >
+            Create Pulse
+          </button>
+        }
+      />
+      <ListToolbar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search pulses…"
+        filters={
+          [
+            { value: "all" as const, label: "All", count: data.pulses.length },
+            { value: "published" as const, label: "Published", count: publishedCount },
+            {
+              value: "draft" as const,
+              label: "Unpublished",
+              count: data.pulses.length - publishedCount,
+            },
+          ] as const
+        }
+        filter={filter}
+        onFilterChange={setFilter}
+        view={view}
+        onViewChange={setView}
+      />
+      <div className="mb-3">
+        <ResultCount shown={rows.length} total={data.pulses.length} noun="pulses" />
+      </div>
+      {rows.length === 0 ? (
+        <EmptyState
+          title={data.pulses.length === 0 ? "No pulses yet" : "No match"}
+          body={
+            data.pulses.length === 0
+              ? "Use Create Pulse (or Configure on the Pulse card) to author slides, then publish here."
+              : undefined
+          }
+        />
+      ) : (
+        <div
+          className={cn(
+            view === "grid" && "grid gap-3 sm:grid-cols-2 xl:grid-cols-3",
+            view === "stack" && "space-y-3",
+            view === "table" && "overflow-x-auto rounded-xl border border-border",
+          )}
+        >
+          {view === "table" ? (
+            <table className="w-full min-w-[40rem] text-left text-sm">
+              <thead className="border-b border-border bg-secondary/40 text-xs text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2 font-medium">Name</th>
+                  <th className="px-3 py-2 font-medium">Code</th>
+                  <th className="px-3 py-2 font-medium">Status</th>
+                  <th className="px-3 py-2 font-medium">Reveal</th>
+                  <th className="px-3 py-2 font-medium">Visibility</th>
+                  <th className="px-3 py-2 font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={row.id} className="border-b border-border last:border-0">
+                    <td className="px-3 py-2 font-medium">{row.name}</td>
+                    <td className="px-3 py-2 font-mono text-xs">{row.joinCode}</td>
+                    <td className="px-3 py-2 capitalize text-muted-foreground">{row.status}</td>
+                    <td className="px-3 py-2 text-muted-foreground">{row.revealMode}</td>
+                    <td className="px-3 py-2">
+                      <StatusPill tone={row.listed ? "live" : "draft"}>
+                        {row.listed ? "Published" : "Unpublished"}
+                      </StatusPill>
+                    </td>
+                    <td className="px-3 py-2">
+                      <PulseRowActions
+                        row={row}
+                        listedPending={listedMut.isPending}
+                        deletePending={deleteMut.isPending}
+                        onPublish={() => listedMut.mutate({ pulseId: row.id, listed: !row.listed })}
+                        onDelete={() => {
+                          if (window.confirm(`Delete “${row.name}”?`)) deleteMut.mutate(row.id);
+                        }}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            rows.map((row) => (
+              <article key={row.id} className="surface-paper space-y-3 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium">{row.name}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Code {row.joinCode} · {row.status} · reveal {row.revealMode}
+                    </p>
+                  </div>
+                  <StatusPill tone={row.listed ? "live" : "draft"}>
+                    {row.listed ? "Published" : "Unpublished"}
+                  </StatusPill>
+                </div>
+                <PulseRowActions
+                  row={row}
+                  listedPending={listedMut.isPending}
+                  deletePending={deleteMut.isPending}
+                  onPublish={() => listedMut.mutate({ pulseId: row.id, listed: !row.listed })}
+                  onDelete={() => {
+                    if (window.confirm(`Delete “${row.name}”?`)) deleteMut.mutate(row.id);
+                  }}
+                />
+                {row.listed ? (
+                  <PulseShareCard
+                    pulseId={row.id}
+                    pulseName={row.name}
+                    joinCode={row.joinCode}
+                    compact
+                  />
+                ) : null}
+              </article>
+            ))
+          )}
+        </div>
+      )}
+
+      <SlideOver
+        open={creating}
+        onClose={() => setCreating(false)}
+        title="Create Pulse"
+        description="Choose reveal mode, then author MCQ, text, or rating slides — same flow as Configure on Play."
+        size="xl"
+      >
+        <PulseCreateForm
+          saving={createMut.isPending}
+          onCancel={() => setCreating(false)}
+          onSave={(payload) => createMut.mutate(payload)}
+        />
+      </SlideOver>
+    </div>
+  );
+}
+
+function PulseRowActions({
+  row,
+  listedPending,
+  deletePending,
+  onPublish,
+  onDelete,
+}: {
+  row: PulseRow;
+  listedPending: boolean;
+  deletePending: boolean;
+  onPublish: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Link
+        to="/admin/play/pulse/$pulseId"
+        params={{ pulseId: row.id }}
+        className={cn(actionBtn, "text-accent")}
+      >
+        Host
+      </Link>
+      <button type="button" className={actionBtn} disabled={listedPending} onClick={onPublish}>
+        {row.listed ? "Unpublish" : "Publish"}
+      </button>
+      <button
+        type="button"
+        className={cn(actionBtn, "text-destructive")}
+        disabled={deletePending}
+        onClick={onDelete}
+      >
+        Delete
+      </button>
     </div>
   );
 }

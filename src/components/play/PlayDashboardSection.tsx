@@ -22,6 +22,7 @@ const LINK_MODES: Partial<Record<PlayKind, { to: string; search?: boolean }>> = 
   escape: { to: "/play/escape", search: true },
   arena: { to: "/play/arena", search: true },
   knockout: { to: "/play/knockout", search: true },
+  pulse: { to: "/play/pulse", search: true },
 };
 
 const REQUIRED_KINDS: PlayKind[] = ["daily", "weekly"];
@@ -36,6 +37,7 @@ const POSSIBLE_KINDS: PlayKind[] = [
   "arena",
   "knockout",
   "escape",
+  "pulse",
 ];
 
 export function PlayDashboardSection({
