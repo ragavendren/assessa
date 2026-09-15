@@ -5,9 +5,11 @@ import { AssessaIcon } from "@/components/icons";
 import { ArenaShareCard } from "@/components/play/ArenaShareCard";
 import { StatTile } from "@/components/platform";
 import { SlideOver } from "@/components/ui/slide-over";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   createLiveArena,
   createPlayTournament,
+  deleteEscapeScenario,
   deleteLiveArena,
   deletePlayActivity,
   saveEscapeScenario,
@@ -74,6 +76,7 @@ export type AdminPlayData = {
       body: string;
       topic: string;
       question_count: number;
+      sort_order?: number;
       stage_key?: string | null;
       question_source?: string;
       questions?: unknown;
@@ -833,8 +836,10 @@ export function EscapePanel({
   onSaved?: () => void;
 }) {
   const queryClient = useQueryClient();
+  const confirm = useConfirm();
   const saveEscape = useServerFn(saveEscapeScenario);
   const setEscStatus = useServerFn(setEscapeStatus);
+  const removeEscape = useServerFn(deleteEscapeScenario);
   const onDone = () => {
     void queryClient.invalidateQueries({ queryKey: ["admin-play"] });
     onSaved?.();
@@ -861,6 +866,15 @@ export function EscapePanel({
   const hydrated = useRef(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const scenarioList = useMemo(() => {
+    const seen = new Set<string>();
+    return data.scenarios.filter((row) => {
+      if (seen.has(row.id)) return false;
+      seen.add(row.id);
+      return true;
+    });
+  }, [data.scenarios]);
+
   function sceneFromRow(s: AdminPlayData["scenarios"][number]["scenes"][number]): SceneDraft {
     const embedded = Array.isArray(s.questions)
       ? (s.questions as SceneDraft["questions"]).filter((q) => q?.prompt && q?.options?.length >= 2)
@@ -880,32 +894,53 @@ export function EscapePanel({
     };
   }
 
+  function resetForm() {
+    setEditingId(null);
+    setName("Cyber Attack");
+    setIntro("");
+    setPoolId(defaultPoolId ?? data.pools[0]?.id ?? "");
+    setStatus("inactive");
+    setScenes([emptyScene()]);
+    setStoryPaste("");
+    setImportOpen(false);
+    hydrated.current = false;
+  }
+
   function loadScenario(id: string) {
-    const row = data.scenarios.find((s) => s.id === id);
-    if (!row) return;
+    const row = scenarioList.find((s) => s.id === id);
+    if (!row) {
+      toast.error("Scenario not found in the list. Refresh and try again.");
+      return;
+    }
+    const orderedScenes = [...row.scenes].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
     setEditingId(row.id);
     setName(row.name);
     setIntro(row.intro);
     setPoolId(row.pool_id ?? "");
     setStatus(row.status === "inactive" ? "inactive" : "active");
-    setScenes(row.scenes.length ? row.scenes.map(sceneFromRow) : [emptyScene()]);
+    setScenes(orderedScenes.length ? orderedScenes.map(sceneFromRow) : [emptyScene()]);
+    toast.message(`Editing “${row.name}” · ${orderedScenes.length} stages`);
   }
 
-  function applyStoryDraft(draft: {
-    name: string;
-    intro: string;
-    scenes: Array<{
-      stageKey: string;
-      title: string;
-      body: string;
-      topic: string;
-      questionCount: number;
-      questionSource: SceneDraft["questionSource"];
-      rewardCode: string | null;
-      rewardLabel: string;
-      questions: SceneDraft["questions"];
-    }>;
-  }) {
+  function applyStoryDraft(
+    draft: {
+      name: string;
+      intro: string;
+      scenes: Array<{
+        stageKey: string;
+        title: string;
+        body: string;
+        topic: string;
+        questionCount: number;
+        questionSource: SceneDraft["questionSource"];
+        rewardCode: string | null;
+        rewardLabel: string;
+        questions: SceneDraft["questions"];
+      }>;
+    },
+    opts?: { asNew?: boolean },
+  ) {
+    if (opts?.asNew) setEditingId(null);
     setName(draft.name);
     setIntro(draft.intro);
     setScenes(
@@ -922,7 +957,11 @@ export function EscapePanel({
       })),
     );
     setImportOpen(false);
-    toast.success(`Loaded ${draft.scenes.length} stages`);
+    toast.success(
+      opts?.asNew
+        ? `New draft · ${draft.scenes.length} stages (replaces form)`
+        : `Loaded ${draft.scenes.length} stages into the form`,
+    );
   }
 
   useEffect(() => {
@@ -972,7 +1011,8 @@ export function EscapePanel({
             })),
         },
       }),
-    onSuccess: () => {
+    onSuccess: (result) => {
+      if (result?.id) setEditingId(result.id);
       toast.success(editingId ? "Scenario updated" : "Scenario saved");
       onDone();
     },
@@ -985,6 +1025,15 @@ export function EscapePanel({
       void queryClient.invalidateQueries({ queryKey: ["admin-play"] });
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Update failed"),
+  });
+  const deleteMut = useMutation({
+    mutationFn: (scenarioId: string) => removeEscape({ data: { scenarioId } }),
+    onSuccess: (_d, scenarioId) => {
+      toast.success("Scenario deleted");
+      if (editingId === scenarioId) resetForm();
+      void queryClient.invalidateQueries({ queryKey: ["admin-play"] });
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Delete failed"),
   });
 
   const topicLabels = topicsForSource(data.pools, null, poolId || null).map((t) => t.label);
@@ -1053,13 +1102,20 @@ export function EscapePanel({
         description="Build an ordered story. Pools are optional — stages can use pool topics, CSV upload, manual questions, or story-only beats."
       >
         <div className="space-y-3">
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              className="rounded-md border border-border px-2.5 py-1.5 text-xs"
+              onClick={() => resetForm()}
+            >
+              New blank
+            </button>
             <button
               type="button"
               className="rounded-md border border-border px-2.5 py-1.5 text-xs"
               onClick={async () => {
                 const { applyCyberAttackTemplate } = await import("@/lib/play.escape.story");
-                applyStoryDraft(applyCyberAttackTemplate());
+                applyStoryDraft(applyCyberAttackTemplate(), { asNew: !editingId });
               }}
             >
               Load Cyber Attack
@@ -1091,6 +1147,13 @@ export function EscapePanel({
             >
               {importOpen ? "Hide import" : "Import story"}
             </button>
+            {editingId ? (
+              <span className="ml-auto text-[11px] text-muted-foreground">
+                Editing saved scenario
+              </span>
+            ) : (
+              <span className="ml-auto text-[11px] text-muted-foreground">Creating new</span>
+            )}
           </div>
 
           {importOpen ? (
@@ -1389,30 +1452,34 @@ export function EscapePanel({
               onClick={() => saveMut.mutate()}
               className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground"
             >
-              {saveMut.isPending ? "Saving…" : "Save scenario"}
+              {saveMut.isPending ? "Saving…" : editingId ? "Update scenario" : "Save new scenario"}
             </button>
           </div>
         </div>
       </AdminPanel>
       {showManagedList ? (
         <AdminPanel title="Scenarios" description="Inactive rooms stay hidden on /play/escape.">
-          {data.scenarios.length === 0 ? (
+          {scenarioList.length === 0 ? (
             <AdminEmpty title="No scenarios yet" body="Author a room with ordered stages." />
           ) : (
             <ul className="space-y-2">
-              {data.scenarios.map((row) => (
+              {scenarioList.map((row) => (
                 <li
                   key={row.id}
-                  className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-sm"
+                  className={cn(
+                    "flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-sm",
+                    editingId === row.id && "ring-1 ring-teal-600/40",
+                  )}
                 >
                   <div className="min-w-0">
                     <p className="truncate font-medium">{row.name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {row.scenes.length} stages · {row.status}
+                      {row.scenes.length} stage{row.scenes.length === 1 ? "" : "s"} ·{" "}
+                      {row.status === "active" ? "published" : "unpublished"}
                       {row.pool_id ? "" : " · no pool"}
                     </p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
                       className="text-xs text-accent"
@@ -1431,6 +1498,25 @@ export function EscapePanel({
                       }
                     >
                       {row.status === "active" ? "Unpublish" : "Publish"}
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs text-destructive"
+                      disabled={deleteMut.isPending}
+                      onClick={() => {
+                        void (async () => {
+                          const ok = await confirm({
+                            title: `Delete “${row.name}”?`,
+                            description:
+                              "Removes the scenario and all stages. This cannot be undone.",
+                            confirmLabel: "Delete",
+                            tone: "destructive",
+                          });
+                          if (ok) deleteMut.mutate(row.id);
+                        })();
+                      }}
+                    >
+                      Delete
                     </button>
                   </div>
                 </li>

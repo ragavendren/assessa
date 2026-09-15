@@ -19,6 +19,7 @@ import {
   startPlayTournament,
   updateLiveArena,
   updatePlayTournament,
+  deleteEscapeScenario,
 } from "@/lib/play.functions";
 import { createPlayPulse, deletePlayPulse, setPulseListed } from "@/lib/play.pulse.functions";
 import type { PulseRevealMode, PulseSlideInput } from "@/lib/play.pulse";
@@ -49,8 +50,8 @@ function canEditArena(row: ArenaRow) {
   return true;
 }
 
-function canEditEscape(status: string) {
-  return status !== "active";
+function canEditEscape(_status: string) {
+  return true;
 }
 
 function canEditTournament(row: TournamentRow) {
@@ -479,11 +480,22 @@ function NumField({
 
 export function AdminEscapeList({ data }: { data: AdminPlayData }) {
   const queryClient = useQueryClient();
+  const confirm = useConfirm();
   const setStatus = useServerFn(setEscapeStatus);
+  const removeEscape = useServerFn(deleteEscapeScenario);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<PublishFilter>("all");
   const [view, setView] = useListViewMode("admin-play-escape", "stack");
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  const scenarios = useMemo(() => {
+    const seen = new Set<string>();
+    return data.scenarios.filter((row) => {
+      if (seen.has(row.id)) return false;
+      seen.add(row.id);
+      return true;
+    });
+  }, [data.scenarios]);
 
   const statusMut = useMutation({
     mutationFn: (payload: { scenarioId: string; status: "active" | "inactive" }) =>
@@ -495,16 +507,36 @@ export function AdminEscapeList({ data }: { data: AdminPlayData }) {
     onError: (err) => toast.error(err instanceof Error ? err.message : "Could not update"),
   });
 
+  const deleteMut = useMutation({
+    mutationFn: (scenarioId: string) => removeEscape({ data: { scenarioId } }),
+    onSuccess: (_d, scenarioId) => {
+      toast.success("Scenario deleted");
+      if (editingId === scenarioId) setEditingId(null);
+      void queryClient.invalidateQueries({ queryKey: ["admin-play"] });
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not delete"),
+  });
+
   const rows = useMemo(() => {
-    return data.scenarios.filter((row) => {
+    return scenarios.filter((row) => {
       const published = row.status === "active";
       if (filter === "published" && !published) return false;
       if (filter === "draft" && published) return false;
       return matchesSearch(`${row.name} ${row.intro}`, search);
     });
-  }, [data.scenarios, filter, search]);
+  }, [scenarios, filter, search]);
 
-  const publishedCount = data.scenarios.filter((r) => r.status === "active").length;
+  const publishedCount = scenarios.filter((r) => r.status === "active").length;
+
+  async function askDelete(row: (typeof scenarios)[number]) {
+    const ok = await confirm({
+      title: `Delete “${row.name}”?`,
+      description: "Removes the scenario and all stages. This cannot be undone.",
+      confirmLabel: "Delete",
+      tone: "destructive",
+    });
+    if (ok) deleteMut.mutate(row.id);
+  }
 
   return (
     <div>
@@ -513,7 +545,7 @@ export function AdminEscapeList({ data }: { data: AdminPlayData }) {
         back={{ to: "/admin/play", label: "Play" }}
         help={{
           label: "Publish to Play",
-          body: "Publish a scenario so participants see it on Play → Escape. Edit is available while unpublished. Author new rooms from Configure on the Escape card.",
+          body: "Publish a scenario so participants see it on Play → Escape. Edit anytime from this list. Author new rooms from Configure on the Escape card.",
         }}
       />
       <ListToolbar
@@ -522,12 +554,12 @@ export function AdminEscapeList({ data }: { data: AdminPlayData }) {
         searchPlaceholder="Search scenarios…"
         filters={
           [
-            { value: "all" as const, label: "All", count: data.scenarios.length },
+            { value: "all" as const, label: "All", count: scenarios.length },
             { value: "published" as const, label: "Published", count: publishedCount },
             {
               value: "draft" as const,
               label: "Unpublished",
-              count: data.scenarios.length - publishedCount,
+              count: scenarios.length - publishedCount,
             },
           ] as const
         }
@@ -537,13 +569,13 @@ export function AdminEscapeList({ data }: { data: AdminPlayData }) {
         onViewChange={setView}
       />
       <div className="mb-3">
-        <ResultCount shown={rows.length} total={data.scenarios.length} noun="scenarios" />
+        <ResultCount shown={rows.length} total={scenarios.length} noun="scenarios" />
       </div>
       {rows.length === 0 ? (
         <EmptyState
-          title={data.scenarios.length === 0 ? "No scenarios yet" : "No match"}
+          title={scenarios.length === 0 ? "No scenarios yet" : "No match"}
           body={
-            data.scenarios.length === 0
+            scenarios.length === 0
               ? "Open Configure on the Escape card to author a scenario, then publish it here."
               : undefined
           }
@@ -561,7 +593,7 @@ export function AdminEscapeList({ data }: { data: AdminPlayData }) {
               <thead className="border-b border-border bg-secondary/40 text-xs text-muted-foreground">
                 <tr>
                   <th className="px-3 py-2 font-medium">Name</th>
-                  <th className="px-3 py-2 font-medium">Scenes</th>
+                  <th className="px-3 py-2 font-medium">Stages</th>
                   <th className="px-3 py-2 font-medium">Visibility</th>
                   <th className="px-3 py-2 font-medium">Actions</th>
                 </tr>
@@ -604,6 +636,14 @@ export function AdminEscapeList({ data }: { data: AdminPlayData }) {
                           >
                             {published ? "Unpublish" : "Publish"}
                           </button>
+                          <button
+                            type="button"
+                            className={cn(actionBtn, "text-destructive")}
+                            disabled={deleteMut.isPending}
+                            onClick={() => void askDelete(row)}
+                          >
+                            Delete
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -620,7 +660,8 @@ export function AdminEscapeList({ data }: { data: AdminPlayData }) {
                     <div className="min-w-0">
                       <p className="font-medium">{row.name}</p>
                       <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-                        {row.scenes.length} scenes
+                        {row.scenes.length} stage{row.scenes.length === 1 ? "" : "s"}
+                        {row.pool_id ? "" : " · no pool"}
                         {row.intro ? ` · ${row.intro}` : ""}
                       </p>
                     </div>
@@ -651,6 +692,14 @@ export function AdminEscapeList({ data }: { data: AdminPlayData }) {
                     >
                       {published ? "Unpublish" : "Publish"}
                     </button>
+                    <button
+                      type="button"
+                      className={cn(actionBtn, "text-destructive")}
+                      disabled={deleteMut.isPending}
+                      onClick={() => void askDelete(row)}
+                    >
+                      Delete
+                    </button>
                   </div>
                 </article>
               );
@@ -663,7 +712,7 @@ export function AdminEscapeList({ data }: { data: AdminPlayData }) {
         open={editingId != null}
         onClose={() => setEditingId(null)}
         title="Edit scenario"
-        description="Update scenes and pool while the room is unpublished."
+        description="Update stages, rewards, and question sources."
         size="xl"
       >
         {editingId ? (

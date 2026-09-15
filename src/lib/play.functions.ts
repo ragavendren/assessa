@@ -581,6 +581,14 @@ export const setEscapeStatus = createServerFn({ method: "POST" })
     return adminSetEscapeStatus(context.userId, data.scenarioId, data.status);
   });
 
+export const deleteEscapeScenario = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) => z.object({ scenarioId: uuid }).parse(input))
+  .handler(async ({ context, data }) => {
+    const { adminDeleteEscape } = await import("@/lib/play.server");
+    return adminDeleteEscape(context.userId, data.scenarioId);
+  });
+
 export const savePlayActivity = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) =>

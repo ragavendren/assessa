@@ -2332,14 +2332,15 @@ export async function listEscapeScenarios(opts?: {
     string,
     { completedIndexes: number[]; restoredAt: string | null }
   >();
-  if (opts?.userId && (scenarios ?? []).length) {
+  const uniqueScenarios = [...new Map((scenarios ?? []).map((s) => [s.id, s])).values()];
+  if (opts?.userId && uniqueScenarios.length) {
     const { data: progressRows } = await db
       .from("escape_progress")
       .select("scenario_id, completed_indexes, restored_at")
       .eq("user_id", opts.userId)
       .in(
         "scenario_id",
-        (scenarios ?? []).map((s) => s.id),
+        uniqueScenarios.map((s) => s.id),
       );
     for (const row of progressRows ?? []) {
       progressByScenario.set(row.scenario_id, {
@@ -2348,10 +2349,12 @@ export async function listEscapeScenarios(opts?: {
       });
     }
   }
-  return (scenarios ?? []).map((s) => {
+  return uniqueScenarios.map((s) => {
     const course = s.courses as unknown as { name: string } | null;
     const { courses: _courses, ...row } = s as typeof s & { courses?: unknown };
-    const sceneRows = (scenes ?? []).filter((sc) => sc.scenario_id === s.id);
+    const sceneRows = (scenes ?? [])
+      .filter((sc) => sc.scenario_id === s.id)
+      .sort((a, b) => a.sort_order - b.sort_order || a.title.localeCompare(b.title));
     const progress = progressByScenario.get(s.id);
     const completedIndexes = progress?.completedIndexes ?? [];
     const completedSet = new Set(completedIndexes);
@@ -2981,6 +2984,21 @@ export async function adminSetEscapeStatus(
     });
   }
   return { ok: true as const };
+}
+
+export async function adminDeleteEscape(userId: string, scenarioId: string) {
+  await requireAdmin(userId);
+  const { data: existing } = await db
+    .from("escape_scenarios")
+    .select("id")
+    .eq("id", scenarioId)
+    .maybeSingle();
+  if (!existing) throw new Error("Scenario not found.");
+  await db.from("escape_progress").delete().eq("scenario_id", scenarioId);
+  await db.from("escape_scenes").delete().eq("scenario_id", scenarioId);
+  const { error } = await db.from("escape_scenarios").delete().eq("id", scenarioId);
+  if (error) throw new Error(error.message);
+  return { ok: true as const, id: scenarioId };
 }
 
 export async function adminSaveEscape(
