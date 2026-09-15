@@ -5,6 +5,7 @@ import { ArenaShareCard } from "@/components/play/ArenaShareCard";
 import { PulseShareCard } from "@/components/play/PulseShareCard";
 import { ListToolbar, useListViewMode } from "@/components/ListToolbar";
 import { EmptyState, PageLoader } from "@/components/platform";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { SlideOver } from "@/components/ui/slide-over";
 import {
   declareTournamentWinner,
@@ -1376,6 +1377,7 @@ function TournamentEditForm({
 export function AdminPulseList({ data }: { data: AdminPlayData }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const confirm = useConfirm();
   const createFn = useServerFn(createPlayPulse);
   const setListed = useServerFn(setPulseListed);
   const removePulse = useServerFn(deletePlayPulse);
@@ -1436,7 +1438,7 @@ export function AdminPulseList({ data }: { data: AdminPlayData }) {
         back={{ to: "/admin/play", label: "Play" }}
         help={{
           label: "Publish to Play",
-          body: "Create slides and a reveal mode, then publish so participants see the session on Play → Pulse. Host from here to open the lobby and advance slides.",
+          body: "Create a self-paced survey (sections + Next) or a live slide deck. Publish so participants see it on Play → Pulse. Host to open the session and review individual responses.",
         }}
         action={
           <button
@@ -1519,7 +1521,15 @@ export function AdminPulseList({ data }: { data: AdminPlayData }) {
                         deletePending={deleteMut.isPending}
                         onPublish={() => listedMut.mutate({ pulseId: row.id, listed: !row.listed })}
                         onDelete={() => {
-                          if (window.confirm(`Delete “${row.name}”?`)) deleteMut.mutate(row.id);
+                          void (async () => {
+                            const ok = await confirm({
+                              title: `Delete “${row.name}”?`,
+                              description: "This removes the Pulse and all participant responses.",
+                              confirmLabel: "Delete",
+                              tone: "destructive",
+                            });
+                            if (ok) deleteMut.mutate(row.id);
+                          })();
                         }}
                       />
                     </td>
@@ -1547,7 +1557,15 @@ export function AdminPulseList({ data }: { data: AdminPlayData }) {
                   deletePending={deleteMut.isPending}
                   onPublish={() => listedMut.mutate({ pulseId: row.id, listed: !row.listed })}
                   onDelete={() => {
-                    if (window.confirm(`Delete “${row.name}”?`)) deleteMut.mutate(row.id);
+                    void (async () => {
+                      const ok = await confirm({
+                        title: `Delete “${row.name}”?`,
+                        description: "This removes the Pulse and all participant responses.",
+                        confirmLabel: "Delete",
+                        tone: "destructive",
+                      });
+                      if (ok) deleteMut.mutate(row.id);
+                    })();
                   }}
                 />
                 {row.listed ? (

@@ -23,8 +23,8 @@ const STEPS: Record<EventKind, StepDef[]> = {
   escape: [
     {
       id: "scenes",
-      label: "Scenes",
-      hint: "Author rooms with a pool on each scenario. Players browse /play/escape.",
+      label: "Story",
+      hint: "Import TXT/CSV or author stages. Pool is optional — use upload/manual/story-only per stage.",
     },
   ],
   knockout: [
@@ -156,7 +156,7 @@ function unlockMap(_kind: EventKind, data: AdminPlayData): Record<EventStepId, b
     activity: true,
     pool: true,
     lobby: hasPool,
-    scenes: hasPool,
+    scenes: true,
     bracket: hasPool,
     pulse: true,
   };
@@ -170,9 +170,6 @@ function nextUnlocked(steps: StepDef[], index: number, unlocked: Record<EventSte
 function lockCopy(_kind: EventKind, step: EventStepId, data: AdminPlayData) {
   if (step === "lobby" && data.pools.length === 0) {
     return "Add a question pool before opening a lobby. Players join from Play — no activity is required.";
-  }
-  if (step === "scenes" && data.pools.length === 0) {
-    return "Import a question pool so each scene can pull a topic set.";
   }
   if (step === "bracket" && data.pools.length === 0) {
     return "Add a question pool first. Knockout does not use activities — players join from Play.";
@@ -193,7 +190,7 @@ export function EventPoolStep({
   onSave: (payload: ChallengeSavePayload) => void;
 }) {
   const [poolId, setPoolId] = useState(challenge.poolId ?? "");
-  const required = challenge.kind === "escape" || challenge.kind === "arena";
+  const required = challenge.kind === "arena";
 
   return (
     <AdminPanel

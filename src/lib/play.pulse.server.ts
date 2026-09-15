@@ -4,7 +4,10 @@
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
   aggregateSlide,
+  formatPulseAnswer,
   generateJoinCode,
+  groupPulseSections,
+  isAnswerableSlideType,
   normalizeJoinCode,
   wallVisible,
   type PulseRevealMode,
@@ -36,7 +39,7 @@ type SlideRow = {
   id: string;
   pulse_id: string;
   sort_order: number;
-  type: "mcq" | "text" | "rating";
+  type: PulseSlide["type"];
   prompt: string;
   image_url: string | null;
   options: unknown;
@@ -84,15 +87,30 @@ async function loadSlides(pulseId: string): Promise<PulseSlide[]> {
   return (data ?? []).map((row) => mapSlide(row as SlideRow));
 }
 
+function slideOptions(slide: PulseSlideInput) {
+  return (slide.options ?? []).map((o) => o.trim()).filter(Boolean);
+}
+
 function validateSlides(slides: PulseSlideInput[]) {
   if (slides.length < 1) throw new Error("Add at least one slide.");
-  if (slides.length > 40) throw new Error("Maximum 40 slides.");
+  if (slides.length > 60) throw new Error("Maximum 60 slides.");
   for (const [i, slide] of slides.entries()) {
     if (!slide.prompt.trim()) throw new Error(`Slide ${i + 1} needs a prompt.`);
-    if (slide.type === "mcq") {
-      const options = (slide.options ?? []).map((o) => o.trim()).filter(Boolean);
-      if (options.length < 2) throw new Error(`Slide ${i + 1}: MCQ needs at least two options.`);
-      if (options.length > 8) throw new Error(`Slide ${i + 1}: MCQ supports at most 8 options.`);
+    if (slide.type === "mcq" || slide.type === "multi") {
+      const options = slideOptions(slide);
+      if (options.length < 2) {
+        throw new Error(`Slide ${i + 1}: ${slide.type} needs at least two options.`);
+      }
+      if (options.length > 24) {
+        throw new Error(`Slide ${i + 1}: at most 24 options.`);
+      }
+    }
+    if (slide.type === "matrix") {
+      const rows = slideOptions(slide);
+      if (rows.length < 2) throw new Error(`Slide ${i + 1}: matrix needs at least two rows.`);
+      if (rows.length > 24) throw new Error(`Slide ${i + 1}: matrix supports at most 24 rows.`);
+      const max = slide.ratingMax ?? 5;
+      if (max < 2 || max > 10) throw new Error(`Slide ${i + 1}: matrix scale must be 2–10.`);
     }
     if (slide.type === "rating") {
       const max = slide.ratingMax ?? 5;
@@ -105,15 +123,19 @@ async function replaceSlides(pulseId: string, slides: PulseSlideInput[]) {
   validateSlides(slides);
   const { error: delError } = await db.from("play_pulse_slides").delete().eq("pulse_id", pulseId);
   if (delError) throw new Error(delError.message);
-  const rows = slides.map((slide, index) => ({
-    pulse_id: pulseId,
-    sort_order: index,
-    type: slide.type,
-    prompt: slide.prompt.trim(),
-    image_url: slide.imageUrl?.trim() || null,
-    options: slide.type === "mcq" ? (slide.options ?? []).map((o) => o.trim()).filter(Boolean) : [],
-    rating_max: slide.type === "rating" ? (slide.ratingMax ?? 5) : 5,
-  }));
+  const rows = slides.map((slide, index) => {
+    const needsOptions = slide.type === "mcq" || slide.type === "multi" || slide.type === "matrix";
+    const needsScale = slide.type === "rating" || slide.type === "matrix";
+    return {
+      pulse_id: pulseId,
+      sort_order: index,
+      type: slide.type,
+      prompt: slide.prompt.trim(),
+      image_url: slide.imageUrl?.trim() || null,
+      options: needsOptions ? slideOptions(slide) : [],
+      rating_max: needsScale ? (slide.ratingMax ?? 5) : 5,
+    };
+  });
   const { error } = await db.from("play_pulse_slides").insert(rows);
   if (error) throw new Error(error.message);
 }
@@ -452,6 +474,20 @@ export async function joinPulseByCode(userId: string, code: string) {
   return joinPulse(userId, pulseId);
 }
 
+async function allResponsesForPulse(pulseId: string) {
+  const { data, error } = await db
+    .from("play_pulse_responses")
+    .select("user_id, slide_index, payload, submitted_at")
+    .eq("pulse_id", pulseId);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => ({
+    userId: row.user_id as string,
+    slideIndex: row.slide_index as number,
+    payload: parsePayload(row.payload),
+    submittedAt: row.submitted_at as string,
+  }));
+}
+
 export async function getPulsePlayer(userId: string, pulseId: string) {
   const pulse = await loadPulse(pulseId);
   if (pulse.status === "draft") throw new Error("This pulse is not open yet.");
@@ -473,17 +509,65 @@ export async function getPulsePlayer(userId: string, pulseId: string) {
     .eq("user_id", userId)
     .maybeSingle();
   const joined = Boolean(membership);
+  const participants = await participantCount(pulseId);
+  const selfPaced = pulse.reveal_mode === "self";
+
+  if (selfPaced) {
+    const allMine = (await allResponsesForPulse(pulseId)).filter((r) => r.userId === userId);
+    const myResponses: Record<number, PulseResponsePayload> = {};
+    for (const row of allMine) myResponses[row.slideIndex] = row.payload;
+    const sections = groupPulseSections(slides);
+    const answerableIndexes = slides
+      .map((s, i) => (isAnswerableSlideType(s.type) ? i : -1))
+      .filter((i) => i >= 0);
+    const answeredCount = answerableIndexes.filter((i) => myResponses[i] != null).length;
+    const open =
+      pulse.status === "prompt" || pulse.status === "results" || pulse.status === "complete";
+
+    return {
+      pulse: {
+        id: pulse.id,
+        name: pulse.name,
+        joinCode: pulse.join_code,
+        status: pulse.status,
+        revealMode: pulse.reveal_mode,
+        currentIndex: pulse.current_index,
+      },
+      joined,
+      participantCount: participants,
+      slideCount: slides.length,
+      selfPaced: true as const,
+      sections,
+      slides: open
+        ? slides.map((s, index) => ({
+            index,
+            type: s.type,
+            prompt: s.prompt,
+            imageUrl: s.imageUrl,
+            options: s.options,
+            ratingMax: s.ratingMax,
+          }))
+        : [],
+      myResponses,
+      answeredCount,
+      answerableCount: answerableIndexes.length,
+      slide: null,
+      myResponse: null,
+      wall: null,
+      wallVisible: false,
+      canAnswer: joined && pulse.status === "prompt",
+    };
+  }
+
   const slide = slides[pulse.current_index] ?? null;
   const responses = await responsesForSlide(pulseId, pulse.current_index);
   const mine = responses.find((r) => r.userId === userId) ?? null;
-  const participants = await participantCount(pulseId);
   const showWall = wallVisible({
     revealMode: pulse.reveal_mode,
     status: pulse.status,
     responseCount: responses.length,
     participantCount: participants,
   });
-  // Always build aggregates for the current slide so the wall can render once reveal rules allow.
   const wall = slide ? aggregateSlide({ slide, responses }) : null;
 
   return {
@@ -498,6 +582,12 @@ export async function getPulsePlayer(userId: string, pulseId: string) {
     joined,
     participantCount: participants,
     slideCount: slides.length,
+    selfPaced: false as const,
+    sections: groupPulseSections(slides),
+    slides: [],
+    myResponses: {} as Record<number, PulseResponsePayload>,
+    answeredCount: mine ? 1 : 0,
+    answerableCount: 1,
     slide:
       slide &&
       (pulse.status === "prompt" || pulse.status === "results" || pulse.status === "complete")
@@ -523,7 +613,8 @@ export async function submitPulseResponse(
 ) {
   const pulse = await loadPulse(payload.pulseId);
   if (pulse.status !== "prompt") throw new Error("Responses are closed for this slide.");
-  if (payload.slideIndex !== pulse.current_index) {
+  const selfPaced = pulse.reveal_mode === "self";
+  if (!selfPaced && payload.slideIndex !== pulse.current_index) {
     throw new Error("This slide is no longer active.");
   }
   const { data: membership } = await db
@@ -537,26 +628,27 @@ export async function submitPulseResponse(
   const slides = await loadSlides(payload.pulseId);
   const slide = slides[payload.slideIndex];
   if (!slide) throw new Error("Slide not found.");
-
-  const response = payload.response;
-  let stored: PulseResponsePayload;
-  if (slide.type === "mcq") {
-    if (!("choiceIndex" in response)) throw new Error("Pick an option.");
-    if (response.choiceIndex < 0 || response.choiceIndex >= slide.options.length) {
-      throw new Error("Invalid option.");
+  if (slide.type === "section") {
+    if (selfPaced) {
+      throw new Error("Section headers are navigational — answer the questions in this section.");
     }
-    stored = { choiceIndex: response.choiceIndex };
-  } else if (slide.type === "rating") {
-    if (!("rating" in response)) throw new Error("Pick a rating.");
-    if (response.rating < 1 || response.rating > slide.ratingMax) {
-      throw new Error(`Rating must be between 1 and ${slide.ratingMax}.`);
-    }
-    stored = { rating: response.rating };
-  } else {
-    if (!("text" in response) || !response.text.trim()) throw new Error("Enter a response.");
-    if (response.text.trim().length > 280) throw new Error("Keep responses under 280 characters.");
-    stored = { text: response.text.trim() };
+    // Host-driven: acknowledge and continue
+    const { error } = await db.from("play_pulse_responses").upsert(
+      {
+        pulse_id: payload.pulseId,
+        user_id: userId,
+        slide_index: payload.slideIndex,
+        payload: { acknowledged: true },
+        submitted_at: new Date().toISOString(),
+      },
+      { onConflict: "pulse_id,user_id,slide_index" },
+    );
+    if (error) throw new Error(error.message);
+    await maybeAutoRevealAllIn(payload.pulseId);
+    return { ok: true as const };
   }
+
+  const stored = normalizeResponsePayload(slide, payload.response);
 
   const { error } = await db.from("play_pulse_responses").upsert(
     {
@@ -570,6 +662,247 @@ export async function submitPulseResponse(
   );
   if (error) throw new Error(error.message);
 
-  await maybeAutoRevealAllIn(payload.pulseId);
+  if (!selfPaced) await maybeAutoRevealAllIn(payload.pulseId);
   return { ok: true as const };
+}
+
+function normalizeResponsePayload(
+  slide: PulseSlide,
+  response: PulseResponsePayload,
+): PulseResponsePayload {
+  if (slide.type === "mcq") {
+    if (!("choiceIndex" in response)) throw new Error("Pick an option.");
+    if (response.choiceIndex < 0 || response.choiceIndex >= slide.options.length) {
+      throw new Error("Invalid option.");
+    }
+    return { choiceIndex: response.choiceIndex };
+  }
+  if (slide.type === "multi") {
+    if (!("choiceIndexes" in response) || !Array.isArray(response.choiceIndexes)) {
+      throw new Error("Select at least one option.");
+    }
+    const indexes = [...new Set(response.choiceIndexes)].filter(
+      (i) => Number.isInteger(i) && i >= 0 && i < slide.options.length,
+    );
+    if (indexes.length < 1) throw new Error("Select at least one option.");
+    const otherText =
+      typeof response.otherText === "string" ? response.otherText.trim().slice(0, 200) : undefined;
+    const hasOther = indexes.some((i) => /^other\b/i.test(slide.options[i] ?? ""));
+    return {
+      choiceIndexes: indexes,
+      ...(hasOther && otherText ? { otherText } : {}),
+    };
+  }
+  if (slide.type === "rating") {
+    if (!("rating" in response)) throw new Error("Pick a rating.");
+    if (response.rating < 1 || response.rating > slide.ratingMax) {
+      throw new Error(`Rating must be between 1 and ${slide.ratingMax}.`);
+    }
+    return { rating: response.rating };
+  }
+  if (slide.type === "matrix") {
+    if (!("ratings" in response) || !Array.isArray(response.ratings)) {
+      throw new Error("Rate every row.");
+    }
+    if (response.ratings.length !== slide.options.length) {
+      throw new Error("Rate every row.");
+    }
+    for (const r of response.ratings) {
+      if (!Number.isInteger(r) || r < 1 || r > slide.ratingMax) {
+        throw new Error(`Each rating must be between 1 and ${slide.ratingMax}.`);
+      }
+    }
+    return { ratings: response.ratings };
+  }
+  if (slide.type === "text") {
+    if (!("text" in response) || !response.text.trim()) throw new Error("Enter a response.");
+    if (response.text.trim().length > 2000) {
+      throw new Error("Keep responses under 2000 characters.");
+    }
+    return { text: response.text.trim() };
+  }
+  throw new Error("Unsupported question type.");
+}
+
+/** Submit every answerable question at once (self-paced surveys). */
+export async function submitPulseResponsesBatch(
+  userId: string,
+  payload: {
+    pulseId: string;
+    answers: Array<{ slideIndex: number; response: PulseResponsePayload }>;
+  },
+) {
+  const pulse = await loadPulse(payload.pulseId);
+  if (pulse.status !== "prompt") throw new Error("Responses are closed.");
+  if (pulse.reveal_mode !== "self") {
+    throw new Error("Batch submit is only for self-paced surveys.");
+  }
+  const { data: membership } = await db
+    .from("play_pulse_participants")
+    .select("user_id")
+    .eq("pulse_id", payload.pulseId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (!membership) throw new Error("Join the pulse before answering.");
+
+  const slides = await loadSlides(payload.pulseId);
+  const answerable = slides
+    .map((s, i) => ({ slide: s, index: i }))
+    .filter((row) => isAnswerableSlideType(row.slide.type));
+  if (payload.answers.length !== answerable.length) {
+    throw new Error(`Submit all ${answerable.length} questions before finishing.`);
+  }
+
+  const byIndex = new Map(payload.answers.map((a) => [a.slideIndex, a.response]));
+  const now = new Date().toISOString();
+  const rows = answerable.map(({ slide, index }) => {
+    const response = byIndex.get(index);
+    if (!response) throw new Error(`Missing answer for question ${index + 1}.`);
+    return {
+      pulse_id: payload.pulseId,
+      user_id: userId,
+      slide_index: index,
+      payload: normalizeResponsePayload(slide, response),
+      submitted_at: now,
+    };
+  });
+
+  const { error } = await db.from("play_pulse_responses").upsert(rows, {
+    onConflict: "pulse_id,user_id,slide_index",
+  });
+  if (error) throw new Error(error.message);
+  return { ok: true as const, count: rows.length };
+}
+
+function parsePayload(raw: unknown): PulseResponsePayload {
+  let payload = raw as PulseResponsePayload | string;
+  if (typeof payload === "string") {
+    try {
+      payload = JSON.parse(payload) as PulseResponsePayload;
+    } catch {
+      payload = { text: payload };
+    }
+  }
+  return payload as PulseResponsePayload;
+}
+
+/** Per-user Q&A report for host dashboard. */
+export async function getPulseReport(userId: string, pulseId: string) {
+  await requireAdmin(userId);
+  const pulse = await loadPulse(pulseId);
+  const slides = await loadSlides(pulseId);
+  const questionSlides = slides
+    .map((slide, slideIndex) => ({ slide, slideIndex }))
+    .filter((row) => isAnswerableSlideType(row.slide.type));
+  const [{ data: participantRows }, { data: responseRows, error: responseError }] =
+    await Promise.all([
+      db
+        .from("play_pulse_participants")
+        .select("user_id, joined_at")
+        .eq("pulse_id", pulseId)
+        .order("joined_at"),
+      db
+        .from("play_pulse_responses")
+        .select("user_id, slide_index, payload, submitted_at")
+        .eq("pulse_id", pulseId),
+    ]);
+  if (responseError) throw new Error(responseError.message);
+
+  const userIds = (participantRows ?? []).map((row) => row.user_id as string);
+  const { data: profiles } =
+    userIds.length > 0
+      ? await db.from("profiles").select("id, full_name, display_name, email").in("id", userIds)
+      : {
+          data: [] as Array<{
+            id: string;
+            full_name: string | null;
+            display_name: string | null;
+            email: string | null;
+          }>,
+        };
+  const profileById = new Map((profiles ?? []).map((p) => [p.id, p]));
+
+  const byUser = new Map<
+    string,
+    Map<number, { payload: PulseResponsePayload; submittedAt: string }>
+  >();
+  const bySlide = new Map<
+    number,
+    Array<{ userId: string; payload: PulseResponsePayload; submittedAt: string }>
+  >();
+  for (const row of responseRows ?? []) {
+    const uid = row.user_id as string;
+    const idx = row.slide_index as number;
+    const slide = slides[idx];
+    if (!slide || !isAnswerableSlideType(slide.type)) continue;
+    const parsed = {
+      userId: uid,
+      payload: parsePayload(row.payload),
+      submittedAt: row.submitted_at as string,
+    };
+    if (!byUser.has(uid)) byUser.set(uid, new Map());
+    byUser.get(uid)!.set(idx, { payload: parsed.payload, submittedAt: parsed.submittedAt });
+    if (!bySlide.has(idx)) bySlide.set(idx, []);
+    bySlide.get(idx)!.push(parsed);
+  }
+
+  const questionCount = questionSlides.length;
+  const reports = (participantRows ?? []).map((row) => {
+    const uid = row.user_id as string;
+    const profile = profileById.get(uid);
+    const answers = questionSlides.map(({ slide, slideIndex }, qn) => {
+      const hit = byUser.get(uid)?.get(slideIndex) ?? null;
+      return {
+        questionNumber: qn + 1,
+        slideIndex,
+        type: slide.type,
+        prompt: slide.prompt,
+        options: slide.options,
+        ratingMax: slide.ratingMax,
+        payload: hit?.payload ?? null,
+        answerText: formatPulseAnswer({ slide, payload: hit?.payload ?? null }),
+        submittedAt: hit?.submittedAt ?? null,
+      };
+    });
+    const answeredCount = answers.filter((a) => a.payload !== null).length;
+    return {
+      userId: uid,
+      joinedAt: row.joined_at as string,
+      name: profile?.display_name || profile?.full_name || profile?.email || "Participant",
+      email: profile?.email ?? null,
+      answeredCount,
+      complete: questionCount > 0 && answeredCount >= questionCount,
+      answers,
+    };
+  });
+
+  const completedCount = reports.filter((r) => r.complete).length;
+  const overview = questionSlides.map(({ slide, slideIndex }, qn) => {
+    const responses = bySlide.get(slideIndex) ?? [];
+    return {
+      questionNumber: qn + 1,
+      slideIndex,
+      type: slide.type,
+      prompt: slide.prompt,
+      options: slide.options,
+      ratingMax: slide.ratingMax,
+      responseCount: responses.length,
+      wall: aggregateSlide({ slide, responses }),
+    };
+  });
+
+  return {
+    pulse: {
+      id: pulse.id,
+      name: pulse.name,
+      status: pulse.status,
+      joinCode: pulse.join_code,
+    },
+    questionCount,
+    slideCount: slides.length,
+    participantCount: reports.length,
+    completedCount,
+    overview,
+    reports,
+  };
 }

@@ -4,12 +4,24 @@ import { z } from "zod";
 
 const uuid = z.string().uuid();
 const slideSchema = z.object({
-  type: z.enum(["mcq", "text", "rating"]),
-  prompt: z.string().trim().min(1).max(500),
+  type: z.enum(["mcq", "multi", "text", "rating", "matrix", "section"]),
+  prompt: z.string().trim().min(1).max(800),
   imageUrl: z.union([z.string().url(), z.literal(""), z.null()]).optional(),
-  options: z.array(z.string().trim().min(1).max(120)).max(8).optional(),
+  options: z.array(z.string().trim().min(1).max(160)).max(24).optional(),
   ratingMax: z.number().int().min(2).max(10).optional(),
 });
+
+const responseSchema = z.union([
+  z.object({ choiceIndex: z.number().int().min(0).max(23) }),
+  z.object({
+    choiceIndexes: z.array(z.number().int().min(0).max(23)).min(1).max(24),
+    otherText: z.string().trim().max(200).optional(),
+  }),
+  z.object({ text: z.string().trim().min(1).max(2000) }),
+  z.object({ rating: z.number().int().min(1).max(10) }),
+  z.object({ ratings: z.array(z.number().int().min(1).max(10)).min(1).max(24) }),
+  z.object({ acknowledged: z.literal(true) }),
+]);
 
 export const createPlayPulse = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -17,8 +29,8 @@ export const createPlayPulse = createServerFn({ method: "POST" })
     z
       .object({
         name: z.string().trim().min(2).max(120),
-        revealMode: z.enum(["live", "all_in", "host"]),
-        slides: z.array(slideSchema).min(1).max(40),
+        revealMode: z.enum(["live", "all_in", "host", "self"]),
+        slides: z.array(slideSchema).min(1).max(60),
         activityId: uuid.nullable().optional(),
         courseId: uuid.nullable().optional(),
       })
@@ -48,8 +60,8 @@ export const updatePlayPulse = createServerFn({ method: "POST" })
       .object({
         pulseId: uuid,
         name: z.string().trim().min(2).max(120).optional(),
-        revealMode: z.enum(["live", "all_in", "host"]).optional(),
-        slides: z.array(slideSchema).min(1).max(40).optional(),
+        revealMode: z.enum(["live", "all_in", "host", "self"]).optional(),
+        slides: z.array(slideSchema).min(1).max(60).optional(),
         activityId: uuid.nullable().optional(),
         courseId: uuid.nullable().optional(),
       })
@@ -128,6 +140,14 @@ export const getPulseHostState = createServerFn({ method: "POST" })
     return getPulseHost(context.userId, data.pulseId);
   });
 
+export const getPulseReportState = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) => z.object({ pulseId: uuid }).parse(input))
+  .handler(async ({ context, data }) => {
+    const { getPulseReport } = await import("@/lib/play.pulse.server");
+    return getPulseReport(context.userId, data.pulseId);
+  });
+
 export const listPlayPulses = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
@@ -166,17 +186,46 @@ export const submitPlayPulseResponse = createServerFn({ method: "POST" })
       .object({
         pulseId: uuid,
         slideIndex: z.number().int().min(0).max(80),
-        response: z.union([
-          z.object({ choiceIndex: z.number().int().min(0).max(20) }),
-          z.object({ text: z.string().trim().min(1).max(280) }),
-          z.object({ rating: z.number().int().min(1).max(10) }),
-        ]),
+        response: responseSchema,
       })
       .parse(input),
   )
   .handler(async ({ context, data }) => {
     const { submitPulseResponse } = await import("@/lib/play.pulse.server");
-    return submitPulseResponse(context.userId, data);
+    return submitPulseResponse(context.userId, {
+      pulseId: data.pulseId,
+      slideIndex: data.slideIndex,
+      response: data.response as import("@/lib/play.pulse").PulseResponsePayload,
+    });
+  });
+
+export const submitPlayPulseResponsesBatch = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) =>
+    z
+      .object({
+        pulseId: uuid,
+        answers: z
+          .array(
+            z.object({
+              slideIndex: z.number().int().min(0).max(80),
+              response: responseSchema,
+            }),
+          )
+          .min(1)
+          .max(60),
+      })
+      .parse(input),
+  )
+  .handler(async ({ context, data }) => {
+    const { submitPulseResponsesBatch } = await import("@/lib/play.pulse.server");
+    return submitPulseResponsesBatch(context.userId, {
+      pulseId: data.pulseId,
+      answers: data.answers.map((a) => ({
+        slideIndex: a.slideIndex,
+        response: a.response as import("@/lib/play.pulse").PulseResponsePayload,
+      })),
+    });
   });
 
 export const resolvePulseCode = createServerFn({ method: "POST" })

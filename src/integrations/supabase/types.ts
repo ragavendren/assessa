@@ -742,6 +742,12 @@ export type Database = {
           body: string;
           topic: string;
           question_count: number;
+          stage_key: string | null;
+          question_source: string;
+          questions: Json;
+          question_ids: string[];
+          reward_code: string | null;
+          reward_label: string | null;
         };
         Insert: {
           id?: string;
@@ -751,6 +757,12 @@ export type Database = {
           body?: string;
           topic?: string;
           question_count?: number;
+          stage_key?: string | null;
+          question_source?: string;
+          questions?: Json;
+          question_ids?: string[];
+          reward_code?: string | null;
+          reward_label?: string | null;
         };
         Update: {
           id?: string;
@@ -760,6 +772,36 @@ export type Database = {
           body?: string;
           topic?: string;
           question_count?: number;
+          stage_key?: string | null;
+          question_source?: string;
+          questions?: Json;
+          question_ids?: string[];
+          reward_code?: string | null;
+          reward_label?: string | null;
+        };
+        Relationships: [];
+      };
+      escape_progress: {
+        Row: {
+          user_id: string;
+          scenario_id: string;
+          completed_indexes: number[];
+          restored_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          scenario_id: string;
+          completed_indexes?: number[];
+          restored_at?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          scenario_id?: string;
+          completed_indexes?: number[];
+          restored_at?: string | null;
+          updated_at?: string;
         };
         Relationships: [];
       };

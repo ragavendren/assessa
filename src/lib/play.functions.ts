@@ -264,9 +264,12 @@ export const getEscapeRooms = createServerFn({ method: "POST" })
   .validator((input: unknown) =>
     z.object({ courseId: uuid.nullable().optional() }).parse(input ?? {}),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ context, data }) => {
     const { listEscapeScenarios } = await import("@/lib/play.server");
-    return listEscapeScenarios({ courseId: data?.courseId ?? null });
+    return listEscapeScenarios({
+      courseId: data?.courseId ?? null,
+      userId: context.userId,
+    });
   });
 
 export const listPlayTournaments = createServerFn({ method: "POST" })
@@ -282,11 +285,21 @@ export const listPlayTournaments = createServerFn({ method: "POST" })
 export const beginEscapeScene = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((input: unknown) =>
-    z.object({ scenarioId: uuid, sceneIndex: z.number().int().min(0).max(20) }).parse(input),
+    z.object({ scenarioId: uuid, sceneIndex: z.number().int().min(0).max(40) }).parse(input),
   )
   .handler(async ({ context, data }) => {
     const { startEscapeScene } = await import("@/lib/play.server");
     return startEscapeScene(context.userId, data.scenarioId, data.sceneIndex);
+  });
+
+export const completeEscapeBeat = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((input: unknown) =>
+    z.object({ scenarioId: uuid, sceneIndex: z.number().int().min(0).max(40) }).parse(input),
+  )
+  .handler(async ({ context, data }) => {
+    const { completeEscapeStoryBeat } = await import("@/lib/play.server");
+    return completeEscapeStoryBeat(context.userId, data.scenarioId, data.sceneIndex);
   });
 
 export const getTournamentDetail = createServerFn({ method: "POST" })
@@ -327,7 +340,7 @@ export const saveEscapeScenario = createServerFn({ method: "POST" })
       .object({
         id: uuid.optional(),
         name: z.string().trim().min(2).max(120),
-        intro: z.string().trim().max(2000),
+        intro: z.string().trim().max(4000),
         poolId: uuid.optional().nullable(),
         courseId: uuid.optional().nullable(),
         status: z.enum(["active", "inactive"]).optional(),
@@ -335,21 +348,114 @@ export const saveEscapeScenario = createServerFn({ method: "POST" })
           .array(
             z.object({
               title: z.string().trim().min(1).max(120),
-              body: z.string().trim().max(2000),
+              body: z.string().trim().max(4000),
               topic: z.string().trim().min(1).max(80),
-              questionCount: z.number().int().min(1).max(20),
+              questionCount: z.number().int().min(0).max(40),
+              stageKey: z.string().trim().max(80).optional().nullable(),
+              questionSource: z.enum(["pool", "upload", "manual", "none"]).optional(),
+              rewardCode: z
+                .enum([
+                  "xp_50",
+                  "xp_100",
+                  "badge",
+                  "avatar",
+                  "double_xp",
+                  "extra_life",
+                  "mock_voucher",
+                ])
+                .optional()
+                .nullable(),
+              rewardLabel: z.string().trim().max(160).optional().nullable(),
+              questions: z
+                .array(
+                  z.object({
+                    prompt: z.string().trim().min(4).max(2000),
+                    options: z.array(z.string().trim().min(1).max(400)).min(2).max(6),
+                    correctIndexes: z.array(z.number().int().min(0).max(5)).min(1).max(6),
+                    multiSelect: z.boolean().optional(),
+                    explanation: z.string().trim().max(2000).optional(),
+                    topic: z.string().trim().max(80).optional(),
+                    subtopic: z.string().trim().max(80).optional(),
+                    difficulty: z.enum(["easy", "medium", "hard"]).optional(),
+                  }),
+                )
+                .max(40)
+                .optional(),
             }),
           )
-          .max(12),
+          .max(20),
       })
       .parse(input),
   )
   .handler(async ({ context, data }) => {
     const { adminSaveEscape } = await import("@/lib/play.server");
-    return adminSaveEscape(context.userId, {
+    return adminSaveEscape(context!.userId, {
       name: data.name,
       intro: data.intro,
-      scenes: data.scenes,
+      scenes: data.scenes.map((scene) => {
+        const row: {
+          title: string;
+          body: string;
+          topic: string;
+          questionCount: number;
+          stageKey?: string | null;
+          questionSource?: "pool" | "upload" | "manual" | "none";
+          rewardCode?:
+            | "xp_50"
+            | "xp_100"
+            | "badge"
+            | "avatar"
+            | "double_xp"
+            | "extra_life"
+            | "mock_voucher"
+            | null;
+          rewardLabel?: string | null;
+          questions?: Array<{
+            prompt: string;
+            options: string[];
+            correctIndexes: number[];
+            multiSelect?: boolean;
+            explanation?: string;
+            topic?: string;
+            subtopic?: string;
+            difficulty?: "easy" | "medium" | "hard";
+          }>;
+        } = {
+          title: scene.title,
+          body: scene.body,
+          topic: scene.topic,
+          questionCount: scene.questionCount,
+        };
+        if (scene.stageKey !== undefined) row.stageKey = scene.stageKey;
+        if (scene.questionSource !== undefined) row.questionSource = scene.questionSource;
+        if (scene.rewardCode !== undefined) row.rewardCode = scene.rewardCode;
+        if (scene.rewardLabel !== undefined) row.rewardLabel = scene.rewardLabel;
+        if (scene.questions !== undefined) {
+          row.questions = scene.questions.map((q) => {
+            const item: {
+              prompt: string;
+              options: string[];
+              correctIndexes: number[];
+              multiSelect?: boolean;
+              explanation?: string;
+              topic?: string;
+              subtopic?: string;
+              difficulty?: "easy" | "medium" | "hard";
+            } = {
+              prompt: q.prompt,
+              options: q.options,
+              correctIndexes: q.correctIndexes,
+            };
+            if (q.multiSelect !== undefined) item.multiSelect = q.multiSelect;
+            if (q.explanation !== undefined) item.explanation = q.explanation;
+            if (q.topic !== undefined) item.topic = q.topic;
+            if (q.subtopic !== undefined) item.subtopic = q.subtopic;
+            if (q.difficulty !== undefined) item.difficulty = q.difficulty;
+            return item;
+          });
+        }
+        return row;
+      }),
       ...(data.id !== undefined ? { id: data.id } : {}),
       ...(data.poolId !== undefined ? { poolId: data.poolId } : {}),
       ...(data.courseId !== undefined ? { courseId: data.courseId } : {}),

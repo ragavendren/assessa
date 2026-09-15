@@ -879,6 +879,8 @@ export async function startPlaySession(
     matchId?: string | null;
     scenarioId?: string | null;
     sceneIndex?: number;
+    /** Escape upload/manual: skip pool draw and use these ids. */
+    questionIds?: string[] | null;
   },
 ) {
   await requirePlayMenu();
@@ -897,9 +899,11 @@ export async function startPlaySession(
   });
   const rules = challenge.rules;
   const courseScope = args.courseId ?? challenge.courseId;
+  const forcedQuestionIds =
+    args.questionIds && args.questionIds.length > 0 ? [...args.questionIds] : null;
   const poolId =
     args.poolId ?? challenge.poolId ?? (await largestPoolId(rules.questionCount, courseScope));
-  if (!poolId && kind !== "flash")
+  if (!poolId && kind !== "flash" && !forcedQuestionIds)
     throw new Error("Add pool questions before starting a challenge.");
 
   if (kind === "daily" || kind === "weekly" || kind === "team") {
@@ -1009,7 +1013,10 @@ export async function startPlaySession(
       }
     }
   }
-  if (questionIds.length === 0) {
+  if (questionIds.length === 0 && forcedQuestionIds) {
+    questionIds = forcedQuestionIds;
+  } else if (questionIds.length === 0) {
+    if (!poolId) throw new Error("Add pool questions before starting a challenge.");
     const inst = await ensureInstance({
       challengeId: challenge.id,
       periodKey: period,
@@ -1269,11 +1276,26 @@ export async function finishPlaySession(
   });
   if (session.match_id) await maybeCompleteMatch(session.match_id);
 
+  let stageReward: { code: RewardCode; label: string } | null = null;
+  const escapeExtra = (session.extra ?? {}) as {
+    scenarioId?: string | null;
+    sceneIndex?: number;
+  };
+  if (kind === "escape" && escapeExtra.scenarioId != null && status === "submitted") {
+    stageReward = await markEscapeSceneComplete(
+      userId,
+      escapeExtra.scenarioId,
+      escapeExtra.sceneIndex ?? 0,
+      sessionId,
+    );
+  }
+
   return summarisePlay(userId, sessionId, {
     xp,
     badges,
     weeklyRank,
     ...(dailyStreak !== undefined ? { dailyStreak } : {}),
+    ...(stageReward ? { stageReward } : {}),
   });
 }
 
@@ -1471,6 +1493,7 @@ export async function summarisePlay(
     badges?: Array<{ code: string; name: string; icon: string }>;
     dailyStreak?: number;
     weeklyRank?: number | null;
+    stageReward?: { code: RewardCode; label: string } | null;
   },
 ) {
   const { data: session } = await db
@@ -1536,6 +1559,7 @@ export async function summarisePlay(
     badges: extras?.badges ?? [],
     dailyStreak: extras?.dailyStreak,
     weeklyRank: extras?.weeklyRank ?? null,
+    stageReward: extras?.stageReward ?? null,
   };
 }
 
@@ -2293,21 +2317,311 @@ export async function listCareerReadiness(userId: string) {
   };
 }
 
-export async function listEscapeScenarios(opts?: { all?: boolean; courseId?: string | null }) {
+export async function listEscapeScenarios(opts?: {
+  all?: boolean;
+  courseId?: string | null;
+  userId?: string | null;
+}) {
   if (!opts?.all && !(await kindEnabled("escape"))) return [];
   let query = db.from("escape_scenarios").select("*, courses(name)");
   if (!opts?.all) query = query.eq("status", "active");
   if (opts?.courseId) query = query.eq("course_id", opts.courseId);
   const { data: scenarios } = await query.order("created_at", { ascending: false });
   const { data: scenes } = await db.from("escape_scenes").select("*").order("sort_order");
+  const progressByScenario = new Map<
+    string,
+    { completedIndexes: number[]; restoredAt: string | null }
+  >();
+  if (opts?.userId && (scenarios ?? []).length) {
+    const { data: progressRows } = await db
+      .from("escape_progress")
+      .select("scenario_id, completed_indexes, restored_at")
+      .eq("user_id", opts.userId)
+      .in(
+        "scenario_id",
+        (scenarios ?? []).map((s) => s.id),
+      );
+    for (const row of progressRows ?? []) {
+      progressByScenario.set(row.scenario_id, {
+        completedIndexes: row.completed_indexes ?? [],
+        restoredAt: row.restored_at ?? null,
+      });
+    }
+  }
   return (scenarios ?? []).map((s) => {
     const course = s.courses as unknown as { name: string } | null;
     const { courses: _courses, ...row } = s as typeof s & { courses?: unknown };
+    const sceneRows = (scenes ?? []).filter((sc) => sc.scenario_id === s.id);
+    const progress = progressByScenario.get(s.id);
+    const completedIndexes = progress?.completedIndexes ?? [];
+    const completedSet = new Set(completedIndexes);
     return {
       ...row,
       courseName: course?.name ?? null,
-      scenes: (scenes ?? []).filter((sc) => sc.scenario_id === s.id),
+      completedIndexes,
+      restoredAt: progress?.restoredAt ?? null,
+      scenes: sceneRows.map((sc, index) => ({
+        ...sc,
+        unlocked: index === 0 || completedSet.has(index - 1),
+        completed: completedSet.has(index),
+      })),
     };
+  });
+}
+
+type EscapeSceneQuestionInput = {
+  prompt: string;
+  options: string[];
+  correctIndexes: number[];
+  multiSelect?: boolean;
+  explanation?: string;
+  topic?: string;
+  subtopic?: string;
+  difficulty?: "easy" | "medium" | "hard";
+};
+
+type EscapeSceneSaveInput = {
+  title: string;
+  body: string;
+  topic: string;
+  questionCount: number;
+  stageKey?: string | null;
+  questionSource?: "pool" | "upload" | "manual" | "none";
+  rewardCode?: RewardCode | null;
+  rewardLabel?: string | null;
+  questions?: EscapeSceneQuestionInput[];
+};
+
+async function applyFixedReward(
+  userId: string,
+  sessionId: string | null,
+  code: RewardCode,
+  label: string,
+  source: string,
+) {
+  const payload: Json = { code, stage: true };
+  if (code === "xp_50") await awardPlayXp(userId, "escape_stage", 50, sessionId ?? code);
+  if (code === "xp_100") await awardPlayXp(userId, "escape_stage", 100, sessionId ?? code);
+  if (code === "double_xp") await grantEntitlement(userId, "double_xp", 1, 24);
+  if (code === "extra_life") await grantEntitlement(userId, "extra_life", 1);
+  if (code === "mock_voucher") await grantEntitlement(userId, "mock_voucher", 1);
+  if (code === "avatar") {
+    const { data: owned } = await db
+      .from("play_entitlements")
+      .select("code")
+      .eq("user_id", userId)
+      .like("code", "avatar:%");
+    const have = new Set((owned ?? []).map((item) => item.code.replace("avatar:", "")));
+    const next =
+      AVATAR_IDS_FALLBACK.find((id) => !have.has(id)) ??
+      AVATAR_IDS_FALLBACK[hashSeed(`${userId}:${sessionId ?? code}`) % AVATAR_IDS_FALLBACK.length];
+    if (next) {
+      await grantEntitlement(userId, `avatar:${next}`, 1);
+      (payload as Record<string, Json>)["avatarId"] = next;
+    }
+  }
+  if (code === "badge") {
+    const { data: catalog } = await db
+      .from("badges")
+      .select("id, code, name, icon, xp_reward")
+      .eq("active", true);
+    const { data: owned } = await db.from("user_badges").select("badge_id").eq("user_id", userId);
+    const have = new Set((owned ?? []).map((b) => b.badge_id));
+    const gift = (catalog ?? []).find((b) => !have.has(b.id));
+    if (gift) {
+      await db.from("user_badges").insert({ user_id: userId, badge_id: gift.id });
+      (payload as Record<string, Json>)["badge"] = {
+        code: gift.code,
+        name: gift.name,
+        icon: gift.icon,
+      };
+    }
+  }
+  if (sessionId) {
+    await db.from("play_rewards").insert({
+      user_id: userId,
+      session_id: sessionId,
+      source,
+      code,
+      label,
+      payload,
+    });
+  }
+  return { code, label };
+}
+
+async function markEscapeSceneComplete(
+  userId: string,
+  scenarioId: string,
+  sceneIndex: number,
+  sessionId: string | null,
+): Promise<{ code: RewardCode; label: string } | null> {
+  const { data: scenes } = await db
+    .from("escape_scenes")
+    .select("*")
+    .eq("scenario_id", scenarioId)
+    .order("sort_order");
+  const scene = scenes?.[sceneIndex];
+  if (!scene) return null;
+
+  const { data: existing } = await db
+    .from("escape_progress")
+    .select("completed_indexes")
+    .eq("user_id", userId)
+    .eq("scenario_id", scenarioId)
+    .maybeSingle();
+  const completed = new Set(existing?.completed_indexes ?? []);
+  const already = completed.has(sceneIndex);
+  completed.add(sceneIndex);
+  const indexes = [...completed].sort((a, b) => a - b);
+  const allDone = (scenes ?? []).length > 0 && (scenes ?? []).every((_, i) => completed.has(i));
+  await db.from("escape_progress").upsert(
+    {
+      user_id: userId,
+      scenario_id: scenarioId,
+      completed_indexes: indexes,
+      restored_at: allDone ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id,scenario_id" },
+  );
+
+  if (already || !scene.reward_code) return null;
+  const code = scene.reward_code as RewardCode;
+  const label = scene.reward_label?.trim() || code;
+  return applyFixedReward(userId, sessionId, code, label, "escape_stage");
+}
+
+export async function completeEscapeStoryBeat(
+  userId: string,
+  scenarioId: string,
+  sceneIndex: number,
+) {
+  if (!(await kindEnabled("escape"))) throw new Error("Escape Room is turned off.");
+  const { data: scenes } = await db
+    .from("escape_scenes")
+    .select("*")
+    .eq("scenario_id", scenarioId)
+    .order("sort_order");
+  const scene = scenes?.[sceneIndex];
+  if (!scene) throw new Error("Scene not found.");
+  if ((scene.question_source ?? "pool") !== "none" && (scene.question_count ?? 0) > 0) {
+    throw new Error("This stage needs a quiz — use Enter instead.");
+  }
+  const completed = await getEscapeCompletedSet(userId, scenarioId);
+  if (sceneIndex > 0 && !completed.has(sceneIndex - 1)) {
+    throw new Error("Clear the previous stage first.");
+  }
+  if (completed.has(sceneIndex)) {
+    return { ok: true as const, already: true as const, stageReward: null };
+  }
+  const stageReward = await markEscapeSceneComplete(userId, scenarioId, sceneIndex, null);
+  return { ok: true as const, already: false as const, stageReward };
+}
+
+async function getEscapeCompletedSet(userId: string, scenarioId: string) {
+  const { data } = await db
+    .from("escape_progress")
+    .select("completed_indexes")
+    .eq("user_id", userId)
+    .eq("scenario_id", scenarioId)
+    .maybeSingle();
+  return new Set(data?.completed_indexes ?? []);
+}
+
+async function materializeEscapeSceneQuestions(args: {
+  poolId: string;
+  scenarioId: string;
+  sceneIndex: number;
+  topic: string;
+  questions: EscapeSceneQuestionInput[];
+}): Promise<string[]> {
+  const tag = `escape:${args.scenarioId}:${args.sceneIndex}`;
+  const { data: prior } = await db
+    .from("pool_questions")
+    .select("id, tags")
+    .eq("pool_id", args.poolId);
+  const doomed = (prior ?? [])
+    .filter((row) => Array.isArray(row.tags) && (row.tags as string[]).includes(tag))
+    .map((row) => row.id);
+  if (doomed.length) {
+    await db.from("pool_questions").delete().in("id", doomed);
+  }
+  if (!args.questions.length) return [];
+  const rows = args.questions.map((q) => {
+    const indexes = q.correctIndexes.length ? q.correctIndexes : [0];
+    return {
+      pool_id: args.poolId,
+      prompt: q.prompt,
+      options: q.options,
+      correct_index: indexes[0] ?? 0,
+      correct_indexes: indexes,
+      multi_select: Boolean(q.multiSelect) || indexes.length > 1,
+      topic: q.topic?.trim() || args.topic || "general",
+      subtopic: q.subtopic?.trim() || "general",
+      difficulty: q.difficulty ?? "medium",
+      explanation: q.explanation ?? "",
+      tags: [tag, "escape"],
+      status: "active" as const,
+      marks: 1,
+      skill: "",
+    };
+  });
+  const { data, error } = await db.from("pool_questions").insert(rows).select("id");
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => row.id);
+}
+
+export async function startEscapeScene(userId: string, scenarioId: string, sceneIndex: number) {
+  if (!(await kindEnabled("escape"))) throw new Error("Escape Room is turned off.");
+  const { data: scenes } = await db
+    .from("escape_scenes")
+    .select("*")
+    .eq("scenario_id", scenarioId)
+    .order("sort_order");
+  const scene = scenes?.[sceneIndex];
+  if (!scene) throw new Error("Scene not found.");
+
+  const completed = await getEscapeCompletedSet(userId, scenarioId);
+  if (sceneIndex > 0 && !completed.has(sceneIndex - 1)) {
+    throw new Error("Clear the previous stage first.");
+  }
+
+  const source = (scene.question_source ?? "pool") as "pool" | "upload" | "manual" | "none";
+  if (source === "none" || scene.question_count <= 0) {
+    throw new Error("This is a story beat — use Continue instead of Enter.");
+  }
+
+  const { data: scenario } = await db
+    .from("escape_scenarios")
+    .select("pool_id")
+    .eq("id", scenarioId)
+    .single();
+
+  if (source === "upload" || source === "manual") {
+    const ids = scene.question_ids ?? [];
+    if (!ids.length) {
+      throw new Error("This stage has no uploaded/manual questions yet. Ask an admin to add some.");
+    }
+    const count = Math.min(scene.question_count || ids.length, ids.length);
+    return startPlaySession(userId, {
+      kind: "escape",
+      ...(scenario?.pool_id != null ? { poolId: scenario.pool_id } : {}),
+      topic: scene.topic,
+      questionCount: count,
+      scenarioId,
+      sceneIndex,
+      questionIds: ids.slice(0, count),
+    });
+  }
+
+  return startPlaySession(userId, {
+    kind: "escape",
+    ...(scenario?.pool_id != null ? { poolId: scenario.pool_id } : {}),
+    topic: scene.topic,
+    questionCount: scene.question_count,
+    scenarioId,
+    sceneIndex,
   });
 }
 
@@ -2331,30 +2645,6 @@ export async function listOpenTournaments(opts?: { courseId?: string | null }) {
     rows = rows.filter((row) => row.pool_id && allow.has(row.pool_id));
   }
   return { tournaments: rows };
-}
-
-export async function startEscapeScene(userId: string, scenarioId: string, sceneIndex: number) {
-  if (!(await kindEnabled("escape"))) throw new Error("Escape Room is turned off.");
-  const { data: scenes } = await db
-    .from("escape_scenes")
-    .select("*")
-    .eq("scenario_id", scenarioId)
-    .order("sort_order");
-  const scene = scenes?.[sceneIndex];
-  if (!scene) throw new Error("Scene not found.");
-  const { data: scenario } = await db
-    .from("escape_scenarios")
-    .select("pool_id")
-    .eq("id", scenarioId)
-    .single();
-  return startPlaySession(userId, {
-    kind: "escape",
-    ...(scenario?.pool_id != null ? { poolId: scenario.pool_id } : {}),
-    topic: scene.topic,
-    questionCount: scene.question_count,
-    scenarioId,
-    sceneIndex,
-  });
 }
 
 async function bootstrapPlayKinds() {
@@ -2702,14 +2992,55 @@ export async function adminSaveEscape(
     poolId?: string | null;
     courseId?: string | null;
     status?: "active" | "inactive";
-    scenes: Array<{ title: string; body: string; topic: string; questionCount: number }>;
+    scenes: EscapeSceneSaveInput[];
   },
 ) {
   await requireAdmin(userId);
   let id = payload.id;
   const status = payload.status ?? "active";
-  const courseId = payload.courseId ?? null;
-  const poolId = payload.poolId ?? null;
+  let courseId = payload.courseId ?? null;
+  let poolId = payload.poolId ?? null;
+  const needsEmbedded = payload.scenes.some(
+    (s) =>
+      (s.questionSource === "upload" || s.questionSource === "manual") &&
+      (s.questions?.length ?? 0) > 0,
+  );
+  if (needsEmbedded && !poolId) {
+    if (!courseId) {
+      const { data: course } = await db
+        .from("courses")
+        .select("id")
+        .eq("status", "active")
+        .order("name")
+        .limit(1)
+        .maybeSingle();
+      courseId = course?.id ?? null;
+    }
+    if (!courseId) {
+      throw new Error(
+        "Uploaded/manual stage questions need a course pool. Create a course pool or bind one on the scenario.",
+      );
+    }
+    const { data: created, error: poolErr } = await db
+      .from("question_pools")
+      .insert({
+        course_id: courseId,
+        name: `Escape · ${payload.name}`.slice(0, 120),
+        status: "active",
+      })
+      .select("id")
+      .single();
+    if (poolErr) throw new Error(poolErr.message);
+    poolId = created.id;
+  } else if (poolId && !courseId) {
+    const { data: pool } = await db
+      .from("question_pools")
+      .select("course_id")
+      .eq("id", poolId)
+      .maybeSingle();
+    courseId = pool?.course_id ?? null;
+  }
+
   let previousStatus: string | null = null;
   if (id) {
     const { data: existing } = await db
@@ -2745,17 +3076,46 @@ export async function adminSaveEscape(
     if (error) throw new Error(error.message);
     id = data.id;
   }
+
   if (payload.scenes.length) {
-    await db.from("escape_scenes").insert(
-      payload.scenes.map((scene, i) => ({
+    const rows = [];
+    for (let i = 0; i < payload.scenes.length; i++) {
+      const scene = payload.scenes[i]!;
+      const source = scene.questionSource ?? (scene.questionCount <= 0 ? "none" : "pool");
+      let questionIds: string[] = [];
+      const embedded = scene.questions ?? [];
+      if ((source === "upload" || source === "manual") && embedded.length && poolId) {
+        questionIds = await materializeEscapeSceneQuestions({
+          poolId,
+          scenarioId: id,
+          sceneIndex: i,
+          topic: scene.topic,
+          questions: embedded,
+        });
+      }
+      const questionCount =
+        source === "none"
+          ? 0
+          : source === "pool"
+            ? Math.max(1, scene.questionCount || 1)
+            : Math.max(1, questionIds.length || scene.questionCount || 1);
+      rows.push({
         scenario_id: id,
         sort_order: i,
         title: scene.title,
         body: scene.body,
-        topic: scene.topic,
-        question_count: scene.questionCount,
-      })),
-    );
+        topic: scene.topic || "general",
+        question_count: questionCount,
+        stage_key: scene.stageKey ?? null,
+        question_source: source,
+        questions: embedded as unknown as Json,
+        question_ids: questionIds,
+        reward_code: scene.rewardCode ?? null,
+        reward_label: scene.rewardLabel ?? null,
+      });
+    }
+    const { error: sceneErr } = await db.from("escape_scenes").insert(rows);
+    if (sceneErr) throw new Error(sceneErr.message);
   }
   if (status === "active" && previousStatus !== "active") {
     await notifyPlayAudience({

@@ -107,16 +107,24 @@ export function PulseWall({
           >
             {title}
           </h2>
-          <ResponseCount total={wall.total} large={large} />
+          <ResponseCount total={wall.total} large={Boolean(large)} />
         </div>
       ) : (
         <div className="mb-1 flex justify-end">
-          <ResponseCount total={wall.total} large={large} />
+          <ResponseCount total={wall.total} large={Boolean(large)} />
         </div>
       )}
-      {wall.kind === "mcq" ? <McqWall wall={wall} large={large} /> : null}
-      {wall.kind === "rating" ? <RatingWall wall={wall} large={large} /> : null}
-      {wall.kind === "text" ? <TextWall wall={wall} large={large} /> : null}
+      {wall.kind === "mcq" || wall.kind === "multi" ? (
+        <McqWall wall={wall} large={Boolean(large)} />
+      ) : null}
+      {wall.kind === "rating" ? <RatingWall wall={wall} large={Boolean(large)} /> : null}
+      {wall.kind === "matrix" ? <MatrixWall wall={wall} large={Boolean(large)} /> : null}
+      {wall.kind === "text" ? <TextWall wall={wall} large={Boolean(large)} /> : null}
+      {wall.kind === "section" ? (
+        <p className="mt-3 text-sm text-muted-foreground">
+          {wall.total} participant{wall.total === 1 ? "" : "s"} acknowledged this section.
+        </p>
+      ) : null}
     </section>
   );
 }
@@ -133,7 +141,7 @@ function McqWall({
   wall,
   large,
 }: {
-  wall: Extract<PulseWallAggregate, { kind: "mcq" }>;
+  wall: Extract<PulseWallAggregate, { kind: "mcq" | "multi" }>;
   large?: boolean;
 }) {
   const maxPercent = Math.max(1, ...wall.options.map((o) => o.percent));
@@ -237,6 +245,52 @@ function RatingWall({
         })}
       </div>
     </div>
+  );
+}
+
+function MatrixWall({
+  wall,
+  large,
+}: {
+  wall: Extract<PulseWallAggregate, { kind: "matrix" }>;
+  large?: boolean;
+}) {
+  return (
+    <ul className={cn("space-y-3", large ? "mt-5 space-y-4" : "mt-3")}>
+      {wall.rows.map((row, index) => {
+        const color = colorAt(index);
+        const width = row.count === 0 ? 0 : Math.max(8, Math.round((row.average / wall.max) * 100));
+        return (
+          <li
+            key={`${row.label}-${index}`}
+            className="animate-[pulse-wall-rise_0.45s_ease-out_both]"
+            style={{ animationDelay: `${index * 40}ms` }}
+          >
+            <div className="mb-1.5 flex items-baseline justify-between gap-3">
+              <span className={cn("font-medium", large ? "text-base" : "text-sm")}>
+                {row.label}
+              </span>
+              <span className={cn("shrink-0 tabular-nums font-semibold", color.text)}>
+                {row.average || "—"}
+                <span className="ml-1.5 font-normal text-muted-foreground">/ {wall.max}</span>
+              </span>
+            </div>
+            <div
+              className={cn("overflow-hidden rounded-full bg-secondary/80", large ? "h-4" : "h-3")}
+              role="presentation"
+            >
+              <div
+                className={cn(
+                  "h-full rounded-full transition-[width] duration-700 ease-out",
+                  color.bar,
+                )}
+                style={{ width: `${width}%` }}
+              />
+            </div>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

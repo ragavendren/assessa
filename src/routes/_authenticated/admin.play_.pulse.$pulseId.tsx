@@ -1,5 +1,6 @@
 import { AdminNav } from "@/components/AdminNav";
 import { AdminAccessDenied } from "@/components/admin/AdminPageUi";
+import { PulseResponseReport } from "@/components/admin/play/PulseResponseReport";
 import { PulseShareCard } from "@/components/play/PulseShareCard";
 import { PulseWall } from "@/components/play/PulseWall";
 import { PageLoader } from "@/components/platform";
@@ -83,6 +84,7 @@ function AdminPulseHostPage() {
   const { pulse, slides, participants, responseCount, wall, wallVisible } = data;
   const current = slides[pulse.currentIndex] ?? null;
   const busy = actionMut.isPending;
+  const selfPaced = pulse.revealMode === "self";
 
   return (
     <div className="space-y-5">
@@ -94,23 +96,35 @@ function AdminPulseHostPage() {
           </Link>
           <h1 className="mt-1 font-display text-2xl">{pulse.name}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {pulse.status} · reveal {pulse.revealMode} · {participants.length} joined ·{" "}
-            {responseCount} answers on this slide
+            {pulse.status} · reveal {pulse.revealMode} · {participants.length} joined
+            {selfPaced
+              ? " · participants move through sections on their own"
+              : ` · ${responseCount} answers on this slide`}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link
-            to="/admin/play/pulse-board/$pulseId"
-            params={{ pulseId }}
-            target="_blank"
-            className={actionBtn}
-          >
-            Undock wall
-          </Link>
+          {!selfPaced ? (
+            <Link
+              to="/admin/play/pulse-board/$pulseId"
+              params={{ pulseId }}
+              target="_blank"
+              className={actionBtn}
+            >
+              Undock wall
+            </Link>
+          ) : null}
         </div>
       </div>
 
       <PulseShareCard pulseId={pulse.id} pulseName={pulse.name} joinCode={pulse.joinCode} />
+
+      {selfPaced ? (
+        <p className="rounded-xl border border-teal-600/20 bg-teal-500/5 px-3 py-2 text-sm text-muted-foreground">
+          Self-paced survey: start once, then participants fill each section and tap{" "}
+          <strong className="font-medium text-foreground">Next</strong>. Use Finish when you want to
+          close responses. Per-user answers appear in the report below.
+        </p>
+      ) : null}
 
       <section className="flex flex-wrap gap-2" aria-label="Host controls">
         {pulse.status === "draft" || pulse.status === "lobby" ? (
@@ -126,34 +140,44 @@ function AdminPulseHostPage() {
               )
             }
           >
-            {pulse.status === "draft" ? "Start session" : "Start first slide"}
+            {pulse.status === "draft"
+              ? selfPaced
+                ? "Open survey"
+                : "Start session"
+              : selfPaced
+                ? "Open survey"
+                : "Start first slide"}
           </button>
         ) : null}
         {pulse.status === "prompt" || pulse.status === "results" ? (
           <>
-            <button
-              type="button"
-              className={actionBtn}
-              disabled={busy || pulse.status === "results"}
-              onClick={() => actionMut.mutate({ action: "reveal" })}
-            >
-              Reveal wall
-            </button>
-            <button
-              type="button"
-              className={actionBtn}
-              disabled={busy}
-              onClick={() => actionMut.mutate({ action: "next" })}
-            >
-              Next slide
-            </button>
+            {!selfPaced ? (
+              <>
+                <button
+                  type="button"
+                  className={actionBtn}
+                  disabled={busy || pulse.status === "results"}
+                  onClick={() => actionMut.mutate({ action: "reveal" })}
+                >
+                  Reveal wall
+                </button>
+                <button
+                  type="button"
+                  className={actionBtn}
+                  disabled={busy}
+                  onClick={() => actionMut.mutate({ action: "next" })}
+                >
+                  Next slide
+                </button>
+              </>
+            ) : null}
             <button
               type="button"
               className={actionBtn}
               disabled={busy}
               onClick={() => actionMut.mutate({ action: "finish" })}
             >
-              Finish
+              {selfPaced ? "Close survey" : "Finish"}
             </button>
           </>
         ) : null}
@@ -169,10 +193,12 @@ function AdminPulseHostPage() {
         ) : null}
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className={cn("grid gap-4", selfPaced ? "lg:grid-cols-1" : "lg:grid-cols-2")}>
         <section className="rounded-2xl border border-border bg-card p-4">
-          <h2 className="text-sm font-semibold">Current slide</h2>
-          {current && (pulse.status === "prompt" || pulse.status === "results") ? (
+          <h2 className="text-sm font-semibold">
+            {selfPaced ? "Survey outline" : "Current slide"}
+          </h2>
+          {!selfPaced && current && (pulse.status === "prompt" || pulse.status === "results") ? (
             <div className="mt-3 space-y-2">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">
                 {current.type} · #{pulse.currentIndex + 1}/{slides.length}
@@ -186,6 +212,14 @@ function AdminPulseHostPage() {
                 />
               ) : null}
             </div>
+          ) : selfPaced ? (
+            <p className="mt-3 text-sm text-muted-foreground">
+              {pulse.status === "prompt"
+                ? "Survey is open. Participants answer in sections without host intervention."
+                : pulse.status === "complete"
+                  ? "Survey closed. Restart to collect another round, or review responses below."
+                  : "Open the survey when you are ready for participants to begin."}
+            </p>
           ) : (
             <p className="mt-3 text-sm text-muted-foreground">
               {pulse.status === "complete"
@@ -202,23 +236,41 @@ function AdminPulseHostPage() {
                   type="button"
                   className={cn(
                     "w-full rounded-md px-2 py-1.5 text-left text-xs hover:bg-secondary",
-                    index === pulse.currentIndex && "bg-primary/10 font-medium",
+                    !selfPaced && index === pulse.currentIndex && "bg-primary/10 font-medium",
+                    slide.type === "section" && "font-semibold text-teal-800 dark:text-teal-300",
                   )}
-                  disabled={busy || pulse.status === "draft"}
+                  disabled={busy || pulse.status === "draft" || selfPaced}
                   onClick={() => actionMut.mutate({ action: "showSlide", slideIndex: index })}
                 >
-                  {index + 1}. {slide.prompt.slice(0, 60)}
+                  {slide.type === "section" ? "▸ " : `${index + 1}. `}
+                  {slide.prompt.slice(0, 72)}
                 </button>
               </li>
             ))}
           </ul>
         </section>
 
-        <div className="space-y-4">
-          <PulseWall
-            wall={wallVisible ? wall : null}
-            title={wallVisible ? "Response wall" : "Wall hidden until reveal rules allow"}
-          />
+        {!selfPaced ? (
+          <div className="space-y-4">
+            <PulseWall
+              wall={wallVisible ? wall : null}
+              title={wallVisible ? "Response wall" : "Wall hidden until reveal rules allow"}
+            />
+            <section className="rounded-2xl border border-border bg-card p-4">
+              <h2 className="text-sm font-semibold">Participants ({participants.length})</h2>
+              <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto text-sm">
+                {participants.map((p) => (
+                  <li key={p.userId} className="flex justify-between gap-2">
+                    <span>{p.name}</span>
+                    {p.email ? (
+                      <span className="text-xs text-muted-foreground">{p.email}</span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </div>
+        ) : (
           <section className="rounded-2xl border border-border bg-card p-4">
             <h2 className="text-sm font-semibold">Participants ({participants.length})</h2>
             <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto text-sm">
@@ -232,8 +284,10 @@ function AdminPulseHostPage() {
               ))}
             </ul>
           </section>
-        </div>
+        )}
       </div>
+
+      <PulseResponseReport pulseId={pulseId} />
     </div>
   );
 }

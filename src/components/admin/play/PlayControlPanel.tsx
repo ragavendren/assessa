@@ -74,6 +74,12 @@ export type AdminPlayData = {
       body: string;
       topic: string;
       question_count: number;
+      stage_key?: string | null;
+      question_source?: string;
+      questions?: unknown;
+      question_ids?: string[];
+      reward_code?: string | null;
+      reward_label?: string | null;
     }>;
   }>;
   arenas: Array<{
@@ -169,7 +175,23 @@ type ChallengeForm = {
   wrongMarks: number;
 };
 
-type SceneDraft = { title: string; body: string; topic: string; questionCount: number };
+type SceneDraft = {
+  title: string;
+  body: string;
+  topic: string;
+  questionCount: number;
+  stageKey: string;
+  questionSource: "pool" | "upload" | "manual" | "none";
+  rewardCode: string;
+  rewardLabel: string;
+  questions: Array<{
+    prompt: string;
+    options: string[];
+    correctIndexes: number[];
+    multiSelect?: boolean;
+    explanation?: string;
+  }>;
+};
 
 export function PlayControlPanel({ data }: { data: AdminPlayData }) {
   const queryClient = useQueryClient();
@@ -822,14 +844,41 @@ export function EscapePanel({
     body: "",
     topic: data.pools[0]?.topics[0]?.label ?? "general",
     questionCount: 4,
+    stageKey: "",
+    questionSource: "pool",
+    rewardCode: "",
+    rewardLabel: "",
+    questions: [],
   });
   const [editingId, setEditingId] = useState<string | null>(initialScenarioId);
-  const [name, setName] = useState("Production Down");
+  const [name, setName] = useState("Cyber Attack");
   const [intro, setIntro] = useState("");
   const [poolId, setPoolId] = useState(defaultPoolId ?? data.pools[0]?.id ?? "");
-  const [status, setStatus] = useState<"active" | "inactive">("active");
+  const [status, setStatus] = useState<"active" | "inactive">("inactive");
   const [scenes, setScenes] = useState<SceneDraft[]>([emptyScene()]);
+  const [storyPaste, setStoryPaste] = useState("");
+  const [importOpen, setImportOpen] = useState(false);
   const hydrated = useRef(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  function sceneFromRow(s: AdminPlayData["scenarios"][number]["scenes"][number]): SceneDraft {
+    const embedded = Array.isArray(s.questions)
+      ? (s.questions as SceneDraft["questions"]).filter((q) => q?.prompt && q?.options?.length >= 2)
+      : [];
+    return {
+      title: s.title,
+      body: s.body,
+      topic: s.topic,
+      questionCount: s.question_count,
+      stageKey: s.stage_key ?? "",
+      questionSource:
+        (s.question_source as SceneDraft["questionSource"]) ||
+        (s.question_count <= 0 ? "none" : "pool"),
+      rewardCode: s.reward_code ?? "",
+      rewardLabel: s.reward_label ?? "",
+      questions: embedded,
+    };
+  }
 
   function loadScenario(id: string) {
     const row = data.scenarios.find((s) => s.id === id);
@@ -839,16 +888,41 @@ export function EscapePanel({
     setIntro(row.intro);
     setPoolId(row.pool_id ?? "");
     setStatus(row.status === "inactive" ? "inactive" : "active");
+    setScenes(row.scenes.length ? row.scenes.map(sceneFromRow) : [emptyScene()]);
+  }
+
+  function applyStoryDraft(draft: {
+    name: string;
+    intro: string;
+    scenes: Array<{
+      stageKey: string;
+      title: string;
+      body: string;
+      topic: string;
+      questionCount: number;
+      questionSource: SceneDraft["questionSource"];
+      rewardCode: string | null;
+      rewardLabel: string;
+      questions: SceneDraft["questions"];
+    }>;
+  }) {
+    setName(draft.name);
+    setIntro(draft.intro);
     setScenes(
-      row.scenes.length
-        ? row.scenes.map((s) => ({
-            title: s.title,
-            body: s.body,
-            topic: s.topic,
-            questionCount: s.question_count,
-          }))
-        : [emptyScene()],
+      draft.scenes.map((s) => ({
+        title: s.title,
+        body: s.body,
+        topic: s.topic,
+        questionCount: s.questionCount,
+        stageKey: s.stageKey,
+        questionSource: s.questionSource,
+        rewardCode: s.rewardCode ?? "",
+        rewardLabel: s.rewardLabel,
+        questions: s.questions ?? [],
+      })),
     );
+    setImportOpen(false);
+    toast.success(`Loaded ${draft.scenes.length} stages`);
   }
 
   useEffect(() => {
@@ -868,7 +942,34 @@ export function EscapePanel({
           intro,
           poolId: poolId || null,
           status,
-          scenes: scenes.filter((s) => s.title.trim()),
+          scenes: scenes
+            .filter((s) => s.title.trim())
+            .map((s) => ({
+              title: s.title.trim(),
+              body: s.body.trim(),
+              topic: s.topic.trim() || "general",
+              questionCount: s.questionSource === "none" ? 0 : s.questionCount,
+              stageKey: s.stageKey.trim() || null,
+              questionSource: s.questionSource,
+              rewardCode: (s.rewardCode || null) as
+                | "xp_50"
+                | "xp_100"
+                | "badge"
+                | "avatar"
+                | "double_xp"
+                | "extra_life"
+                | "mock_voucher"
+                | null,
+              rewardLabel: s.rewardLabel.trim() || null,
+              questions:
+                s.questionSource === "upload" || s.questionSource === "manual"
+                  ? s.questions.filter(
+                      (q) =>
+                        q.prompt.trim().length >= 4 &&
+                        q.options.filter((o) => o.trim()).length >= 2,
+                    )
+                  : [],
+            })),
         },
       }),
     onSuccess: () => {
@@ -887,6 +988,58 @@ export function EscapePanel({
   });
 
   const topicLabels = topicsForSource(data.pools, null, poolId || null).map((t) => t.label);
+  const rewardOptions = [
+    { value: "", label: "No stage reward" },
+    { value: "xp_50", label: "+50 XP" },
+    { value: "xp_100", label: "+100 XP" },
+    { value: "badge", label: "Badge" },
+    { value: "avatar", label: "Avatar unlock" },
+    { value: "double_xp", label: "Double XP (24h)" },
+    { value: "extra_life", label: "Extra life" },
+    { value: "mock_voucher", label: "Free mock test" },
+  ];
+
+  function updateScene(index: number, patch: Partial<SceneDraft>) {
+    setScenes((rows) => rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  }
+
+  async function onStoryFile(file: File) {
+    const text = await file.text();
+    try {
+      const { parseEscapeStoryImport } = await import("@/lib/play.escape.story");
+      applyStoryDraft(parseEscapeStoryImport(text));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not parse story file");
+    }
+  }
+
+  async function onStageQuestionCsv(index: number, file: File) {
+    const text = await file.text();
+    try {
+      const { parsePoolQuestionsCsv } = await import("@/lib/pool-questions-csv");
+      const { questions, errors } = parsePoolQuestionsCsv(text);
+      if (!questions.length) {
+        toast.error(errors[0] ?? "No questions found in CSV");
+        return;
+      }
+      updateScene(index, {
+        questionSource: "upload",
+        questions: questions.map((q) => ({
+          prompt: q.prompt,
+          options: q.options,
+          correctIndexes: q.correctIndexes,
+          multiSelect: q.multiSelect,
+          explanation: q.explanation,
+        })),
+        questionCount: questions.length,
+        topic: questions[0]?.topic || scenes[index]?.topic || "general",
+      });
+      toast.success(`Attached ${questions.length} questions to stage ${index + 1}`);
+      if (errors.length) toast.message(`${errors.length} row warning(s) skipped`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "CSV import failed");
+    }
+  }
 
   return (
     <div
@@ -897,9 +1050,98 @@ export function EscapePanel({
     >
       <AdminPanel
         title={editingId ? "Edit scenario" : "New scenario"}
-        description="Each scene pulls a topic set from the bound pool. Order is the participant path."
+        description="Build an ordered story. Pools are optional — stages can use pool topics, CSV upload, manual questions, or story-only beats."
       >
         <div className="space-y-3">
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              className="rounded-md border border-border px-2.5 py-1.5 text-xs"
+              onClick={async () => {
+                const { applyCyberAttackTemplate } = await import("@/lib/play.escape.story");
+                applyStoryDraft(applyCyberAttackTemplate());
+              }}
+            >
+              Load Cyber Attack
+            </button>
+            <button
+              type="button"
+              className="rounded-md border border-border px-2.5 py-1.5 text-xs"
+              onClick={async () => {
+                const { downloadEscapeStoryTemplate } = await import("@/lib/play.escape.story");
+                downloadEscapeStoryTemplate("txt");
+              }}
+            >
+              Download TXT
+            </button>
+            <button
+              type="button"
+              className="rounded-md border border-border px-2.5 py-1.5 text-xs"
+              onClick={async () => {
+                const { downloadEscapeStoryTemplate } = await import("@/lib/play.escape.story");
+                downloadEscapeStoryTemplate("csv");
+              }}
+            >
+              Download CSV
+            </button>
+            <button
+              type="button"
+              className="rounded-md border border-border px-2.5 py-1.5 text-xs"
+              onClick={() => setImportOpen((v) => !v)}
+            >
+              {importOpen ? "Hide import" : "Import story"}
+            </button>
+          </div>
+
+          {importOpen ? (
+            <div className="space-y-2 rounded-md border border-dashed border-border bg-secondary/20 p-3">
+              <p className="text-[11px] text-muted-foreground">
+                Paste TXT/CSV or upload a file. Attach pool CSV or manual questions per stage when
+                needed.
+              </p>
+              <textarea
+                className="field min-h-[6rem] w-full font-mono text-xs"
+                placeholder="# Cyber Attack&#10;Intro: …&#10;## 1. Reconnaissance"
+                value={storyPaste}
+                onChange={(e) => setStoryPaste(e.target.value)}
+              />
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="rounded-md bg-secondary px-2.5 py-1.5 text-xs"
+                  onClick={async () => {
+                    try {
+                      const { parseEscapeStoryImport } = await import("@/lib/play.escape.story");
+                      applyStoryDraft(parseEscapeStoryImport(storyPaste));
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : "Parse failed");
+                    }
+                  }}
+                >
+                  Parse paste
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-border px-2.5 py-1.5 text-xs"
+                  onClick={() => fileRef.current?.click()}
+                >
+                  Upload file
+                </button>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept=".txt,.csv,.md,text/plain,text/csv"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) void onStoryFile(file);
+                    e.target.value = "";
+                  }}
+                />
+              </div>
+            </div>
+          ) : null}
+
           <input
             className="field h-9 w-full text-sm"
             value={name}
@@ -907,7 +1149,7 @@ export function EscapePanel({
           />
           <textarea
             className="field min-h-[4.5rem] w-full text-sm"
-            placeholder="Intro copy"
+            placeholder="Intro / CRITICAL ALERT copy"
             value={intro}
             onChange={(e) => setIntro(e.target.value)}
           />
@@ -917,7 +1159,7 @@ export function EscapePanel({
               value={poolId}
               onChange={(e) => setPoolId(e.target.value)}
             >
-              <option value="">Default play pool</option>
+              <option value="">No default pool (optional)</option>
               {data.pools.map((pool) => (
                 <option key={pool.id} value={pool.id}>
                   {pool.courseName} · {pool.name}
@@ -937,7 +1179,11 @@ export function EscapePanel({
             {scenes.map((scene, index) => (
               <li key={index} className="rounded-md border border-border p-3">
                 <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
-                  Scene {index + 1}
+                  <span>
+                    Stage {index + 1}
+                    {scene.stageKey ? ` · ${scene.stageKey}` : ""}
+                    {index < scenes.length - 1 ? " →" : ""}
+                  </span>
                   {scenes.length > 1 ? (
                     <button
                       type="button"
@@ -952,57 +1198,180 @@ export function EscapePanel({
                   className="field h-8 w-full text-sm"
                   placeholder="Title"
                   value={scene.title}
-                  onChange={(e) =>
-                    setScenes((rows) =>
-                      rows.map((row, i) => (i === index ? { ...row, title: e.target.value } : row)),
-                    )
-                  }
+                  onChange={(e) => updateScene(index, { title: e.target.value })}
                 />
                 <textarea
                   className="field mt-2 min-h-[3rem] w-full text-sm"
                   placeholder="Story copy"
                   value={scene.body}
-                  onChange={(e) =>
-                    setScenes((rows) =>
-                      rows.map((row, i) => (i === index ? { ...row, body: e.target.value } : row)),
-                    )
-                  }
+                  onChange={(e) => updateScene(index, { body: e.target.value })}
                 />
                 <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                  <select
-                    className="field h-8 text-sm"
-                    value={scene.topic}
-                    onChange={(e) =>
-                      setScenes((rows) =>
-                        rows.map((row, i) =>
-                          i === index ? { ...row, topic: e.target.value } : row,
-                        ),
-                      )
-                    }
-                  >
-                    {(topicLabels.length ? topicLabels : [scene.topic]).map((label) => (
-                      <option key={label} value={label}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    className="field h-8 text-sm"
-                    type="number"
-                    min={1}
-                    max={20}
-                    value={scene.questionCount}
-                    onChange={(e) =>
-                      setScenes((rows) =>
-                        rows.map((row, i) =>
-                          i === index
-                            ? { ...row, questionCount: Number(e.target.value) || 1 }
-                            : row,
-                        ),
-                      )
-                    }
-                  />
+                  <label className="text-[11px] text-muted-foreground">
+                    Question source
+                    <select
+                      className="field mt-1 h-8 w-full text-sm"
+                      value={scene.questionSource}
+                      onChange={(e) => {
+                        const questionSource = e.target.value as SceneDraft["questionSource"];
+                        updateScene(index, {
+                          questionSource,
+                          questionCount:
+                            questionSource === "none" ? 0 : Math.max(1, scene.questionCount || 4),
+                        });
+                      }}
+                    >
+                      <option value="pool">Pool topic</option>
+                      <option value="upload">Upload CSV</option>
+                      <option value="manual">Manual</option>
+                      <option value="none">Story only (no quiz)</option>
+                    </select>
+                  </label>
+                  <label className="text-[11px] text-muted-foreground">
+                    Stage reward
+                    <select
+                      className="field mt-1 h-8 w-full text-sm"
+                      value={scene.rewardCode}
+                      onChange={(e) => {
+                        const rewardCode = e.target.value;
+                        const opt = rewardOptions.find((o) => o.value === rewardCode);
+                        updateScene(index, {
+                          rewardCode,
+                          rewardLabel: rewardCode ? (opt?.label ?? scene.rewardLabel) : "",
+                        });
+                      }}
+                    >
+                      {rewardOptions.map((opt) => (
+                        <option key={opt.value || "none"} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 </div>
+                {scene.rewardCode ? (
+                  <input
+                    className="field mt-2 h-8 w-full text-sm"
+                    placeholder="Reward label (shown to players)"
+                    value={scene.rewardLabel}
+                    onChange={(e) => updateScene(index, { rewardLabel: e.target.value })}
+                  />
+                ) : null}
+
+                {scene.questionSource === "pool" ? (
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    <select
+                      className="field h-8 text-sm"
+                      value={scene.topic}
+                      onChange={(e) => updateScene(index, { topic: e.target.value })}
+                    >
+                      {(topicLabels.length ? topicLabels : [scene.topic || "general"]).map(
+                        (label) => (
+                          <option key={label} value={label}>
+                            {label}
+                          </option>
+                        ),
+                      )}
+                    </select>
+                    <input
+                      className="field h-8 text-sm"
+                      type="number"
+                      min={1}
+                      max={40}
+                      value={scene.questionCount}
+                      onChange={(e) =>
+                        updateScene(index, { questionCount: Number(e.target.value) || 1 })
+                      }
+                    />
+                  </div>
+                ) : null}
+
+                {scene.questionSource === "upload" || scene.questionSource === "manual" ? (
+                  <div className="mt-2 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px]">
+                        Upload stage CSV
+                        <input
+                          type="file"
+                          accept=".csv,text/csv"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) void onStageQuestionCsv(index, file);
+                            e.target.value = "";
+                          }}
+                        />
+                      </label>
+                      <span className="text-[11px] text-muted-foreground">
+                        {scene.questions.length} question
+                        {scene.questions.length === 1 ? "" : "s"} attached
+                      </span>
+                      <button
+                        type="button"
+                        className="text-[11px] text-accent"
+                        onClick={() =>
+                          updateScene(index, {
+                            questions: [
+                              ...scene.questions,
+                              {
+                                prompt: "",
+                                options: ["", "", "", ""],
+                                correctIndexes: [0],
+                              },
+                            ],
+                            questionSource: "manual",
+                          })
+                        }
+                      >
+                        + Manual question
+                      </button>
+                    </div>
+                    {scene.questions.slice(0, 6).map((q, qi) => (
+                      <div key={qi} className="rounded border border-border/70 p-2 text-xs">
+                        <input
+                          className="field h-7 w-full text-xs"
+                          placeholder={`Q${qi + 1} prompt`}
+                          value={q.prompt}
+                          onChange={(e) => {
+                            const questions = scene.questions.map((row, i) =>
+                              i === qi ? { ...row, prompt: e.target.value } : row,
+                            );
+                            updateScene(index, { questions });
+                          }}
+                        />
+                        <div className="mt-1 grid grid-cols-2 gap-1">
+                          {q.options.slice(0, 4).map((opt, oi) => (
+                            <input
+                              key={oi}
+                              className="field h-7 text-xs"
+                              placeholder={`Option ${String.fromCharCode(65 + oi)}`}
+                              value={opt}
+                              onChange={(e) => {
+                                const options = [...q.options];
+                                options[oi] = e.target.value;
+                                const questions = scene.questions.map((row, i) =>
+                                  i === qi ? { ...row, options } : row,
+                                );
+                                updateScene(index, { questions });
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                    {scene.questions.length > 6 ? (
+                      <p className="text-[11px] text-muted-foreground">
+                        +{scene.questions.length - 6} more (saved with scenario)
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {scene.questionSource === "none" ? (
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    Story beat — players continue without a quiz (e.g. SYSTEM RESTORED).
+                  </p>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -1013,7 +1382,7 @@ export function EscapePanel({
               className="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-xs"
             >
               <AssessaIcon name="plus" className="h-3.5 w-3.5" />
-              Add scene
+              Add stage
             </button>
             <button
               type="button"
@@ -1028,7 +1397,7 @@ export function EscapePanel({
       {showManagedList ? (
         <AdminPanel title="Scenarios" description="Inactive rooms stay hidden on /play/escape.">
           {data.scenarios.length === 0 ? (
-            <AdminEmpty title="No scenarios yet" body="Author a room with ordered scenes." />
+            <AdminEmpty title="No scenarios yet" body="Author a room with ordered stages." />
           ) : (
             <ul className="space-y-2">
               {data.scenarios.map((row) => (
@@ -1039,7 +1408,8 @@ export function EscapePanel({
                   <div className="min-w-0">
                     <p className="truncate font-medium">{row.name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {row.scenes.length} scenes · {row.status}
+                      {row.scenes.length} stages · {row.status}
+                      {row.pool_id ? "" : " · no pool"}
                     </p>
                   </div>
                   <div className="flex gap-2">
